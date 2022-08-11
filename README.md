@@ -1,3 +1,5 @@
+The Lox interpreter described in the wonderful book: [https://craftinginterpreters.com](https://craftinginterpreters.com) (freely available online!)
+
 # Quick Start
 `./gradlew build` -- Builds the project and runs unit tests.
 `./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"` -- Builds the project and runs the `infinite-loop.lox` file.
