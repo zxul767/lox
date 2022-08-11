@@ -129,13 +129,15 @@ class Scanner {
     }
   }
 
-  // ignores all chars until the end of the line (excluding the newline char)
+  // Scan (and ignore the contents of) a single-line comment.
+  //
   // pre-condition: the opening delimiter (//) has just been consumed
+  // post-condition: all characters up to a newline (or EOF) have been consumed.
   private void singleLineComment() {
     while (peek() != '\n' && !isAtEnd())
       advance();
   }
-  // Scan (and ignore the contents of) a multiline comment.
+  // Scan (and ignore the contents of) a multi-line comment.
   //
   // pre-condition: the /* opening chars have just been consumed.
   // post-condition: all characters up to and including the first */ delimiter
