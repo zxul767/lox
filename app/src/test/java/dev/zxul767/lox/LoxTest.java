@@ -37,7 +37,7 @@ class LoxTest {
     List<String> expectedLexemes = Arrays.asList("var", "line", "=", "10", ";");
 
     Scanner scanner = new Scanner(
-        "var line = 10; /* while (true) { var line = read(); print(line); } */");
+        "var line = 10; /* while (true) {\n var line = read();\n print(line);\n} */");
     List<Token> tokens = scanner.scanTokens();
 
     assertThatLexemesMatch(tokens, expectedLexemes);
