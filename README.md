@@ -2,10 +2,11 @@ The Lox interpreter described in the wonderful book: [https://craftinginterprete
 
 # Quick Start
 `./gradlew build` -- Builds the project and runs unit tests.
-`./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"` -- Builds the project and runs the `infinite-loop.lox` file.
+
+`./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"` -- Builds the project and runs a script.
 
 # Dependencies
-+ A recent version of the Java Runtime and Compiler (I've personally only tested it with `OpenJDK 14.0` on Mac OS). As the procedure to install it may change over time, your best bet is to do an online search for something like "install java on <your-favorite-os>"
++ A recent version of the Java Runtime and Compiler (I've personally only tested it with `OpenJDK 14.0` on Mac OS). As the procedure to install it may change over time, your best bet is to do an online search for something like "install java on Mac OS/Linux/Windows"
 
 # Building and Running Tests
 `./gradlew run`
