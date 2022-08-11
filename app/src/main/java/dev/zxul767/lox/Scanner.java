@@ -97,6 +97,8 @@ class Scanner {
     case '/':
       if (match('/')) {
         singleLineComment();
+      } else if (match('*')) {
+        multiLineComment();
       } else {
         addToken(SLASH);
       }
@@ -132,6 +134,24 @@ class Scanner {
   private void singleLineComment() {
     while (peek() != '\n' && !isAtEnd())
       advance();
+  }
+  // Scan (and ignore the contents of) a multiline comment.
+  //
+  // pre-condition: the /* opening chars have just been consumed.
+  // post-condition: all characters up to and including the first */ delimiter
+  //    string have been consumed.
+  // limitations: does NOT support nested multi-line comments, i.e., this will
+  //    not be correctly parsed as a single comment: /* /* nested comment */ */
+  private void multiLineComment() {
+    while (!isAtEnd() && !(peek() == '*' && peekNext() == '/'))
+      advance();
+    if (isAtEnd()) {
+      Lox.error(line, "Unterminated multi-line comment.");
+      return;
+    }
+    // the closing */ chars
+    advance();
+    advance();
   }
 
   private void identifier() {
