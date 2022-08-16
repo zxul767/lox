@@ -31,7 +31,8 @@ class Scanner {
 
   private final String sourceCode;
   private final List<Token> tokens = new ArrayList<>();
-  // `start` & `current` are meant to index `sourceCode`
+  // `start` & `current` are meant to index `sourceCode` and they
+  // represent the bounds of the token currently under examination.
   private int start = 0;
   private int current = 0;
   // `line` starts at 1 (and not 0) to be user friendly
@@ -39,12 +40,15 @@ class Scanner {
 
   Scanner(String sourceCode) { this.sourceCode = sourceCode; }
 
-  List<Token> scanTokens() {
+  List<Token> scanTokens() { return scanTokens(/*includeEOF: */ false); }
+
+  List<Token> scanTokens(boolean includeEOF) {
     while (!isAtEnd()) {
       start = current;
       scanToken();
     }
-    tokens.add(new Token(EOF, /* lexeme: */ "", /* value: */ null, line));
+    if (includeEOF)
+      tokens.add(new Token(EOF, /* lexeme: */ "", /* value: */ null, line));
     return tokens;
   }
 
@@ -137,23 +141,35 @@ class Scanner {
     while (peek() != '\n' && !isAtEnd())
       advance();
   }
+
   // Scan (and ignore the contents of) a multi-line comment.
   //
   // pre-condition: the /* opening chars have just been consumed.
-  // post-condition: all characters up to and including the first */ delimiter
-  //    string have been consumed.
-  // limitations: does NOT support nested multi-line comments, i.e., this will
-  //    not be correctly parsed as a single comment: /* /* nested comment */ */
+  // post-condition: all characters up to and including the last */ delimiter
+  //    have been consumed (i.e., nested multiline comments are properly
+  //    handled)
   private void multiLineComment() {
-    while (!isAtEnd() && !(peek() == '*' && peekNext() == '/'))
-      advance();
-    if (isAtEnd()) {
+    int nestedComments = 1; // we've just consumed the opening delimiter
+
+    while (!isAtEnd()) {
+      if (peek() == '/' && peekNext() == '*') {
+        nestedComments++;
+        advance(2);
+      } else if (peek() == '*' && peekNext() == '/') {
+        nestedComments--;
+        advance(2);
+      } else {
+        advance();
+      }
+      if (nestedComments == 0)
+        break;
+    }
+
+    // `nestedComments` should be zero if the first opening delimiter was closed
+    if (isAtEnd() && nestedComments != 0) {
       Lox.error(line, "Unterminated multi-line comment.");
       return;
     }
-    // the closing */ chars
-    advance();
-    advance();
   }
 
   private void identifier() {
@@ -234,7 +250,16 @@ class Scanner {
 
   private boolean isAtEnd() { return current >= sourceCode.length(); }
 
+  // returns the previously current character and advances one char forward
   private char advance() { return sourceCode.charAt(current++); }
+
+  // returns the previously current character and advances `count` chars forward
+  // pre-condition: current + count < sourceCode.length()
+  private char advance(int count) {
+    char currentChar = sourceCode.charAt(current);
+    current += count;
+    return currentChar;
+  }
 
   private void addToken(TokenType type) { addToken(type, /* value: */ null); }
 
