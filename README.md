@@ -6,14 +6,16 @@ The Lox interpreter described in the wonderful book: [https://craftinginterprete
 `./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"` -- Builds the project and runs a script.
 
 # Dependencies
-+ A recent version of the Java Runtime and Compiler (I've personally only tested it with `OpenJDK 14.0` on Mac OS). As the procedure to install it may change over time, your best bet is to do an online search for something like "install java on Mac OS/Linux/Windows"
++ A recent version of the [JDK](https://www.oracle.com/java/technologies/downloads/) (I have only tested it with `OpenJDK 14.0` on Mac OS).
++ The [`gradle`](https://gradle.org/install/) build system. 
+   + Strictly speaking, you might be able to get the project running without using `gradle`, but then you'll have to manually manage the third-party dependencies with whatever other build system you decide to use.
 
 # Building and Running Tests
-`./gradlew run`
+`./gradlew build`
 
 If you're doing incremental development (e.g., [`TDD`](https://en.wikipedia.org/wiki/Test-driven_development)), you will eventually find it tedious to run this command after every change in the code. To make the command run automatically after a file in the project changes, you can use the `--continous` flag:
 
-`./gradlew --continous run`
+`./gradlew --continous build`
 
 Also, if you're curious about all the tasks that are being run, you can use the `--console=verbose` flag as follows:
 `./gradlew --console=verbose build`
@@ -45,4 +47,4 @@ See more details [here](https://stackoverflow.com/questions/13172137/console-app
 
 # FAQ
 ### Binary Files in the Repository?
-As you might have noticed, `gradle`--our build system--stores `gradle/wrapper/gradle-wrapper.jar`. This is indeed something that seems fishy, and there is an ongoing discussion about this [here](https://discuss.gradle.org/t/adding-gradle-wrapper-files-to-gitignore/27428).
+As you might have noticed, `gradle` stores `gradle/wrapper/gradle-wrapper.jar`. This is indeed something that seems fishy, and there is an ongoing discussion about this [here](https://discuss.gradle.org/t/adding-gradle-wrapper-files-to-gitignore/27428).
