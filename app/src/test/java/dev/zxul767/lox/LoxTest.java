@@ -79,6 +79,15 @@ class LoxTest {
     assertEquals(0, tokens.size());
   }
 
+  @Test
+  void shouldIncludeEOFTokenByDefault() {
+    Scanner scanner = new Scanner("");
+    List<Token> tokens = scanner.scanTokens();
+
+    assertEquals(1, tokens.size());
+    assertEquals(TokenType.EOF, tokens.get(0).type);
+  }
+
   private static void assertThatLexemesMatch(List<Token> tokens,
                                              List<String> expectedLexemes) {
     List<String> lexemes =

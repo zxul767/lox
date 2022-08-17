@@ -40,7 +40,7 @@ class Scanner {
 
   Scanner(String sourceCode) { this.sourceCode = sourceCode; }
 
-  List<Token> scanTokens() { return scanTokens(/*includeEOF: */ false); }
+  List<Token> scanTokens() { return scanTokens(/*includeEOF: */ true); }
 
   List<Token> scanTokens(boolean includeEOF) {
     while (!isAtEnd()) {
