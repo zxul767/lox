@@ -57,6 +57,16 @@ class LoxTest {
   }
 
   @Test
+  void canProcessDeeplyNestedMultilineComments() {
+    List<String> expectedLexemes = Arrays.asList("var", "line", "=", "10", ";");
+
+    List<Token> tokens =
+        scan("/* nested /* 1 */ /* 2 /* 2.1 */ */ */ var line = 10;");
+
+    assertThatLexemesMatch(tokens, expectedLexemes);
+  }
+
+  @Test
   void canProcessTokensBetweenComments() {
     List<String> expectedLexemes = Arrays.asList("var", "line", "=", "10", ";");
 
