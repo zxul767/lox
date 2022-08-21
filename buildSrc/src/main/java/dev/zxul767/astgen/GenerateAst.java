@@ -28,14 +28,14 @@ public class GenerateAst {
     writer.println();
     writer.println("import java.util.List;");
     writer.println();
-    // writer.println("abstract class " + baseName + " {");
 
     writer.println(String.format("abstract class %s {", baseName));
 
     // the AST classes
     for (String type : types) {
-      String className = type.split(":")[0].trim();
-      String fields = type.split(":")[1].trim();
+      String[] parts = type.split(":");
+      String className = parts[0].trim();
+      String fields = parts[1].trim();
       defineType(writer, baseName, className, fields);
       writer.println();
     }
@@ -45,31 +45,34 @@ public class GenerateAst {
 
   private static void defineType(PrintWriter writer, String baseName,
                                  String className, String fieldList) {
-    indent(writer, 2);
-    writer.println(
+    iprintln(
+        writer, /*indentation:*/ 2,
         String.format("static class %s extends %s {", className, baseName));
 
     // constructor
-    indent(writer, 4);
-    writer.println(String.format("%s (%s) {", className, fieldList));
+    iprintln(writer, /*indentation:*/ 4,
+             String.format("%s (%s) {", className, fieldList));
 
     // store parameters in fields
     String[] fields = fieldList.split(", ");
     for (String field : fields) {
       String name = field.split(" ")[1];
-      indent(writer, 6);
-      writer.println(String.format("this.%s = %s;", name, name));
+      iprintln(writer, /*indentation:*/ 6,
+               String.format("this.%s = %s;", name, name));
     }
-    indent(writer, 4);
-    writer.println("}");
+    iprintln(writer, /*indentation:*/ 4, "}");
 
     // fields
     for (String field : fields) {
-      indent(writer, 4);
-      writer.println(String.format("final %s;", field));
+      iprintln(writer, /*indentation:*/ 4, String.format("final %s;", field));
     }
-    indent(writer, 2);
-    writer.println("}");
+    iprintln(writer, /*indentation:*/ 2, "}");
+  }
+
+  private static void iprintln(PrintWriter writer, int indentation,
+                               String message) {
+    indent(writer, indentation);
+    writer.println(message);
   }
 
   private static void indent(PrintWriter writer, int spaces) {
