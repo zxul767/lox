@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
-class LoxTest {
+class ScannerTest {
   private static List<Token> scan(String source) {
     Scanner scanner = new Scanner(source);
     return scanner.scanTokens(/*includeEOF:*/ false);

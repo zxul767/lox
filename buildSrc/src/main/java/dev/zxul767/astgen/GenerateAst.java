@@ -31,7 +31,14 @@ public class GenerateAst {
 
     writer.println(String.format("abstract class %s {", baseName));
 
+    defineVisitor(writer, baseName, types);
+
+    // The base accept() method
+    iprintln(writer, /*indentation:*/ 2,
+             "abstract <R> R accept(Visitor<R> visitor);");
+
     // the AST classes
+    writer.println();
     for (String type : types) {
       String[] parts = type.split(":");
       String className = parts[0].trim();
@@ -39,8 +46,21 @@ public class GenerateAst {
       defineType(writer, baseName, className, fields);
       writer.println();
     }
+
     writer.println("}");
     writer.close();
+  }
+
+  private static void defineVisitor(PrintWriter writer, String baseName,
+                                    List<String> types) {
+    iprintln(writer, /*indentation:*/ 2, "interface Visitor<R> {");
+    for (String type : types) {
+      String typeName = type.split(":")[0].trim();
+      iprintln(writer, /*indentation:*/ 4,
+               String.format("R visit%s(%s);", typeName + baseName,
+                             typeName + " " + baseName.toLowerCase()));
+    }
+    iprintln(writer, /*indentation:*/ 2, "}");
   }
 
   private static void defineType(PrintWriter writer, String baseName,
@@ -60,6 +80,15 @@ public class GenerateAst {
       iprintln(writer, /*indentation:*/ 6,
                String.format("this.%s = %s;", name, name));
     }
+    iprintln(writer, /*indentation:*/ 4, "}");
+
+    // visitor pattern
+    writer.println();
+    iprintln(writer, /*indentation:*/ 4, "@Override");
+    iprintln(writer, /*indentation:*/ 4, "<R> R accept(Visitor<R> visitor) {");
+    iprintln(
+        writer, /*indentation:*/ 6,
+        String.format("return visitor.visit%s(this);", className + baseName));
     iprintln(writer, /*indentation:*/ 4, "}");
 
     // fields
