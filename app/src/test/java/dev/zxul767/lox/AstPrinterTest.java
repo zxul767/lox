@@ -6,14 +6,15 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
-class ScannerTest {
+class AstPrinterTest {
   @Test
   void canPrintAST() {
-    Expr expression =
-        new Expr.Binary(new Expr.Unary(new Token(TokenType.MINUS, "-", null, 1),
-                                       new Expr.Literal(123)),
-                        new Token(TokenType.STAR, "*", null, 1),
-                        new Expr.Grouping(new Expr.Literal(45.67)));
+    Expr expression = new Expr.Binary(
+        new Expr.Unary(new Token(TokenType.MINUS, "-",
+                                 /*value:*/ null, /*line:*/ 1),
+                       new Expr.Literal(123)),
+        new Token(TokenType.STAR, "*", /*value:*/ null, /*line:*/ 1),
+        new Expr.Grouping(new Expr.Literal(45.67)));
 
     AstPrinter printer = new AstPrinter();
     String ast = printer.print(expression);
