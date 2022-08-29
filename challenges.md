@@ -1,6 +1,12 @@
 # Chapter 1
 **1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
+It means that not all of the tokens produced by their compilers/interpreters can be described using a regular expression. One reason for this--there might be more--is that during tokenization, they produce `INDENT`/`DEDENT` tokens which require indentation context (i.e., information about previous tokens) to be correctly established.
+
+It should be noted, however, that this is due to a pragmatic decision on the part of the implementers, rather than an absolute necessity. In other words, it is possible to implement Python/Haskell without using `INDENT`, `DEDENT` tokens (just `WHITESPACE` tokens), but then the burden of establishing where a block begins and where it ends is completely delegated to the parser.
+
+You can find a discussion of this in [this Reddit thread](https://www.reddit.com/r/compsci/comments/kkzn3r/the_lexical_grammars_of_python_and_haskell_are/)
+
 **2. Aside from separating tokens--distinguishing `print foo` from `printfoo`--spaces aren't used for much in most languages. However, in a couple of dark corners, a space does affect how code is parsed in CoffeeScript, Ruby, and the C preprocessor. Where and what effect does it have in each of those languages?**
 
 **3. Our scanner here, like most, discards comments and whitespace since those aren't needed by the parser. Why might you want to write a scanner that does *not* discard those? What would it be useful for?**
@@ -15,7 +21,7 @@ Adding support for nested comments turned out to be more a design than an implem
 /* nested /* ... */
 ```
 
-On its own, it might be reasonble to argue that the above should be considered a single comment. But consider what happens in this very similar case:
+On its own, it might be reasonable to argue that the above should be considered a single comment. But consider what happens in this very similar case:
 
 ```
 /* nested /* ... */ var a = 1;
@@ -27,7 +33,7 @@ In the end, I decided to allow for nested comments, and throw errors if any of t
 
 # Chapter 2
 
-**1. Earlier, I said that the `|`, `*` and `+` forms we added to our grammar metasyntax were just syntactic sugar. Take this grammar:**
+**1. Earlier, I said that the `|`, `*` and `+` forms we added to our grammar meta-syntax were just syntactic sugar. Take this grammar:**
 
 ```
 expr -> expr ( "(" (expr ( "," expr )* )? ")" | "." IDENTIFIER )+
@@ -35,7 +41,7 @@ expr -> expr ( "(" (expr ( "," expr )* )? ")" | "." IDENTIFIER )+
      | NUMBER
 ```
 
-**Produce a gammar that matches the same language but doesn't use any of that notational sugar.**
+**Produce a game that matches the same language but doesn't use any of that notational sugar.**
 
 **Bonus: What kind of expression does this bit of grammar encode?**
 
@@ -43,7 +49,7 @@ expr -> expr ( "(" (expr ( "," expr )* )? ")" | "." IDENTIFIER )+
 
 **(SML or Haskell would be ideal for this exercise, but Scheme or another Lisp works as well.)**
 
-**3. In [reverse Polish notation]() (RPN), the operands to an arithmetic operator are both placed before the operator, so `1 + 2` becomes `1 2 +`. Evaluation proceeds from left to right. Numbers are pushed onto an implicit stack. An arithmetic operator pops the top two numbers, performs the operation, and pushes the result. Thus, this:**
+**3. In [reverse Polish notation](https://en.wikipedia.org/wiki/Reverse_Polish_notation) (RPN), the operands to an arithmetic operator are both placed before the operator, so `1 + 2` becomes `1 2 +`. Evaluation proceeds from left to right. Numbers are pushed onto an implicit stack. An arithmetic operator pops the top two numbers, performs the operation, and pushes the result. Thus, this:**
 
 ```
 (1 + 2) * (4 - 3)
