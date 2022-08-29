@@ -13,7 +13,7 @@ In CoffeeScript this happens in expressions such as `[1..10].map (i) -> i*2` (wh
 
 In Ruby, an analogous issue happens due to the unary splat operator, which makes the expressions `*10` and `* 10` semantically different. You can read all the details in [this post](https://stackoverflow.com/questions/50543569/is-ruby-whitespace-sensitive-in-certain-cases).
 
-Finally, in the C preprocessor, the issue manifests in the definition of macros: the expression `#define A (n) (n)++` is not the same as `#define A(n) (n)++`. In the former case, we're simply defining a literal substitution for the character `A` for the literal characters `(n) (n)++`, whereas in the latter any occurence of `A(x)` will be replaced by `(x)++`.
+Finally, in the C preprocessor, the issue manifests in the definition of macros: the expression `#define A (n) (n)++` is not the same as `#define A(n) (n)++`. In the former case, we're simply defining a literal substitution for the character `A` for the literal characters `(n) (n)++`, whereas in the latter any occurence of `A(x)` will be replaced by `(x)++` (where `x` could be a number, a string, etc.)
 
 **3. Our scanner here, like most, discards comments and whitespace since those aren't needed by the parser. Why might you want to write a scanner that does *not* discard those? What would it be useful for?**
 
