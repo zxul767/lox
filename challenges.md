@@ -15,9 +15,9 @@ In Ruby, an analogous issue happens due to the unary splat operator, which makes
 
 Finally, in the C preprocessor, the issue manifests in the definition of macros: the expression `#define A (n) (n)++` is not the same as `#define A(n) (n)++`. In the former case, we're simply defining a literal substitution for the character `A` for the literal characters `(n) (n)++`, whereas in the latter any occurence of `A(x)` will be replaced by `(x)++`.
 
-3. Our scanner here, like most, discards comments and whitespace since those aren't needed by the parser. Why might you want to write a scanner that does *not* discard those? What would it be useful for?
+**3. Our scanner here, like most, discards comments and whitespace since those aren't needed by the parser. Why might you want to write a scanner that does *not* discard those? What would it be useful for?**
 
-One reason could be so that we can reconstructor the original source code from the AST representation (although that would also require keeping comments around.) This may be useful when writing refactoring tools which want to operate on specific parts of the source code, while leaving everything else intact. 
+One reason could be so that we can reconstruct the original source code from the AST representation (although that would also require keeping comments around.) This may be useful when writing refactoring tools which want to operate on specific parts of the source code, while leaving everything else intact. 
 
 **4. Add support to Lox's scanner for C-style `/* ... */` block comments. Make sure to handle newlines in them. Consider allowing them to nest. Is adding support for nesting more work than you expected? Why?**
 
