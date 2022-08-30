@@ -70,3 +70,5 @@ expr -> expr ( "(" (expr ( "," expr )* )? ")" | "." IDENTIFIER )+
 ```
 
 **Define a visitor class for our syntax tree that takes an expression, converts it to RPN, and returns the resulting string.**
+
+The implementation for this visitor can be seen in [this commit](https://github.com/zxul767/lox/commit/08a9e9755b8271bd12dcff81172f7662e3e77810).
