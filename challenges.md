@@ -9,8 +9,22 @@ I guess this project setup covers the above and beyond?
 
 **3. Do the same thing for C. To get some practice with pointers, define a doubly linked list of heap-allocated strings. Write functions to insert, find, and delete items from it. Test them.**
 
+# Chapter 2
+**1. Pick an open source implementation of a language you like. Download the source code and poke around in it. Try to find the code that implements the scanner and parser. Are they handwritten, or generated using tools like Lex and Yacc? (`.l` or `.y` files usually imply the latter.)**
+
+**2. Just-in-time compilation tends to be the fastest way to implement dynamically typed languages, but not all of them use it. What reasons are there to *not* JIT?**
+
+**3. Most Lisp implementations that compile to C also contain an interpreter that lets them execute Lisp code on the fly as well. Why?**
+
+# Chapter 3
+**1. Write some sample Lox programs and run them (you can use the implementations of Lox in [my repository]()). Try to come up with edge case behavior I didn't specify here. Does it do what you expect? Why or why not?**
+
+**2. This informal introduction leaves a *lot* unspecified. List several open questions you have about the language's syntax and semantics. What do you think the answers should be?**
+
+**3. Lox is a pretty tiny language. What features do you think it is missing that would make it annoying to use for real programs? (Aside from the standard library, of course.)**
+
 # Chapter 4
-1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
+**1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
 It means that one or more tokens in those languages cannot be described by a [regular expression](https://en.wikipedia.org/wiki/Regular_expression). Consider, for example, the `INDENT`/`DEDENT` tokens--both languages use indentation to create code blocks--which require indentation context (i.e., information about previous tokens) to be correctly determined.
 
