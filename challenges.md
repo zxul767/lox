@@ -1,4 +1,4 @@
-# Chapter 1
+# Chapter 4
 **1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
 It means that one or more tokens in those languages cannot be described by a [regular expression](https://en.wikipedia.org/wiki/Regular_expression). Consider, for example, the `INDENT`/`DEDENT` tokens--both languages use indentation to create code blocks--which require indentation context (i.e., information about previous tokens) to be correctly determined.
@@ -39,7 +39,7 @@ Now there's more ambiguity as to whether we should consider this to be a single 
 
 In the end, I decided to allow for nested comments, and throw errors if any of them (at any level of nesting) didn't properly close.
 
-# Chapter 2
+# Chapter 5
 
 **1. Earlier, I said that the `|`, `*` and `+` forms we added to our grammar meta-syntax were just syntactic sugar. Take this grammar:**
 
