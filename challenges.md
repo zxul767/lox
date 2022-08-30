@@ -1,3 +1,8 @@
+# Chapter 1
+**1. There are least six domain-specific languages used in the [little system I cobbled together](https://github.com/munificent/craftinginterpreters) to write and publish this book. What are they?**
+
+CSS (for redering graphics), SCSS (a superset of CSS), HTML (for structuring web content), Markdown (for writing formatted text), YAML (for projects and tools configurations), Mustache (for rendering strings with interpolated values), and the language used to specify Makefiles (to build projects according to specified dependencies). I may have missed some other domain-specific languages.
+
 # Chapter 4
 **1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
