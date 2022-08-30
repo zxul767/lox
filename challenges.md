@@ -3,8 +3,14 @@
 
 CSS (for redering graphics), SCSS (a superset of CSS), HTML (for structuring web content), Markdown (for writing formatted text), YAML (for projects and tools configurations), Mustache (for rendering strings with interpolated values), and the language used to specify Makefiles (to build projects according to specified dependencies). I may have missed some other domain-specific languages.
 
+**2. Get a "Hello, world!" program written and running in Java. Set up whatever makefiles or IDE projects you need to get it working. If yu have a debugger, get comfortable with it and step through your program as it runs.**
+
+I guess this project setup covers the above and beyond?
+
+**3. Do the same thing for C. To get some practice with pointers, define a doubly linked list of heap-allocated strings. Write functions to insert, find, and delete items from it. Test them.**
+
 # Chapter 4
-**1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
+1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
 It means that one or more tokens in those languages cannot be described by a [regular expression](https://en.wikipedia.org/wiki/Regular_expression). Consider, for example, the `INDENT`/`DEDENT` tokens--both languages use indentation to create code blocks--which require indentation context (i.e., information about previous tokens) to be correctly determined.
 
