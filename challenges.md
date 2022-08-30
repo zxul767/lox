@@ -1,9 +1,9 @@
 # Chapter 1
 **1. The lexical grammars of Python and Haskell are not *regular*. What does that mean, and why aren't they?**
 
-It means that not all of the tokens produced by their compilers/interpreters can be described using a regular expression. One reason for this--there might be more--is that during tokenization, they produce `INDENT`/`DEDENT` tokens which require indentation context (i.e., information about previous tokens) to be correctly established.
+It means that one or more tokens in those languages cannot be described by a [regular expression](https://en.wikipedia.org/wiki/Regular_expression). Consider, for example, the `INDENT`/`DEDENT` tokens--both languages use indentation to create code blocks--which require indentation context (i.e., information about previous tokens) to be correctly determined.
 
-It should be noted, however, that this is due to a pragmatic decision on the part of the implementers, rather than an absolute necessity. In other words, it is possible to implement Python/Haskell without using `INDENT`, `DEDENT` tokens (just `WHITESPACE` tokens), but then the burden of establishing where a block begins and where it ends is completely delegated to the parser.
+Notice that this is a pragmatic decision, rather than something absolutely necessary. Indeed, it is possible to implement Python/Haskell without using `INDENT`, `DEDENT` tokens (just `WHITESPACE` tokens), but then the burden of establishing where a block begins and where it ends is completely delegated to the parser.
 
 You can find a discussion of this in [this Reddit thread](https://www.reddit.com/r/compsci/comments/kkzn3r/the_lexical_grammars_of_python_and_haskell_are/)
 
