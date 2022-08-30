@@ -13,5 +13,9 @@ class Token {
     this.line = line;
   }
 
+  Token(TokenType type, String lexeme) {
+    this(type, lexeme, /*value:*/ null, /*line:*/ 1);
+  }
+
   public String toString() { return type + " " + lexeme + " " + value; }
 }
