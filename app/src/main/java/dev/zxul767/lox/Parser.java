@@ -9,6 +9,7 @@ class Parser {
   private static class ParseError extends RuntimeException {}
 
   private final List<Token> tokens;
+  // indexes the token currently being looked at
   private int current = 0;
 
   Parser(List<Token> tokens) { this.tokens = tokens; }
@@ -23,20 +24,31 @@ class Parser {
     }
   }
 
+  // expression -> equality ;
   private Expr expression() { return equality(); }
 
+  // equality -> equality ( "-" | "+" ) comparison
+  //           | comparison ;
   private Expr equality() {
     return binary(() -> comparison(), BANG_EQUAL, EQUAL_EQUAL);
   }
 
+  // comparison -> comparison ( ">" | ">=" | "<" | "<=" ) term
+  //             | term ;
   private Expr comparison() {
     return binary(() -> term(), GREATER, GREATER_EQUAL, LESS, LESS_EQUAL);
   }
 
+  // term -> term ( "-" | "+" ) factor
+  //       | factor ;
   private Expr term() { return binary(() -> factor(), MINUS, PLUS); }
 
+  // factor -> factor ( "/" | "*" ) unary
+  //         | unary ;
   private Expr factor() { return binary(() -> unary(), SLASH, STAR); }
 
+  // unary -> ( "!" | "-" ) unary
+  //        | primary ;
   private Expr unary() {
     if (match(BANG, MINUS)) {
       Token operator = previous();
@@ -46,16 +58,8 @@ class Parser {
     return primary();
   }
 
-  private Expr binary(Supplier<Expr> subunitParser, TokenType... types) {
-    Expr expr = subunitParser.get();
-    while (match(types)) {
-      Token operator = previous();
-      Expr right = subunitParser.get();
-      expr = new Expr.Binary(expr, operator, right);
-    }
-    return expr;
-  }
-
+  // primary -> NUMBER | STRING | "true" | "false" | "nil"
+  //          | "(" expression ")" ;
   private Expr primary() {
     if (match(FALSE))
       return new Expr.Literal(false);
@@ -79,8 +83,22 @@ class Parser {
     throw error(peek(), "Unexpected token in primary expression!");
   }
 
-  private boolean match(TokenType... types) {
-    for (TokenType type : types) {
+  // binary -> binary ONE_OF<tokenTypes> subunit
+  //         | subunit ;
+  private Expr binary(Supplier<Expr> subunitParser, TokenType... tokenTypes) {
+    Expr expr = subunitParser.get();
+    while (match(tokenTypes)) {
+      Token operator = previous();
+      Expr right = subunitParser.get();
+      expr = new Expr.Binary(expr, operator, right);
+    }
+    return expr;
+  }
+
+  // returns true if it was able to consume the next token
+  // consumes the next token if it matches one of `tokenTypes`
+  private boolean match(TokenType... tokenTypes) {
+    for (TokenType type : tokenTypes) {
       if (check(type)) {
         advance();
         return true;
@@ -95,10 +113,10 @@ class Parser {
     throw error(peek(), message);
   }
 
-  private boolean check(TokenType type) {
+  private boolean check(TokenType expectedType) {
     if (isAtEnd())
       return false;
-    return peek().type == type;
+    return peek().type == expectedType;
   }
 
   private Token advance() {
@@ -118,6 +136,9 @@ class Parser {
     return new ParseError();
   }
 
+  // skips as many tokens as necessary to get out of the current
+  // state of confusion (when we've failed to parse a rule but
+  // we want to tolerate errors)
   private void synchronize() {
     advance();
 
