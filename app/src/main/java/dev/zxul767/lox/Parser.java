@@ -14,11 +14,13 @@ class Parser {
 
   Parser(List<Token> tokens) { this.tokens = tokens; }
 
-  // FIXME: expressions such as "<valid-subexpression> <invalid-token> ..." are
-  // currently accepted and the error silently ignored.
   Expr parse() {
     try {
-      return expression();
+      Expr expr = expression();
+      if (!isAtEnd()) {
+        throw error(peek(), "Unexpected token after valid expression!");
+      }
+      return expr;
     } catch (ParseError error) {
       return null;
     }

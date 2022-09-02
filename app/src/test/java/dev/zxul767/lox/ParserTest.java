@@ -23,9 +23,16 @@ class ParserTest {
     assertEquals("(== (group (<= (group (+ 1.0 1.0)) 3.0)) false)", ast);
   }
 
+  @Test
   void canParseWithCorrectOperatorPrecedence() {
     Expr expression = parse("1 + 2.5 * 3 / 3 == 1.0");
     String ast = (new AstPrinter()).print(expression);
-    assertEquals("(== (+ 1.0 (* 2.5 (/ 3.0 3.0))) 1.0)", ast);
+    assertEquals("(== (+ 1.0 (/ (* 2.5 3.0) 3.0)) 1.0)", ast);
+  }
+
+  @Test
+  void canDetectUnexpectedTokenAfterValidExpression() {
+    Expr expression = parse("1 + 2 and 3 + 3");
+    assertNull(expression);
   }
 }
