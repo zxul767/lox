@@ -96,9 +96,9 @@ class Parser {
   }
 
   // returns true if it was able to consume the next token
-  // consumes the next token if it matches one of `tokenTypes`
-  private boolean match(TokenType... tokenTypes) {
-    for (TokenType type : tokenTypes) {
+  // consumes the next token if it matches one of `expectedTypes`
+  private boolean match(TokenType... expectedTypes) {
+    for (TokenType type : expectedTypes) {
       if (check(type)) {
         advance();
         return true;
