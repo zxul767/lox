@@ -2,6 +2,8 @@ package dev.zxul767.lox;
 
 import static dev.zxul767.lox.TokenType.*;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -14,20 +16,38 @@ class Parser {
 
   Parser(List<Token> tokens) { this.tokens = tokens; }
 
-  Expr parse() {
+  List<Stmt> parse() {
+    List<Stmt> statements = new ArrayList<>();
     try {
-      Expr expr = expression();
-      if (!isAtEnd()) {
-        throw error(peek(), "Unexpected token after valid expression!");
+      while (!isAtEnd()) {
+        statements.add(statement());
       }
-      return expr;
+      return statements;
     } catch (ParseError error) {
-      return null;
+      return Collections.emptyList();
     }
   }
 
   // expression -> equality ;
   private Expr expression() { return equality(); }
+
+  private Stmt statement() {
+    if (match(PRINT))
+      return printStatement();
+    return expressionStatement();
+  }
+
+  private Stmt printStatement() {
+    Expr value = expression();
+    consume(SEMICOLON, "Expected ';' after value.");
+    return new Stmt.Print(value);
+  }
+
+  private Stmt expressionStatement() {
+    Expr value = expression();
+    consume(SEMICOLON, "Expected ';' after expression.");
+    return new Stmt.Expression(value);
+  }
 
   // equality -> equality ( "-" | "+" ) comparison
   //           | comparison ;
@@ -75,8 +95,8 @@ class Parser {
     }
     if (match(LEFT_PAREN)) {
       Expr expr = expression();
-      // TODO: we should present the original source code for easier debugging;
-      // that will require keep source maps in the tokens, though.
+      // TODO: we should present the original source code for easier
+      // debugging; that will require keep source maps in the tokens, though.
       consume(RIGHT_PAREN, String.format("Expected ')' after expression: %s",
                                          new AstPrinter().print(expr)));
       return new Expr.Grouping(expr);

@@ -8,29 +8,30 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class InterpreterTest {
-  private static Object interpret(String source) {
-    Scanner scanner = new Scanner(source);
+  private static Object interpret(String singleExpression) {
+    Scanner scanner = new Scanner(singleExpression);
     List<Token> tokens = scanner.scanTokens();
     Parser parser = new Parser(tokens);
-    Expr expression = parser.parse();
+    List<Stmt> statements = parser.parse();
 
     // stop if there was a syntax error
-    if (expression == null)
+    if (statements.size() == 0)
       return null;
 
     Interpreter interpreter = new Interpreter();
-    return interpreter.evaluate(expression);
+    Stmt.Expression expr = (Stmt.Expression)statements.get(0);
+    return interpreter.evaluate(expr.expression);
   }
 
   @Test
   void canInterpretArithmeticExpressions() {
-    Object result = interpret("(10 + 20) / (2 * 5)");
+    Object result = interpret("(10 + 20) / (2 * 5);");
     assertEquals(3.0, (double)result);
   }
 
   @Test
   void canInterpretBooleanExpressions() {
-    Object result = interpret("(1 + 1) == 2 == true");
+    Object result = interpret("(1 + 1) == 2 == true;");
     assertEquals(true, (boolean)result);
   }
 }
