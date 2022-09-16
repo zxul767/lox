@@ -28,6 +28,16 @@ class RPNPrinter implements Expr.Visitor<String> {
     return toRPN(expr.operator.lexeme, expr.right);
   }
 
+  @Override
+  public String visitVariableExpr(Expr.Variable expr) {
+    return expr.name.lexeme;
+  }
+
+  @Override
+  public String visitAssignExpr(Expr.Assign expr) {
+    return toRPN("assign", new Expr.Variable(expr.name), expr.value);
+  }
+
   private String toRPN(String operator, Expr... operands) {
     StringBuilder builder = new StringBuilder();
     for (Expr operand : operands) {

@@ -68,13 +68,14 @@ public class Lox {
   }
 
   static void runtimeError(RuntimeError error) {
-    System.err.println(
-        String.format("%s\n[line %d]", error.getMessage(), error.token.line));
+    System.err.println(String.format("Runtime Error: %s\n[line %d]",
+                                     error.getMessage(), error.token.line));
     hadRuntimeError = true;
   }
 
   private static void report(int line, String where, String message) {
-    System.err.println("[line " + line + "] Error" + where + ": " + message);
+    System.err.println("Parsing Error: [line " + line + "] Error" + where +
+                       ": " + message);
     hadError = true;
   }
 
