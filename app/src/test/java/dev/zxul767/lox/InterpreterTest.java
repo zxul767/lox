@@ -8,8 +8,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class InterpreterTest {
-  private static Object interpret(String singleExpression) {
-    Scanner scanner = new Scanner(singleExpression);
+  // returns the value of the last statement (expression) in `program`.
+  //
+  // pre-condition: the last statement in `program` is an expression.
+  // post-condition: all statements in `program` have been executed.
+  private static Object interpret(String program) {
+    Scanner scanner = new Scanner(program);
     List<Token> tokens = scanner.scanTokens();
     Parser parser = new Parser(tokens);
     List<Stmt> statements = parser.parse();
@@ -19,7 +23,9 @@ class InterpreterTest {
       return null;
 
     Interpreter interpreter = new Interpreter();
-    Stmt.Expression expr = (Stmt.Expression)statements.get(0);
+    interpreter.interpret(statements);
+    int lastIndex = statements.size() - 1;
+    Stmt.Expression expr = (Stmt.Expression)statements.get(lastIndex);
     return interpreter.evaluate(expr.expression);
   }
 
@@ -33,5 +39,25 @@ class InterpreterTest {
   void canInterpretBooleanExpressions() {
     Object result = interpret("(1 + 1) == 2 == true;");
     assertEquals(true, (boolean)result);
+  }
+
+  @Test
+  void canUseGlobalVariables() {
+    Object result = interpret("var a = 1; var b = 2; (a + b) == 3 == true;");
+    assertEquals(true, (boolean)result);
+  }
+
+  @Test
+  void localVariablesShouldShadowGlobalOnes() {
+    Object result =
+        interpret("var a = 1; var result; { var a = 2; result = a; } result;");
+    assertEquals(2.0, (double)result);
+  }
+
+  @Test
+  void localVariablesShouldOnesInOuterScope() {
+    Object result = interpret(
+        "var a = 1; var result; { var a = 2; { var a = 3; result = a; } } result;");
+    assertEquals(3.0, (double)result);
   }
 }

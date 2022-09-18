@@ -31,6 +31,7 @@ class Parser {
   // expression -> equality ;
   private Expr expression() { return assignment(); }
 
+  // declaration -> "var" varDeclaration
   private Stmt declaration() {
     try {
       if (match(VAR))
@@ -42,18 +43,27 @@ class Parser {
     }
   }
 
+  // statement -> expressionStatement
+  //            | printStatement
+  //            | block ;
   private Stmt statement() {
     if (match(PRINT))
       return printStatement();
+
+    if (match(LEFT_BRACE))
+      return new Stmt.Block(block());
+
     return expressionStatement();
   }
 
+  // printStatement -> "print" expression ;
   private Stmt printStatement() {
     Expr value = expression();
     consume(SEMICOLON, "Expected ';' after value.");
     return new Stmt.Print(value);
   }
 
+  // varDeclaration -> IDENTIFIER ("=" expression)? ;
   private Stmt varDeclaration() {
     Token name = consume(IDENTIFIER, "expect variable name.");
     Expr initializer = null;
@@ -64,12 +74,25 @@ class Parser {
     return new Stmt.Var(name, initializer);
   }
 
+  // expressionStatement -> expression ;
   private Stmt expressionStatement() {
     Expr value = expression();
     consume(SEMICOLON, "Expected ';' after expression.");
     return new Stmt.Expression(value);
   }
 
+  // block -> "{" declaration* "}" ;
+  private List<Stmt> block() {
+    List<Stmt> statements = new ArrayList<>();
+    while (!check(RIGHT_BRACE) && !isAtEnd()) {
+      statements.add(declaration());
+    }
+    consume(RIGHT_BRACE, "Expected '}' after block.");
+    return statements;
+  }
+
+  // assignment -> IDENTIFIER "=" assignment
+  //             | equality ;
   private Expr assignment() {
     Expr expr = equality();
 
