@@ -1,5 +1,7 @@
 package dev.zxul767.lox;
 
+import java.util.ArrayList;
+
 // RPN stands for Reverse Polish Notation
 // See https://en.wikipedia.org/wiki/Reverse_Polish_notation
 //
@@ -41,6 +43,13 @@ class RPNPrinter implements Expr.Visitor<String> {
   @Override
   public String visitAssignExpr(Expr.Assign expr) {
     return toRPN("assign", new Expr.Variable(expr.name), expr.value);
+  }
+
+  @Override
+  public String visitCallExpr(Expr.Call expr) {
+    ArrayList<Expr> args = new ArrayList<>(expr.arguments);
+    args.add(0, expr.callee);
+    return toRPN("funcall", args.toArray(new Expr[0]));
   }
 
   private String toRPN(String operator, Expr... operands) {

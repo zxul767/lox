@@ -1,9 +1,16 @@
 package dev.zxul767.lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
-  private Environment environment = new Environment();
+  final Environment globals = new Environment();
+  private Environment environment = globals;
+
+  Interpreter() {
+    globals.define("clock", StandardLibrary.clock);
+    globals.define("sin", StandardLibrary.sin);
+  }
 
   void interpret(List<Stmt> statements) {
     try {
@@ -17,9 +24,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   Object evaluate(Expr expression) { return expression.accept(this); }
 
-  private void execute(Stmt stmt) { stmt.accept(this); }
+  void execute(Stmt stmt) { stmt.accept(this); }
 
-  private void executeBlock(List<Stmt> statements, Environment environment) {
+  void executeBlock(List<Stmt> statements, Environment environment) {
     Environment previous = this.environment;
     try {
       this.environment = environment;
@@ -44,6 +51,13 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   }
 
   @Override
+  public Void visitFunctionStmt(Stmt.Function stmt) {
+    LoxFunction function = new LoxFunction(stmt);
+    environment.define(stmt.name.lexeme, function);
+    return null;
+  }
+
+  @Override
   public Void visitIfStmt(Stmt.If stmt) {
     if (isTruthy(evaluate(stmt.condition))) {
       execute(stmt.thenBranch);
@@ -58,6 +72,14 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     Object value = evaluate(stmt.expression);
     System.out.println(stringify(value));
     return null;
+  }
+
+  @Override
+  public Void visitReturnStmt(Stmt.Return stmt) {
+    Object value = null;
+    if (stmt.value != null)
+      value = evaluate(stmt.value);
+    throw new Return(value);
   }
 
   @Override
@@ -170,6 +192,26 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
     // unreachable
     return null;
+  }
+
+  @Override
+  public Object visitCallExpr(Expr.Call expr) {
+    Object callee = evaluate(expr.callee);
+    List<Object> args = new ArrayList<>();
+    for (Expr arg : expr.arguments) {
+      args.add(evaluate(arg));
+    }
+    if (!(callee instanceof LoxCallable)) {
+      throw new RuntimeError(expr.paren,
+                             "Can only call functions and classes.");
+    }
+    LoxCallable function = (LoxCallable)callee;
+    if (args.size() != function.arity()) {
+      throw new RuntimeError(expr.paren,
+                             String.format("Expected %d arguments but got %d.",
+                                           function.arity(), args.size()));
+    }
+    return function.call(this, args);
   }
 
   private void checkNumberOperand(Token operator, Object operand) {

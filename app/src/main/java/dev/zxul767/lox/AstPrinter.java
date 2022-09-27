@@ -1,5 +1,7 @@
 package dev.zxul767.lox;
 
+import java.util.ArrayList;
+
 class AstPrinter implements Expr.Visitor<String> {
   String print(Expr expr) { return expr.accept(this); }
 
@@ -38,6 +40,13 @@ class AstPrinter implements Expr.Visitor<String> {
   @Override
   public String visitAssignExpr(Expr.Assign expr) {
     return parenthesize("assign", new Expr.Variable(expr.name), expr.value);
+  }
+
+  @Override
+  public String visitCallExpr(Expr.Call expr) {
+    ArrayList<Expr> args = new ArrayList<>(expr.arguments);
+    args.add(0, expr.callee);
+    return parenthesize("funcall", args.toArray(new Expr[0]));
   }
 
   private String parenthesize(String name, Expr... exprs) {

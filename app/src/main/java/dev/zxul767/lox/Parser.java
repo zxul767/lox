@@ -32,10 +32,13 @@ class Parser {
   // expression -> assignment
   private Expr expression() { return assignment(); }
 
-  // declaration -> "var" varDeclaration
+  // declaration -> varDeclaration
+  //              | funDeclaration
   //              | statement
   private Stmt declaration() {
     try {
+      if (match(FUN))
+        return funDeclaration("function");
       if (match(VAR))
         return varDeclaration();
       return statement();
@@ -58,6 +61,9 @@ class Parser {
 
     if (match(PRINT))
       return printStatement();
+
+    if (match(RETURN))
+      return returnStatement();
 
     if (match(WHILE))
       return whileStatement();
@@ -136,7 +142,19 @@ class Parser {
     return new Stmt.Print(value);
   }
 
-  // varDeclaration -> IDENTIFIER ("=" expression)? ";"
+  // returnStatement -> "return" expression? ";"
+  private Stmt returnStatement() {
+    Token keyword = previous();
+    Expr value = null;
+    if (!check(SEMICOLON)) {
+      value = expression();
+    }
+    consume(SEMICOLON, "Expected ';' after return value.");
+
+    return new Stmt.Return(keyword, value);
+  }
+
+  // varDeclaration -> "var" IDENTIFIER ("=" expression)? ";"
   private Stmt varDeclaration() {
     Token name = consume(IDENTIFIER, "expect variable name.");
     Expr initializer = null;
@@ -172,6 +190,27 @@ class Parser {
     }
     consume(RIGHT_BRACE, "Expected '}' after block.");
     return statements;
+  }
+
+  // funDeclaration -> "fun" IDENTIFIER "(" parameters? ")" block
+  private Stmt.Function funDeclaration(String kind) {
+    Token name = consume(IDENTIFIER, String.format("Expected %s name.", kind));
+    consume(LEFT_PAREN, String.format("Expected '(' after %s name.", kind));
+    List<Token> parameters = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do {
+        if (parameters.size() >= 255) {
+          error(peek(), "Can't have more than 255 parameters.");
+        }
+        parameters.add(consume(IDENTIFIER, "Expected parameter name."));
+      } while (match(COMMA));
+    }
+    consume(RIGHT_PAREN, "Expected ')' after parameters");
+
+    consume(LEFT_BRACE, String.format("Expected '{' before %s body.", kind));
+    List<Stmt> body = block();
+
+    return new Stmt.Function(name, parameters, body);
   }
 
   // In Lox, assignments are expressions, so one can do things like:
@@ -242,14 +281,47 @@ class Parser {
   private Expr factor() { return binary(() -> unary(), SLASH, STAR); }
 
   // unary -> ( "!" | "-" ) unary
-  //        | primary
+  //        | call
   private Expr unary() {
     if (match(BANG, MINUS)) {
       Token operator = previous();
       Expr right = unary();
       return new Expr.Unary(operator, right);
     }
-    return primary();
+    return call();
+  }
+
+  private Expr finishCall(Expr callee) {
+    List<Expr> arguments = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do {
+        // TODO: hoist 255 into a symbolic constant (maybe in a Constraints
+        // static class?)
+        if (arguments.size() >= 255) {
+          error(peek(), "Can't have more than 255 arguments.");
+        }
+        arguments.add(expression());
+      } while (match(COMMA));
+    }
+    Token paren = consume(RIGHT_PAREN, "Expected ')' after arguments.");
+    return new Expr.Call(callee, paren, arguments);
+  }
+
+  private Expr call() {
+    Expr expr = primary();
+    // this loop is necessary because the primary expression could return a
+    // function that returns another function, and so on:
+    //
+    // callee(a, b)(c, d, e)(f, g)
+    //
+    while (true) {
+      if (match(LEFT_PAREN)) {
+        expr = finishCall(expr);
+      } else {
+        break;
+      }
+    }
+    return expr;
   }
 
   // primary -> NUMBER | STRING | "true" | "false" | "nil"

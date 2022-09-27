@@ -94,4 +94,24 @@ class InterpreterTest {
         "var sum = 0; for (var i = 0; i <= 10; i = i + 1) { sum = sum + i; } sum;");
     assertEquals(55.0, (double)result);
   }
+
+  @Test
+  void canDefineSimpleProcedures() {
+    Object result = interpret(
+        "var total = 10; fun addTax() { total = total * 1.1; } addTax(); total;");
+    assertEquals(11.0, (double)result);
+  }
+
+  @Test
+  void canDefineRecursiveFunctions() {
+    Object result = interpret(
+        "fun fib(n) { if (n <= 1) return n; return fib(n-1) + fib(n-2); } fib(10);");
+    assertEquals(55.0, (double)result);
+  }
+
+  @Test
+  void canUseStandardLibraryFunctions() {
+    Object result = interpret("sin(3.14159265359);");
+    assertEquals(0.0, (double)result, /*delta:*/ 1e-5);
+  }
 }
