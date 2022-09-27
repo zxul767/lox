@@ -24,6 +24,11 @@ class RPNPrinter implements Expr.Visitor<String> {
   }
 
   @Override
+  public String visitLogicalExpr(Expr.Logical expr) {
+    return toRPN(expr.operator.lexeme, expr.left, expr.right);
+  }
+
+  @Override
   public String visitUnaryExpr(Expr.Unary expr) {
     return toRPN(expr.operator.lexeme, expr.right);
   }

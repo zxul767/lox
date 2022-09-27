@@ -60,4 +60,24 @@ class InterpreterTest {
         "var a = 1; var result; { var a = 2; { var a = 3; result = a; } } result;");
     assertEquals(3.0, (double)result);
   }
+
+  @Test
+  void canUseConditionalsWithBareStatements() {
+    Object result = interpret("var result; if (1 == 1) result = true; result;");
+    assertEquals(true, (boolean)result);
+  }
+
+  @Test
+  void canUseConditionalsWithBlock() {
+    Object result =
+        interpret("var result; if (1 == 1) { result = true; } result;");
+    assertEquals(true, (boolean)result);
+  }
+
+  @Test
+  void canUseConditionalsWithElse() {
+    Object result = interpret(
+        "var result; if (1 == 2) { result = true; } else { result = false; } result;");
+    assertEquals(false, (boolean)result);
+  }
 }

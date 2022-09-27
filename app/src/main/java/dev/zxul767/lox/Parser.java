@@ -23,15 +23,16 @@ class Parser {
         statements.add(declaration());
       }
     } catch (ParseError error) {
-      // TODO: does the caller care about the errors?
+      // TODO: call error on future error reporter
     }
     return statements;
   }
 
-  // expression -> equality ;
+  // expression -> assignment
   private Expr expression() { return assignment(); }
 
   // declaration -> "var" varDeclaration
+  //              | statement
   private Stmt declaration() {
     try {
       if (match(VAR))
@@ -44,9 +45,13 @@ class Parser {
   }
 
   // statement -> expressionStatement
+  //            | ifStatement
   //            | printStatement
-  //            | block ;
+  //            | block
   private Stmt statement() {
+    if (match(IF))
+      return ifStatement();
+
     if (match(PRINT))
       return printStatement();
 
@@ -56,14 +61,29 @@ class Parser {
     return expressionStatement();
   }
 
-  // printStatement -> "print" expression ;
+  // ifStatement -> "if" "(" expression ")" statement
+  //                ("else" statement)?
+  private Stmt ifStatement() {
+    consume(LEFT_PAREN, "Expected '(' after 'if'.");
+    Expr condition = expression();
+    consume(RIGHT_PAREN, "Expected ')' after 'if' condition.");
+
+    Stmt thenBranch = statement();
+    Stmt elseBranch = null;
+    if (match(ELSE)) {
+      elseBranch = statement();
+    }
+    return new Stmt.If(condition, thenBranch, elseBranch);
+  }
+
+  // printStatement -> "print" expression ";"
   private Stmt printStatement() {
     Expr value = expression();
     consume(SEMICOLON, "Expected ';' after value.");
     return new Stmt.Print(value);
   }
 
-  // varDeclaration -> IDENTIFIER ("=" expression)? ;
+  // varDeclaration -> IDENTIFIER ("=" expression)? ";"
   private Stmt varDeclaration() {
     Token name = consume(IDENTIFIER, "expect variable name.");
     Expr initializer = null;
@@ -74,14 +94,14 @@ class Parser {
     return new Stmt.Var(name, initializer);
   }
 
-  // expressionStatement -> expression ;
+  // expressionStatement -> expression ";"
   private Stmt expressionStatement() {
     Expr value = expression();
     consume(SEMICOLON, "Expected ';' after expression.");
     return new Stmt.Expression(value);
   }
 
-  // block -> "{" declaration* "}" ;
+  // block -> "{" declaration* "}"
   private List<Stmt> block() {
     List<Stmt> statements = new ArrayList<>();
     while (!check(RIGHT_BRACE) && !isAtEnd()) {
@@ -91,10 +111,15 @@ class Parser {
     return statements;
   }
 
+  // In Lox, assignments are expressions, so one can do things like:
+  //    if (a = true) print "a is true";
+  // Is this wise? Probably not, as evidenced by its prohibition in
+  // modern languages (e.g., Python and Go)
+  //
   // assignment -> IDENTIFIER "=" assignment
-  //             | equality ;
+  //             | logic_or
   private Expr assignment() {
-    Expr expr = equality();
+    Expr expr = or();
 
     if (match(EQUAL)) {
       Token equals = previous();
@@ -109,28 +134,52 @@ class Parser {
     return expr;
   }
 
+  // logic_or -> logic_nad ( "or" logic_and )*
+  private Expr or() {
+    Expr expr = and();
+
+    while (match(OR)) {
+      Token operator = previous();
+      Expr right = and();
+      expr = new Expr.Logical(expr, operator, right);
+    }
+    return expr;
+  }
+
+  // logic_and -> equality ( "and" equality )*
+  private Expr and() {
+    Expr expr = equality();
+
+    while (match(AND)) {
+      Token operator = previous();
+      Expr right = equality();
+      expr = new Expr.Logical(expr, operator, right);
+    }
+    return expr;
+  }
+
   // equality -> equality ( "-" | "+" ) comparison
-  //           | comparison ;
+  //           | comparison
   private Expr equality() {
     return binary(() -> comparison(), BANG_EQUAL, EQUAL_EQUAL);
   }
 
   // comparison -> comparison ( ">" | ">=" | "<" | "<=" ) term
-  //             | term ;
+  //             | term
   private Expr comparison() {
     return binary(() -> term(), GREATER, GREATER_EQUAL, LESS, LESS_EQUAL);
   }
 
   // term -> term ( "-" | "+" ) factor
-  //       | factor ;
+  //       | factor
   private Expr term() { return binary(() -> factor(), MINUS, PLUS); }
 
   // factor -> factor ( "/" | "*" ) unary
-  //         | unary ;
+  //         | unary
   private Expr factor() { return binary(() -> unary(), SLASH, STAR); }
 
   // unary -> ( "!" | "-" ) unary
-  //        | primary ;
+  //        | primary
   private Expr unary() {
     if (match(BANG, MINUS)) {
       Token operator = previous();
@@ -141,7 +190,7 @@ class Parser {
   }
 
   // primary -> NUMBER | STRING | "true" | "false" | "nil"
-  //          | "(" expression ")" ;
+  //          | "(" expression ")"
   private Expr primary() {
     if (match(FALSE))
       return new Expr.Literal(false);
@@ -170,7 +219,7 @@ class Parser {
   }
 
   // binary -> binary ONE_OF<tokenTypes> subunit
-  //         | subunit ;
+  //         | subunit
   private Expr binary(Supplier<Expr> subunitParser, TokenType... tokenTypes) {
     Expr expr = subunitParser.get();
     while (match(tokenTypes)) {
@@ -223,8 +272,16 @@ class Parser {
   }
 
   // skips as many tokens as necessary to get out of the current
-  // state of confusion (when we've failed to parse a rule but
-  // we want to tolerate errors)
+  // state of confusion (i.e., we've failed to parse a rule but
+  // we want to tolerate errors, so we try to move past to the
+  // begining of the next statement.)
+  //
+  // pre-condition: the current token "breaks" the current grammar
+  // rule being parsed.
+  //
+  // post-condition: all tokens in the previous statement have been
+  // discarded, and the current token is now at the beginning of the
+  // next statement or at EOF
   private void synchronize() {
     advance();
 
