@@ -110,6 +110,13 @@ class InterpreterTest {
   }
 
   @Test
+  void canReturnClosures() {
+    Object result = interpret(
+        "fun counter() { var i = -1; fun next() { i = i + 1; return i; } return next; } var c = counter(); c(); c();");
+    assertEquals(2.0, (double)result);
+  }
+
+  @Test
   void canUseStandardLibraryFunctions() {
     Object result = interpret("sin(3.14159265359);");
     assertEquals(0.0, (double)result, /*delta:*/ 1e-5);
