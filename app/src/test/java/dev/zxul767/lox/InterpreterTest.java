@@ -82,9 +82,16 @@ class InterpreterTest {
   }
 
   @Test
-  void canIterateWithWhileStatement() {
+  void whileStatementShouldProvideIteration() {
     Object result = interpret(
         "var sum = 0; var i = 1; while (i <= 10) { sum = sum + i; i = i + 1; } sum;");
+    assertEquals(55.0, (double)result);
+  }
+
+  @Test
+  void forStatementShouldProvideIteration() {
+    Object result = interpret(
+        "var sum = 0; for (var i = 0; i <= 10; i = i + 1) { sum = sum + i; } sum;");
     assertEquals(55.0, (double)result);
   }
 }
