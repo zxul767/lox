@@ -52,7 +52,11 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private void declare(Token name) {
     if (scopes.isEmpty())
       return;
-    scopes.peek().put(name.lexeme, VarResolution.DECLARED);
+    Map<String, VarResolution> scope = scopes.peek();
+    if (scope.containsKey(name.lexeme)) {
+      Lox.error(name, "Already a variable with this name in this scope.");
+    }
+    scope.put(name.lexeme, VarResolution.DECLARED);
   }
 
   private void define(Token name) {
