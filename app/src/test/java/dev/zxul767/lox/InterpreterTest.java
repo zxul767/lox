@@ -13,6 +13,8 @@ class InterpreterTest {
   // pre-condition: the last statement in `program` is an expression.
   // post-condition: all statements in `program` have been executed.
   private static Object interpret(String program) {
+    // TODO: we should have a high-level API for the interpreter to avoid
+    // duplicating logic with Lox.java
     Scanner scanner = new Scanner(program);
     List<Token> tokens = scanner.scanTokens();
     Parser parser = new Parser(tokens);
@@ -23,6 +25,10 @@ class InterpreterTest {
       return null;
 
     Interpreter interpreter = new Interpreter();
+    // if we don't resolve the program, variable references will fail
+    Resolver resolver = new Resolver(interpreter);
+    resolver.resolve(statements);
+
     interpreter.interpret(statements);
     int lastIndex = statements.size() - 1;
     Stmt.Expression expr = (Stmt.Expression)statements.get(lastIndex);
@@ -114,6 +120,14 @@ class InterpreterTest {
     Object result = interpret(
         "fun counter() { var i = -1; fun next() { i = i + 1; return i; } return next; } var c = counter(); c(); c();");
     assertEquals(2.0, (double)result);
+  }
+
+  @Test
+  void lexicalScopeShouldBeHonored() {
+    // if F() didn't honor lexical scoping, `result` would end up being 2.0
+    Object result = interpret(
+        "var result; var a = 1; { fun F() { return a; } F(); var a = 2; result = F(); } result;");
+    assertEquals(1.0, result);
   }
 
   @Test
