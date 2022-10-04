@@ -26,7 +26,7 @@ import java.util.Stack;
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private enum VarResolution { DECLARED, DEFINED }
   private enum FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
-  private enum ClassType { NONE, CLASS }
+  private enum ClassType { NONE, CLASS, SUBCLASS }
 
   // We need the interpreter to communicate to it information about the
   // declaring scopes for each variable reference in the AST.
@@ -129,7 +129,6 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
 
     ClassType enclosingClass = currentClass;
-    currentClass = ClassType.CLASS;
 
     // It is valid to refer to the class name inside its definition,
     // so we'll pretend that it is defined at this point.
@@ -141,6 +140,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       // inside blocks, so it's possible the superclass name refers to a local
       // variable.
       // TODO: do we really want/need to allow classes to be defined locally?
+      currentClass = ClassType.SUBCLASS;
       resolve(stmt.superclass);
 
       // This scope ensures that "super.method(...)" references are resolved
@@ -173,7 +173,7 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       //
       // See `Interpreter.visitSuperExpr` for more details.
     }
-
+    currentClass = ClassType.CLASS;
     // "this" (the instance) only needs to be declared (but not defined,
     // since its definition is implicit in the construction of the instance)
     beginScope();
@@ -315,6 +315,12 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitSuperExpr(Expr.Super expr) {
+    if (currentClass == ClassType.NONE) {
+      Lox.error(expr.keyword, "Can't use 'super' outside of class.");
+    } else if (currentClass != ClassType.SUBCLASS) {
+      Lox.error(expr.keyword,
+                "Can't use 'super' in a class with no superclass.");
+    }
     resolveLocal(expr, expr.keyword);
     return null;
   }
