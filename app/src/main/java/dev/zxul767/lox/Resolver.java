@@ -25,7 +25,7 @@ import java.util.Stack;
 //
 class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private enum VarResolution { DECLARED, DEFINED }
-  private enum FunctionType { NONE, FUNCTION, METHOD }
+  private enum FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
   private enum ClassType { NONE, CLASS }
 
   // We need the interpreter to communicate to it information about the
@@ -134,7 +134,11 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     declare(new Token(THIS, "this"));
 
     for (Stmt.Function method : stmt.methods) {
-      resolveFunction(method, FunctionType.METHOD);
+      FunctionType declaration = FunctionType.METHOD;
+      if (method.name.lexeme.equals("__init__")) {
+        declaration = FunctionType.INITIALIZER;
+      }
+      resolveFunction(method, declaration);
     }
     define(stmt.name);
     endScope();
@@ -178,6 +182,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       Lox.error(stmt.keyword, "Can't return from top-level code.");
     }
     if (stmt.value != null) {
+      if (currentFunction == FunctionType.INITIALIZER) {
+        Lox.error(stmt.keyword, "Can't return a value from an initializer.");
+      }
       resolve(stmt.value);
     }
     return null;

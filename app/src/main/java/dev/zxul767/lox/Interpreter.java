@@ -31,8 +31,6 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   void execute(Stmt stmt) { stmt.accept(this); }
 
-  void resolve(Expr expr, int depth) { locals.put(expr, depth); }
-
   void executeBlock(List<Stmt> statements, Environment environment) {
     Environment previous = this.environment;
     try {
@@ -44,6 +42,11 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       this.environment = previous;
     }
   }
+
+  // Track how many environment hops (from the active environment) are
+  // necessary to make to reach the environment were the variable contained
+  // in `expr` was declared.
+  void resolve(Expr expr, int hops) { locals.put(expr, hops); }
 
   @Override
   public Void visitBlockStmt(Stmt.Block stmt) {
@@ -57,7 +60,9 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     Map<String, LoxFunction> methods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
-      LoxFunction function = new LoxFunction(method, environment);
+      LoxFunction function = new LoxFunction(
+          method, environment,
+          /* isInitializer: */ method.name.lexeme.equals("__init__"));
       methods.put(method.name.lexeme, function);
     }
     LoxClass _class = new LoxClass(stmt.name.lexeme, methods);
@@ -73,7 +78,8 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitFunctionStmt(Stmt.Function stmt) {
-    LoxFunction function = new LoxFunction(stmt, environment);
+    LoxFunction function =
+        new LoxFunction(stmt, environment, /* isInitializer: */ false);
     environment.define(stmt.name.lexeme, function);
     return null;
   }
