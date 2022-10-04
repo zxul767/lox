@@ -1,6 +1,6 @@
 package dev.zxul767.lox;
 
-import static dev.zxul767.lox.TokenType.THIS;
+import static dev.zxul767.lox.TokenType.*;
 
 import java.util.HashMap;
 import java.util.List;
@@ -123,16 +123,61 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitClassStmt(Stmt.Class stmt) {
+    if (stmt.superclass != null &&
+        stmt.name.lexeme.equals(stmt.superclass.name.lexeme)) {
+      Lox.error(stmt.superclass.name, "A class can't inherit from itself.");
+    }
+
     ClassType enclosingClass = currentClass;
     currentClass = ClassType.CLASS;
 
-    declare(stmt.name);
-    beginScope();
-    // "this" (the instance) only needs to be declared
-    // (but not defined, since that's implicit when any of the methods
-    // are invoked)
-    declare(new Token(THIS, "this"));
+    // It is valid to refer to the class name inside its definition,
+    // so we'll pretend that it is defined at this point.
+    declareAndDefine(stmt.name);
 
+    if (stmt.superclass != null) {
+      // This doesn't usually do anything useful (since classes are usually
+      // declared at the top level). However, classes can be declared even
+      // inside blocks, so it's possible the superclass name refers to a local
+      // variable.
+      // TODO: do we really want/need to allow classes to be defined locally?
+      resolve(stmt.superclass);
+
+      // This scope ensures that "super.method(...)" references are resolved
+      // by starting the lookup on the superclass containing the "super"
+      // expression (and not on the superclass of the "this" instance)
+      beginScope();
+      define(new Token(SUPER, "super"));
+      // Consider the following program to see why this is necessary:
+      //
+      // class A {
+      //   method() {
+      //     print "A method";
+      //   }
+      // }
+      // class B < A {
+      //   method() {
+      //     print "B method";
+      //   }
+      //   test() {
+      //     super.method();
+      //   }
+      // }
+      // class C < B {}
+      // C().test();
+      //
+      // Without the additional environment, resolving "super" could only be
+      // done with information available to C's instance, which would point
+      // to B. However, our expectation is that "super" would resolve to A
+      // instead (because "super" has lexical-scope resolution semantics.)
+      //
+      // See `Interpreter.visitSuperExpr` for more details.
+    }
+
+    // "this" (the instance) only needs to be declared (but not defined,
+    // since its definition is implicit in the construction of the instance)
+    beginScope();
+    declare(new Token(THIS, "this"));
     for (Stmt.Function method : stmt.methods) {
       FunctionType declaration = FunctionType.METHOD;
       if (method.name.lexeme.equals("__init__")) {
@@ -140,8 +185,12 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
       }
       resolveFunction(method, declaration);
     }
-    define(stmt.name);
     endScope();
+
+    if (stmt.superclass != null) {
+      // ends the scope associated with the "super" keyword
+      endScope();
+    }
 
     currentClass = enclosingClass;
     return null;
@@ -261,6 +310,12 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   public Void visitSetExpr(Expr.Set expr) {
     resolve(expr.value);
     resolve(expr.object);
+    return null;
+  }
+
+  @Override
+  public Void visitSuperExpr(Expr.Super expr) {
+    resolveLocal(expr, expr.keyword);
     return null;
   }
 

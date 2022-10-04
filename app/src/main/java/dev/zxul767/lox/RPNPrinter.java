@@ -64,7 +64,12 @@ class RPNPrinter implements Expr.Visitor<String> {
 
   @Override
   public String visitThisExpr(Expr.This expr) {
-    return toRPN("get", new Expr.Variable(expr.keyword), expr);
+    return toRPN("get", new Expr.Variable(expr.keyword));
+  }
+
+  @Override
+  public String visitSuperExpr(Expr.Super expr) {
+    return toRPN("super", new Expr.Variable(expr.method));
   }
 
   private String toRPN(String operator, Expr... operands) {

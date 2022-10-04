@@ -56,7 +56,20 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitClassStmt(Stmt.Class stmt) {
+    Object superclass = null;
+    if (stmt.superclass != null) {
+      superclass = evaluate(stmt.superclass);
+      if (!(superclass instanceof LoxClass)) {
+        throw new RuntimeError(stmt.superclass.name,
+                               "Superclass must be a class.");
+      }
+    }
     environment.define(stmt.name.lexeme, null);
+
+    if (stmt.superclass != null) {
+      environment = new Environment(environment);
+      environment.define("super", superclass);
+    }
 
     Map<String, LoxFunction> methods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
@@ -65,8 +78,18 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
           /* isInitializer: */ method.name.lexeme.equals("__init__"));
       methods.put(method.name.lexeme, function);
     }
-    LoxClass _class = new LoxClass(stmt.name.lexeme, methods);
+    LoxClass _class =
+        new LoxClass(stmt.name.lexeme, (LoxClass)superclass, methods);
+
+    // The enviroment defined for "super" was transient and only needed
+    // while defining the methods in the class (so their closures can
+    // bind "super" to the superclass)
+    if (superclass != null) {
+      environment = environment.enclosing;
+    }
+
     environment.assign(stmt.name, _class);
+
     return null;
   }
 
@@ -168,6 +191,21 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     Object value = evaluate(expr.value);
     ((LoxInstance)object).set(expr.name, value);
     return value;
+  }
+
+  @Override
+  public Object visitSuperExpr(Expr.Super expr) {
+    int distance = locals.get(expr);
+    LoxClass superclass = (LoxClass)environment.getAt(distance, "super");
+    LoxInstance object = (LoxInstance)environment.getAt(distance - 1, "this");
+    LoxFunction method = superclass.findMethod(expr.method.lexeme);
+
+    if (method == null) {
+      throw new RuntimeError(
+          expr.method,
+          String.format("Undefined property '%s'.", expr.method.lexeme));
+    }
+    return method.bind(object);
   }
 
   @Override
