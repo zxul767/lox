@@ -52,6 +52,21 @@ class RPNPrinter implements Expr.Visitor<String> {
     return toRPN("funcall", args.toArray(new Expr[0]));
   }
 
+  @Override
+  public String visitGetExpr(Expr.Get expr) {
+    return toRPN("get", expr.object, new Expr.Variable(expr.name));
+  }
+
+  @Override
+  public String visitSetExpr(Expr.Set expr) {
+    return toRPN("set", expr.object, new Expr.Variable(expr.name), expr.value);
+  }
+
+  @Override
+  public String visitThisExpr(Expr.This expr) {
+    return toRPN("get", new Expr.Variable(expr.keyword), expr);
+  }
+
   private String toRPN(String operator, Expr... operands) {
     StringBuilder builder = new StringBuilder();
     for (Expr operand : operands) {

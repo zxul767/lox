@@ -33,12 +33,14 @@ class Parser {
   private Expr expression() { return assignment(); }
 
   // declaration -> varDeclaration
-  //              | funDeclaration
+  //              | functionDeclaration
   //              | statement
   private Stmt declaration() {
     try {
+      if (match(CLASS))
+        return classDeclaration();
       if (match(FUN))
-        return funDeclaration("function");
+        return functionDeclaration("function");
       if (match(VAR))
         return varDeclaration();
       return statement();
@@ -46,6 +48,20 @@ class Parser {
       synchronize();
       return null;
     }
+  }
+
+  // classDeclaration -> "class" IDENTIFIER "{" function* "}"
+  private Stmt classDeclaration() {
+    Token name = consume(IDENTIFIER, "Expected class name.");
+    consume(LEFT_BRACE, "Expected '{' before class body");
+
+    List<Stmt.Function> methods = new ArrayList<>();
+    while (!check(RIGHT_BRACE) && !isAtEnd()) {
+      methods.add(functionDeclaration("method"));
+    }
+    consume(RIGHT_BRACE, "Expected '}' after class body");
+
+    return new Stmt.Class(name, methods);
   }
 
   // statement -> expressionStatement
@@ -192,8 +208,8 @@ class Parser {
     return statements;
   }
 
-  // funDeclaration -> "fun" IDENTIFIER "(" parameters? ")" block
-  private Stmt.Function funDeclaration(String kind) {
+  // functionDeclaration -> "fun" IDENTIFIER "(" parameters? ")" block
+  private Stmt.Function functionDeclaration(String kind) {
     Token name = consume(IDENTIFIER, String.format("Expected %s name.", kind));
     consume(LEFT_PAREN, String.format("Expected '(' after %s name.", kind));
     List<Token> parameters = new ArrayList<>();
@@ -218,7 +234,7 @@ class Parser {
   // Is this wise? Probably not, as evidenced by its prohibition in
   // modern languages (e.g., Python and Go)
   //
-  // assignment -> IDENTIFIER "=" assignment
+  // assignment -> ( call "." )? IDENTIFIER "=" assignment
   //             | logic_or
   private Expr assignment() {
     Expr expr = or();
@@ -230,6 +246,10 @@ class Parser {
       if (expr instanceof Expr.Variable) {
         Token name = ((Expr.Variable)expr).name;
         return new Expr.Assign(name, value);
+
+      } else if (expr instanceof Expr.Get) {
+        Expr.Get get = (Expr.Get)expr;
+        return new Expr.Set(get.object, get.name, value);
       }
       error(equals, "Invalid assignment target.");
     }
@@ -291,6 +311,34 @@ class Parser {
     return call();
   }
 
+  // TODO: since we're handling "get" expressions here too, the name "call"
+  // no longer seems appropriate and may actually be confusing. Suggestions?
+  //
+  // call -> primary ( "(" arguments? ")" | "." IDENTIFIER )*
+  // arguments -> expression ( "," expression )*
+  private Expr call() {
+    Expr callee = primary();
+    // this loop is necessary because we might have an expression like this:
+    //    callee(a, b)(c, d, e)(f, g)
+    //
+    while (true) {
+      if (match(LEFT_PAREN)) {
+        callee = finishCall(callee);
+      } else if (match(DOT)) {
+        Token name = consume(IDENTIFIER, "Expected property name after '.'.");
+        callee = new Expr.Get(callee, name);
+      } else {
+        break;
+      }
+    }
+    return callee;
+  }
+
+  // Gather all arguments and create a single call expression
+  // to be used by `call`
+  //
+  // pre-condition: a LEFT_PAREN has just been consumed
+  // post-condition: a RIGHT_PAREN is the last consumed token
   private Expr finishCall(Expr callee) {
     List<Expr> arguments = new ArrayList<>();
     if (!check(RIGHT_PAREN)) {
@@ -307,40 +355,27 @@ class Parser {
     return new Expr.Call(callee, paren, arguments);
   }
 
-  private Expr call() {
-    Expr expr = primary();
-    // this loop is necessary because the primary expression could return a
-    // function that returns another function, and so on:
-    //
-    // callee(a, b)(c, d, e)(f, g)
-    //
-    while (true) {
-      if (match(LEFT_PAREN)) {
-        expr = finishCall(expr);
-      } else {
-        break;
-      }
-    }
-    return expr;
-  }
-
   // primary -> NUMBER | STRING | "true" | "false" | "nil"
   //          | "(" expression ")"
   private Expr primary() {
-    if (match(FALSE))
+    if (match(FALSE)) {
       return new Expr.Literal(false);
-    if (match(TRUE))
+    }
+    if (match(TRUE)) {
       return new Expr.Literal(true);
-    if (match(NIL))
+    }
+    if (match(NIL)) {
       return new Expr.Literal(null);
-
+    }
     if (match(NUMBER, STRING)) {
       return new Expr.Literal(previous().value);
+    }
+    if (match(THIS)) {
+      return new Expr.This(previous());
     }
     if (match(IDENTIFIER)) {
       return new Expr.Variable(previous());
     }
-
     if (match(LEFT_PAREN)) {
       Expr expr = expression();
       // TODO: we should present the original source code for easier
@@ -349,7 +384,6 @@ class Parser {
                                          new AstPrinter().print(expr)));
       return new Expr.Grouping(expr);
     }
-
     throw error(peek(), "Unexpected token in primary expression!");
   }
 

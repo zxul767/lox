@@ -52,6 +52,20 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   }
 
   @Override
+  public Void visitClassStmt(Stmt.Class stmt) {
+    environment.define(stmt.name.lexeme, null);
+
+    Map<String, LoxFunction> methods = new HashMap<>();
+    for (Stmt.Function method : stmt.methods) {
+      LoxFunction function = new LoxFunction(method, environment);
+      methods.put(method.name.lexeme, function);
+    }
+    LoxClass _class = new LoxClass(stmt.name.lexeme, methods);
+    environment.assign(stmt.name, _class);
+    return null;
+  }
+
+  @Override
   public Void visitExpressionStmt(Stmt.Expression stmt) {
     evaluate(stmt.expression);
     return null;
@@ -136,6 +150,23 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         return left;
     }
     return evaluate(expr.right);
+  }
+
+  @Override
+  public Object visitSetExpr(Expr.Set expr) {
+    Object object = evaluate(expr.object);
+    if (!(object instanceof LoxInstance)) {
+      throw new RuntimeError(expr.name, "Only instances have fields.");
+    }
+
+    Object value = evaluate(expr.value);
+    ((LoxInstance)object).set(expr.name, value);
+    return value;
+  }
+
+  @Override
+  public Object visitThisExpr(Expr.This expr) {
+    return lookupVariable(expr.keyword, expr);
   }
 
   @Override
@@ -234,6 +265,15 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
                                            function.arity(), args.size()));
     }
     return function.call(this, args);
+  }
+
+  @Override
+  public Object visitGetExpr(Expr.Get expr) {
+    Object object = evaluate(expr.object);
+    if (object instanceof LoxInstance) {
+      return ((LoxInstance)object).get(expr.name);
+    }
+    throw new RuntimeError(expr.name, "Only instances have properties.");
   }
 
   private void checkNumberOperand(Token operator, Object operand) {
