@@ -7,3 +7,5 @@ build
 *.jar
 *.war
 *.ear
+
+!gradle-wrapper.jar
