@@ -5,7 +5,7 @@ CSS (for redering graphics), SCSS (a superset of CSS), HTML (for structuring web
 
 **2. Get a "Hello, world!" program written and running in Java. Set up whatever makefiles or IDE projects you need to get it working. If you have a debugger, get comfortable with it and step through your program as it runs.**
 
-I guess this project setup covers the above and beyond?
+I guess this project setup (i.e., [`jlox`](./jlox))covers the above and beyond?
 
 **3. Do the same thing for C. To get some practice with pointers, define a doubly linked list of heap-allocated strings. Write functions to insert, find, and delete items from it. Test them.**
 
