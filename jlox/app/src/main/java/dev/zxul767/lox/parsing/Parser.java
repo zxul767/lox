@@ -1,23 +1,24 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.parsing;
 
-import static dev.zxul767.lox.TokenType.*;
+import static dev.zxul767.lox.parsing.TokenType.*;
 
+import dev.zxul767.lox.Errors;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
-class Parser {
+public class Parser {
   private static class ParseError extends RuntimeException {}
 
   private final List<Token> tokens;
   // indexes the token currently being looked at
   private int current = 0;
 
-  Parser(List<Token> tokens) { this.tokens = tokens; }
+  public Parser(List<Token> tokens) { this.tokens = tokens; }
 
-  List<Stmt> parse() {
+  public List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
     try {
       while (!isAtEnd()) {
@@ -450,7 +451,7 @@ class Parser {
   private Token previous() { return tokens.get(current - 1); }
 
   private ParseError error(Token token, String message) {
-    Lox.error(token, message);
+    Errors.error(token, message);
     return new ParseError();
   }
 

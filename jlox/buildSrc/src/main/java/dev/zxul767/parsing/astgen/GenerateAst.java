@@ -1,4 +1,4 @@
-package dev.zxul767.astgen;
+package dev.zxul767.parsing.astgen;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -45,18 +45,21 @@ public class GenerateAst {
     String path = outputDir + "/" + baseName + ".java";
     PrintWriter writer = new PrintWriter(path, "UTF-8");
 
-    writer.println("package dev.zxul767.lox;");
+    writer.println("package dev.zxul767.lox.parsing;");
     writer.println();
     writer.println("import java.util.List;");
     writer.println();
 
-    writer.println(String.format("abstract class %s {", baseName));
+    // All `Expr` and `Stmt` classes are simple data structures with no
+    // real behavior (that is implemented as "visitors" in `Interpreter` and
+    // `Resolver`) so it's okay for them (and their fields) to be public.
+    writer.println(String.format("public abstract class %s {", baseName));
 
     defineVisitor(writer, baseName, types);
 
     // The base accept() method
     iprintln(writer, /*indentation:*/ 2,
-             "abstract <R> R accept(Visitor<R> visitor);");
+             "public abstract <R> R accept(Visitor<R> visitor);");
 
     // the AST classes
     writer.println();
@@ -74,11 +77,11 @@ public class GenerateAst {
 
   private static void defineVisitor(PrintWriter writer, String baseName,
                                     List<String> types) {
-    iprintln(writer, /*indentation:*/ 2, "interface Visitor<R> {");
+    iprintln(writer, /*indentation:*/ 2, "public interface Visitor<R> {");
     for (String type : types) {
       String typeName = type.split(":")[0].trim();
       iprintln(writer, /*indentation:*/ 4,
-               String.format("R visit%s(%s);", typeName + baseName,
+               String.format("public R visit%s(%s);", typeName + baseName,
                              typeName + " " + baseName.toLowerCase()));
     }
     iprintln(writer, /*indentation:*/ 2, "}");
@@ -86,13 +89,13 @@ public class GenerateAst {
 
   private static void defineType(PrintWriter writer, String baseName,
                                  String className, String fieldList) {
-    iprintln(
-        writer, /*indentation:*/ 2,
-        String.format("static class %s extends %s {", className, baseName));
+    iprintln(writer, /*indentation:*/ 2,
+             String.format("public static class %s extends %s {", className,
+                           baseName));
 
     // constructor
     iprintln(writer, /*indentation:*/ 4,
-             String.format("%s (%s) {", className, fieldList));
+             String.format("public %s (%s) {", className, fieldList));
 
     // store parameters in fields
     String[] fields = fieldList.split(", ");
@@ -106,7 +109,8 @@ public class GenerateAst {
     // visitor pattern
     writer.println();
     iprintln(writer, /*indentation:*/ 4, "@Override");
-    iprintln(writer, /*indentation:*/ 4, "<R> R accept(Visitor<R> visitor) {");
+    iprintln(writer, /*indentation:*/ 4,
+             "public <R> R accept(Visitor<R> visitor) {");
     iprintln(
         writer, /*indentation:*/ 6,
         String.format("return visitor.visit%s(this);", className + baseName));
@@ -114,18 +118,15 @@ public class GenerateAst {
 
     // fields
     for (String field : fields) {
-      iprintln(writer, /*indentation:*/ 4, String.format("final %s;", field));
+      iprintln(writer, /*indentation:*/ 4,
+               String.format("public final %s;", field));
     }
     iprintln(writer, /*indentation:*/ 2, "}");
   }
 
   private static void iprintln(PrintWriter writer, int indentation,
                                String message) {
-    indent(writer, indentation);
+    writer.print(" ".repeat(indentation));
     writer.println(message);
-  }
-
-  private static void indent(PrintWriter writer, int spaces) {
-    writer.print(" ".repeat(spaces));
   }
 }

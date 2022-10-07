@@ -1,6 +1,6 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.parsing;
 
-enum TokenType {
+public enum TokenType {
   // Single-character tokens.
   LEFT_PAREN,
   RIGHT_PAREN,

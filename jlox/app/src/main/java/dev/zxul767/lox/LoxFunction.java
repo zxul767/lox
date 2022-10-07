@@ -1,5 +1,6 @@
 package dev.zxul767.lox;
 
+import dev.zxul767.lox.parsing.Stmt;
 import java.util.List;
 
 class LoxFunction implements LoxCallable {

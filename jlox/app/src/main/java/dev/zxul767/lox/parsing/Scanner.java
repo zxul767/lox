@@ -1,13 +1,14 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.parsing;
 
-import static dev.zxul767.lox.TokenType.*;
+import static dev.zxul767.lox.parsing.TokenType.*;
 
+import dev.zxul767.lox.Errors;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class Scanner {
+public class Scanner {
   private static final Map<String, TokenType> keywords;
   static {
     keywords = new HashMap<>();
@@ -38,9 +39,9 @@ class Scanner {
   // `line` starts at 1 (and not 0) to be user friendly
   private int line = 1;
 
-  Scanner(String sourceCode) { this.sourceCode = sourceCode; }
+  public Scanner(String sourceCode) { this.sourceCode = sourceCode; }
 
-  List<Token> scanTokens() { return scanTokens(/*includeEOF: */ true); }
+  public List<Token> scanTokens() { return scanTokens(/*includeEOF: */ true); }
 
   List<Token> scanTokens(boolean includeEOF) {
     while (!isAtEnd()) {
@@ -128,7 +129,7 @@ class Scanner {
       } else if (isAlpha(c)) {
         identifier();
       } else {
-        Lox.error(line, String.format("Unexpected character: <%c>.", c));
+        Errors.error(line, String.format("Unexpected character: <%c>.", c));
       }
     }
   }
@@ -167,7 +168,7 @@ class Scanner {
 
     // `nestedComments` should be zero if the first opening delimiter was closed
     if (isAtEnd() && nestedComments != 0) {
-      Lox.error(line, "Unterminated multi-line comment.");
+      Errors.error(line, "Unterminated multi-line comment.");
       return;
     }
   }
@@ -192,7 +193,7 @@ class Scanner {
       advance();
     }
     if (isAtEnd()) {
-      Lox.error(line, "Unterminated string.");
+      Errors.error(line, "Unterminated string.");
       return;
     }
     // the closing "

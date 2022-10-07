@@ -1,5 +1,6 @@
 package dev.zxul767.lox;
 
+import dev.zxul767.lox.parsing.*;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -10,8 +11,6 @@ import java.util.List;
 
 public class Lox {
   private static final Interpreter interpreter = new Interpreter();
-  static boolean hadError = false;
-  static boolean hadRuntimeError = false;
 
   public static void main(String[] args) throws IOException {
     if (args.length > 1) {
@@ -28,9 +27,9 @@ public class Lox {
   private static void runFile(String path) throws IOException {
     byte[] bytes = Files.readAllBytes(Paths.get(path));
     run(new String(bytes, Charset.defaultCharset()));
-    if (hadError)
+    if (Errors.hadError)
       System.exit(65);
-    if (hadRuntimeError)
+    if (Errors.hadRuntimeError)
       System.exit(70);
   }
 
@@ -46,7 +45,7 @@ public class Lox {
       run(line);
       // if the user makes a mistake, we shouldn't kill the entire
       // session
-      hadError = false;
+      Errors.hadError = false;
     }
   }
 
@@ -57,40 +56,16 @@ public class Lox {
     List<Stmt> statements = parser.parse();
 
     // stop if there was a syntax error
-    if (hadError)
+    if (Errors.hadError)
       return;
 
     Resolver resolver = new Resolver(interpreter);
     resolver.resolve(statements);
 
     // stop if there was a resolution error
-    if (hadError)
+    if (Errors.hadError)
       return;
 
     interpreter.interpret(statements);
-  }
-
-  static void error(int line, String message) {
-    report(line, /* where: */ "", message);
-  }
-
-  static void runtimeError(RuntimeError error) {
-    System.err.println(String.format("Runtime Error: %s\n[line %d]",
-                                     error.getMessage(), error.token.line));
-    hadRuntimeError = true;
-  }
-
-  private static void report(int line, String where, String message) {
-    System.err.println("Parsing Error: [line " + line + "] Error" + where +
-                       ": " + message);
-    hadError = true;
-  }
-
-  static void error(Token token, String message) {
-    if (token.type == TokenType.EOF) {
-      report(token.line, " at end", message);
-    } else {
-      report(token.line, String.format(" at '%s'", token.lexeme), message);
-    }
   }
 }
