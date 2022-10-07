@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.parsing;
 
 import java.util.ArrayList;
 

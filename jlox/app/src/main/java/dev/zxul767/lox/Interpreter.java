@@ -1,5 +1,6 @@
 package dev.zxul767.lox;
 
+import dev.zxul767.lox.parsing.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -23,7 +24,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         execute(statement);
       }
     } catch (RuntimeError error) {
-      Lox.runtimeError(error);
+      Errors.runtimeError(error);
     }
   }
 

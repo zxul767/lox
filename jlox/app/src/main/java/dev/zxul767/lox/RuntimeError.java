@@ -1,5 +1,7 @@
 package dev.zxul767.lox;
 
+import dev.zxul767.lox.parsing.Token;
+
 class RuntimeError extends RuntimeException {
   final Token token;
 
