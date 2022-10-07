@@ -1,6 +1,8 @@
 package dev.zxul767.lox.parsing;
 
 public class Token {
+  // `Token` is just a data structure with no behavior so it's okay for
+  // its fields to be public
   public final TokenType type;
   public final String lexeme;
   public final Object value;

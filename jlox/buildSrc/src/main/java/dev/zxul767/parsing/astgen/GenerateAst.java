@@ -50,6 +50,9 @@ public class GenerateAst {
     writer.println("import java.util.List;");
     writer.println();
 
+    // All `Expr` and `Stmt` classes are simple data structures with no
+    // real behavior (that is implemented as "visitors" in `Interpreter` and
+    // `Resolver`) so it's okay for them (and their fields) to be public.
     writer.println(String.format("public abstract class %s {", baseName));
 
     defineVisitor(writer, baseName, types);
@@ -123,11 +126,7 @@ public class GenerateAst {
 
   private static void iprintln(PrintWriter writer, int indentation,
                                String message) {
-    indent(writer, indentation);
+    writer.print(" ".repeat(indentation));
     writer.println(message);
-  }
-
-  private static void indent(PrintWriter writer, int spaces) {
-    writer.print(" ".repeat(spaces));
   }
 }
