@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
 import dev.zxul767.lox.parsing.Stmt;
 import java.util.List;

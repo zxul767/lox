@@ -2,6 +2,7 @@ package dev.zxul767.lox;
 
 import dev.zxul767.lox.parsing.Token;
 import dev.zxul767.lox.parsing.TokenType;
+import dev.zxul767.lox.runtime.RuntimeError;
 
 // TODO: turn into an injectable error reporting interface to be used
 // in various modules of the interpreter

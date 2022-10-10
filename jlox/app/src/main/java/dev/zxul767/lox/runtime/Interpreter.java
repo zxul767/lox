@@ -1,24 +1,25 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
+import dev.zxul767.lox.Errors;
 import dev.zxul767.lox.parsing.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
+public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   final Environment globals = new Environment();
   private Environment environment = globals;
   // maps every variable expression to the number of environment hops
   // needed to get to its declaring scope
   private final Map<Expr, Integer> locals = new HashMap<>();
 
-  Interpreter() {
+  public Interpreter() {
     globals.define("clock", StandardLibrary.clock);
     globals.define("sin", StandardLibrary.sin);
   }
 
-  void interpret(List<Stmt> statements) {
+  public void interpret(List<Stmt> statements) {
     try {
       for (Stmt statement : statements) {
         execute(statement);

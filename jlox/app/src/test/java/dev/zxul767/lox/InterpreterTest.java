@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;

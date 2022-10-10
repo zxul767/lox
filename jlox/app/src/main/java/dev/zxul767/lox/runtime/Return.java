@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
 class Return extends RuntimeException {
   final Object value;

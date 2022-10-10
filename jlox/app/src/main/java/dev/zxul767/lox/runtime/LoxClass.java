@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
 import java.util.List;
 import java.util.Map;

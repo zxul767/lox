@@ -1,4 +1,4 @@
-package dev.zxul767.lox;
+package dev.zxul767.lox.runtime;
 
 import static dev.zxul767.lox.parsing.TokenType.*;
 
@@ -27,7 +27,7 @@ import java.util.Stack;
 // it will make sense to partition it into another class that performs
 // an additional traversal.
 //
-class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
+public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   private enum VarResolution { DECLARED, DEFINED }
   private enum FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
   private enum ClassType { NONE, CLASS, SUBCLASS }
@@ -51,9 +51,9 @@ class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // resolver to detect invalid uses as well.
   private ClassType currentClass = ClassType.NONE;
 
-  Resolver(Interpreter interpreter) { this.interpreter = interpreter; }
+  public Resolver(Interpreter interpreter) { this.interpreter = interpreter; }
 
-  void resolve(List<Stmt> statements) {
+  public void resolve(List<Stmt> statements) {
     for (Stmt statement : statements) {
       resolve(statement);
     }

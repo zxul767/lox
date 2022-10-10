@@ -1,6 +1,11 @@
 package dev.zxul767.lox;
 
-import dev.zxul767.lox.parsing.*;
+import dev.zxul767.lox.parsing.Parser;
+import dev.zxul767.lox.parsing.Scanner;
+import dev.zxul767.lox.parsing.Stmt;
+import dev.zxul767.lox.parsing.Token;
+import dev.zxul767.lox.runtime.Interpreter;
+import dev.zxul767.lox.runtime.Resolver;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
