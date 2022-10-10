@@ -20,12 +20,11 @@ public class Parser {
 
   public List<Stmt> parse() {
     List<Stmt> statements = new ArrayList<>();
-    try {
-      while (!isAtEnd()) {
-        statements.add(declaration());
+    while (!isAtEnd()) {
+      Stmt statement = declaration();
+      if (statement != null) {
+        statements.add(statement);
       }
-    } catch (ParseError error) {
-      // TODO: call error on future error reporter
     }
     return statements;
   }
