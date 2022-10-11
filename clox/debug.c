@@ -54,3 +54,13 @@ int bytecode__disassemble_instruction(const Bytecode *code, int offset) {
     return offset + 1;
   }
 }
+
+void vm__dump_stack(const VM *vm) {
+  printf("          ");
+  for (const Value *slot = vm->stack; slot < vm->stack_top; slot++) {
+    printf("[ ");
+    value__print(*slot);
+    printf(" ]");
+  }
+  printf("\n");
+}

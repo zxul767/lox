@@ -9,16 +9,6 @@ void vm__init(VM *vm) { reset_stack(vm); }
 
 void vm__dispose(VM *vm) {}
 
-static void dump_stack(const VM *vm) {
-  printf("          ");
-  for (const Value *slot = vm->stack; slot < vm->stack_top; slot++) {
-    printf("[ ");
-    value__print(*slot);
-    printf(" ]");
-  }
-  printf("\n");
-}
-
 static InterpretResult run(VM *vm) {
 #define READ_BYTE() (*vm->instruction_pointer++)
 #define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
@@ -31,7 +21,7 @@ static InterpretResult run(VM *vm) {
 
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    dump_stack(vm);
+    vm__dump_stack(vm);
     bytecode__disassemble_instruction(
         vm->bytecode,
         (int)(vm->instruction_pointer - vm->bytecode->instructions));
