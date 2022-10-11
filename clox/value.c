@@ -29,3 +29,4 @@ void value_array__dispose(ValueArray *array) {
 }
 
 void value__print(Value value) { printf("%g", value); }
+void value__println(Value value) { printf("%g\n", value); }

@@ -15,5 +15,6 @@ void value_array__init(ValueArray *array);
 void value_array__append(ValueArray *array, Value value);
 void value_array__dispose(ValueArray *array);
 void value__print(Value value);
+void value__println(Value value);
 
 #endif // VALUE_H_

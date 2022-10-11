@@ -35,7 +35,6 @@ static InterpretResult run(VM *vm) {
     case OP_CONSTANT: {
       Value constant = READ_CONSTANT();
       vm__push(constant, vm);
-      printf("\n");
       break;
     }
     case OP_NEGATE: {
@@ -43,8 +42,7 @@ static InterpretResult run(VM *vm) {
       break;
     }
     case OP_RETURN: {
-      value__print(vm__pop(vm));
-      printf("\n");
+      value__println(vm__pop(vm));
       return INTERPRET_OK;
     }
     }
