@@ -3,7 +3,7 @@
 
 #include "bytecode.h"
 
-void bytecode__disassemble(Bytecode *code, const char *name);
-int bytecode__disassemble_instruction(Bytecode *code, int offset);
+void bytecode__disassemble(const Bytecode *code, const char *name);
+int bytecode__disassemble_instruction(const Bytecode *code, int offset);
 
 #endif // DEBUG_H_

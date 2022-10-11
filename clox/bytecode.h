@@ -6,7 +6,12 @@
 
 typedef enum {
   OP_RETURN,
+  // push a constant (read as two bytes: [opcode, index]) onto
+  // the stack
   OP_CONSTANT,
+  // negate the current value at the top of the stack
+  // (pop and push, or in-place modification)
+  OP_NEGATE,
 
 } OpCode;
 
