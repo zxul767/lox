@@ -9,6 +9,12 @@ typedef enum {
   // push a constant (read as two bytes: [opcode, index]) onto
   // the stack
   OP_CONSTANT,
+  // all binary operations take their two operands from the top
+  // of the stack
+  OP_ADD,
+  OP_SUBTRACT,
+  OP_MULTIPLY,
+  OP_DIVIDE,
   // negate the current value at the top of the stack
   // (pop and push, or in-place modification)
   OP_NEGATE,
