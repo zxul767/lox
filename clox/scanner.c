@@ -81,6 +81,20 @@ static void skip_whitespace(Scanner *scanner) {
   }
 }
 
+static Token string(Scanner *scanner) {
+  while (peek(scanner) != '"' && !is_at_end(scanner)) {
+    if (peek(scanner) == '\n')
+      scanner->line++;
+    advance(scanner);
+  }
+  if (is_at_end(scanner))
+    return error_token("Unterminated string.", scanner);
+
+  // the closing quote
+  advance(scanner);
+  return make_token(TOKEN_STRING, scanner);
+}
+
 Token scanner__next_token(Scanner *scanner) {
   skip_whitespace(scanner);
 
@@ -124,6 +138,8 @@ Token scanner__next_token(Scanner *scanner) {
   case '>':
     return make_token(match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER,
                       scanner);
+  case '"':
+    return string(scanner);
   }
   return error_token("Unexpected character.", scanner);
 }
