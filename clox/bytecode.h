@@ -20,9 +20,9 @@ typedef struct {
 
 void bytecode__init(Bytecode *code);
 void bytecode__dispose(Bytecode *code);
-void bytecode__write_byte(Bytecode *code, uint8_t byte);
+void bytecode__append(Bytecode *code, uint8_t byte);
 // returns the slot index into which `value` was inserted
 // in the code->constants array
-int bytecode__add_constant(Bytecode *code, Value value);
+int bytecode__store_constant(Bytecode *code, Value value);
 
 #endif // BYTECODE_H_

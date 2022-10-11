@@ -12,7 +12,7 @@ typedef struct {
 } ValueArray;
 
 void value_array__init(ValueArray *array);
-void value_array__write(ValueArray *array, Value value);
+void value_array__append(ValueArray *array, Value value);
 void value_array__dispose(ValueArray *array);
 void value__print(Value value);
 

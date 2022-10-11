@@ -15,7 +15,7 @@ static void grow_capacity(ValueArray *array) {
       GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
 }
 
-void value_array__write(ValueArray *array, Value value) {
+void value_array__append(ValueArray *array, Value value) {
   if (array->count + 1 > array->capacity) {
     grow_capacity(array);
   }

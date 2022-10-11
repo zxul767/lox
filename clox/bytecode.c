@@ -21,7 +21,7 @@ static void grow_capacity(Bytecode *code) {
       GROW_ARRAY(uint8_t, code->instructions, old_capacity, code->capacity);
 }
 
-void bytecode__write_byte(Bytecode *code, uint8_t byte) {
+void bytecode__append(Bytecode *code, uint8_t byte) {
   if (code->count + 1 > code->capacity) {
     grow_capacity(code);
   }
@@ -29,7 +29,7 @@ void bytecode__write_byte(Bytecode *code, uint8_t byte) {
   code->count++;
 }
 
-int bytecode__add_constant(Bytecode *code, Value value) {
-  value_array__write(&code->constants, value);
+int bytecode__store_constant(Bytecode *code, Value value) {
+  value_array__append(&code->constants, value);
   return code->constants.count - 1;
 }
