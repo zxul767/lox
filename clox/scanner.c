@@ -38,6 +38,11 @@ static char advance(Scanner *scanner) {
 }
 
 static char peek(Scanner *scanner) { return *(scanner->current); }
+static char peek_next(Scanner *scanner) {
+  if (is_at_end(scanner))
+    return '\0';
+  return scanner->current[1];
+}
 
 static bool match(char expected, Scanner *scanner) {
   if (is_at_end(scanner))
@@ -60,6 +65,15 @@ static void skip_whitespace(Scanner *scanner) {
     case '\n':
       scanner->line++;
       advance(scanner);
+      break;
+    case '/':
+      if (peek_next(scanner) == '/') {
+        // a comment goes until the end of the line
+        while (peek(scanner) != '\n' && !is_at_end(scanner))
+          advance(scanner);
+      } else {
+        return;
+      }
       break;
     default:
       return;
