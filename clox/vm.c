@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "common.h"
+#include "compiler.h"
 #include "debug.h"
 #include <stdio.h>
 
@@ -63,10 +64,15 @@ static InterpretResult run(VM *vm) {
 #undef BINARY_OP
 }
 
-InterpretResult vm__interpret(const Bytecode *code, VM *vm) {
+InterpretResult vm__interpret_bytecode(const Bytecode *code, VM *vm) {
   vm->bytecode = code;
   vm->instruction_pointer = vm->bytecode->instructions;
   return run(vm);
+}
+
+InterpretResult vm__interpret(const char *source, VM *vm) {
+  compiler__compile(source, vm);
+  return INTERPRET_OK;
 }
 
 void vm__push(Value value, VM *vm) {
