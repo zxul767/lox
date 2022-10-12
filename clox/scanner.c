@@ -88,21 +88,23 @@ static void skip_whitespace(Scanner *scanner) {
   }
 }
 
+// returns true if [this_start, this_end) === that; false otherwise
 // pre-conditions:
-// + `start` and `end` are pointers to sections of a null-terminated c-string;
-// + the substring to be compared to `other` begins at `start` and ends
-//   at `end-1` (i.e., `end` is a non-inclusive "index")
-// + `other` is a null-terminated c-string;
-static bool string__equals(const char *start, const char *end,
-                           const char *other) {
-  while (*other && start < end) {
-    if (*start != *other)
+// + `this_start` and `this_end` are pointers to sections of a null-terminated
+//    c-string;
+// + the substring to be compared to `that` begins at `this_start` and ends
+//   at `this_end-1` (i.e., `this_end` is a non-inclusive "index")
+// + `that` is a null-terminated c-string;
+static bool string__equals(const char *this_start, const char *this_end,
+                           const char *that) {
+  while (*that && this_start < this_end) {
+    if (*this_start != *that)
       break;
-    other++;
-    start++;
+    that++;
+    this_start++;
   }
   // equality only happens if both strings were fully "consumed"
-  return *other == '\0' && start == end;
+  return *that == '\0' && this_start == this_end;
 }
 
 static TokenType check_keyword(const char *keyword, TokenType type,
