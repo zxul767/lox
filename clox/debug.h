@@ -4,8 +4,10 @@
 #include "bytecode.h"
 #include "vm.h"
 
-void bytecode__disassemble(const Bytecode *code, const char *name);
-int bytecode__disassemble_instruction(const Bytecode *code, int offset);
-void vm__dump_stack(const VM *vm);
+void debug__disassemble(const Bytecode *code, const char *name);
+int debug__disassemble_instruction(const Bytecode *code, int offset);
+void debug__dump_stack(const VM *vm);
+
+void debug__print_section_divider();
 
 #endif // DEBUG_H_

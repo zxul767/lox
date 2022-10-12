@@ -43,7 +43,7 @@ void bytecode_sample() {
   bytecode__append(&code, OP_RETURN, line);
 
   vm__interpret_bytecode(&code, &vm);
-  /* bytecode__disassemble(&code, "clox bytecode"); */
+  /* debug__disassemble(&code, "clox bytecode"); */
 
   bytecode__dispose(&code);
   vm__dispose(&vm);
@@ -57,6 +57,8 @@ static void repl(VM *vm) {
       printf("\n");
       break;
     }
+    if (!strcmp("quit\n", line))
+      break;
     vm__interpret(line, vm);
   }
 }
@@ -115,5 +117,6 @@ int main(int args_count, const char *args[]) {
     exit(64);
   }
   vm__dispose(&vm);
+
   return 0;
 }

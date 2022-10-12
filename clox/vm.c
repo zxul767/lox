@@ -20,10 +20,15 @@ static InterpretResult run(VM *vm) {
     vm__push(a op b, vm);                                                      \
   } while (false)
 
+#ifdef DEBUG_TRACE_EXECUTION
+  printf("TRACED EXECUTION\n");
+  debug__print_section_divider();
+#endif
+
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    vm__dump_stack(vm);
-    bytecode__disassemble_instruction(
+    debug__dump_stack(vm);
+    debug__disassemble_instruction(
         vm->bytecode,
         (int)(vm->instruction_pointer - vm->bytecode->instructions));
 #endif
@@ -54,6 +59,8 @@ static InterpretResult run(VM *vm) {
       break;
     }
     case OP_RETURN: {
+      debug__print_section_divider();
+      printf("RESULT: ");
       value__println(vm__pop(vm));
       return INTERPRET_OK;
     }
@@ -71,8 +78,22 @@ InterpretResult vm__interpret_bytecode(const Bytecode *code, VM *vm) {
 }
 
 InterpretResult vm__interpret(const char *source, VM *vm) {
-  compiler__compile(source, vm);
-  return INTERPRET_OK;
+  Bytecode bytecode;
+  bytecode__init(&bytecode);
+
+  // compilation into bytecode
+  if (!compiler__compile(source, &bytecode)) {
+    bytecode__dispose(&bytecode);
+    return INTERPRET_COMPILE_ERROR;
+  }
+
+  // bytecode execution
+  vm->bytecode = &bytecode;
+  vm->instruction_pointer = vm->bytecode->instructions;
+  InterpretResult result = run(vm);
+
+  bytecode__dispose(&bytecode);
+  return result;
 }
 
 void vm__push(Value value, VM *vm) {

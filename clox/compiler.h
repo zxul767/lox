@@ -1,8 +1,8 @@
 #ifndef COMPILER_H_
 #define COMPILER_H_
 
-#include "vm.h"
+#include "bytecode.h"
 
-void compiler__compile(const char *source, VM *vm);
+bool compiler__compile(const char *source, Bytecode *bytecode);
 
 #endif // COMPILER_H_

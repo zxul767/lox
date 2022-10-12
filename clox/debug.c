@@ -1,11 +1,23 @@
 #include "debug.h"
 #include <stdio.h>
 
-void bytecode__disassemble(const Bytecode *code, const char *name) {
-  printf("== %s ==\n", name);
+static void print_char(char c, int times) {
+  for (int i = 0; i < times; i++)
+    putchar('#');
+}
+
+void debug__print_section_divider() {
+  print_char('=', 80);
+  putchar('\n');
+}
+
+void debug__disassemble(const Bytecode *code, const char *name) {
+  printf("%s\n", name);
+  debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
-    offset = bytecode__disassemble_instruction(code, offset);
+    offset = debug__disassemble_instruction(code, offset);
   }
+  debug__print_section_divider();
 }
 
 static int simple_instruction(const char *name, int offset) {
@@ -23,7 +35,7 @@ static int constant_instruction(const char *name, const Bytecode *code,
   return offset + 2;
 }
 
-int bytecode__disassemble_instruction(const Bytecode *code, int offset) {
+int debug__disassemble_instruction(const Bytecode *code, int offset) {
   printf("%04d ", offset);
 
   if (offset > 0 &&
@@ -55,7 +67,7 @@ int bytecode__disassemble_instruction(const Bytecode *code, int offset) {
   }
 }
 
-void vm__dump_stack(const VM *vm) {
+void debug__dump_stack(const VM *vm) {
   printf("          ");
   for (const Value *slot = vm->stack; slot < vm->stack_top; slot++) {
     printf("[ ");
