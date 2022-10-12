@@ -89,11 +89,10 @@ static void skip_whitespace(Scanner *scanner) {
 }
 
 // pre-conditions:
-// + `start` and `end` are pointers to sections
-//    of a valid null-terminated string;
+// + `start` and `end` are pointers to sections of a null-terminated c-string;
 // + the substring to be compared to `other` begins at `start` and ends
 //   at `end-1` (i.e., `end` is a non-inclusive "index")
-// + `other` is a valid null-terminated string;
+// + `other` is a null-terminated c-string;
 static bool string__equals(const char *start, const char *end,
                            const char *other) {
   while (*other && start < end) {
@@ -107,59 +106,62 @@ static bool string__equals(const char *start, const char *end,
 }
 
 static TokenType check_keyword(const char *keyword, TokenType type,
-                               const Scanner *scanner) {
-  if (string__equals(scanner->start, scanner->current, keyword)) {
+                               const Scanner *scanner, int skip) {
+  // `skip` is the size of the prefix we've already verified for equality
+  if (string__equals(scanner->start + skip, scanner->current, keyword + skip)) {
     return type;
   }
   return TOKEN_IDENTIFIER;
 }
 
 static TokenType identifier_type(Scanner *scanner) {
+  // This is a hard-coded trie for keywords for very quick identification.
+  // See https://en.wikipedia.org/wiki/Trie for details.
   switch (scanner->start[0]) {
   case 'a':
-    return check_keyword("and", TOKEN_AND, scanner);
+    return check_keyword("and", TOKEN_AND, scanner, /*skip:*/ 1);
   case 'c':
-    return check_keyword("class", TOKEN_CLASS, scanner);
+    return check_keyword("class", TOKEN_CLASS, scanner, /*skip:*/ 1);
   case 'e':
-    return check_keyword("else", TOKEN_ELSE, scanner);
+    return check_keyword("else", TOKEN_ELSE, scanner, /*skip:*/ 1);
   case 'f':
     if (scanner->current - scanner->start > 1) {
       switch (scanner->start[1]) {
       case 'a':
-        return check_keyword("false", TOKEN_FALSE, scanner);
+        return check_keyword("false", TOKEN_FALSE, scanner, /*skip:*/ 2);
       case 'o':
-        return check_keyword("for", TOKEN_FOR, scanner);
+        return check_keyword("for", TOKEN_FOR, scanner, /*skip:*/ 2);
       case 'u':
-        return check_keyword("fun", TOKEN_FUN, scanner);
+        return check_keyword("fun", TOKEN_FUN, scanner, /*skip:*/ 2);
       }
     }
     break;
   case 'i':
-    return check_keyword("if", TOKEN_IF, scanner);
+    return check_keyword("if", TOKEN_IF, scanner, /*skip:*/ 1);
   case 'n':
-    return check_keyword("nil", TOKEN_NIL, scanner);
+    return check_keyword("nil", TOKEN_NIL, scanner, /*skip:*/ 1);
   case 'o':
-    return check_keyword("or", TOKEN_OR, scanner);
+    return check_keyword("or", TOKEN_OR, scanner, /*skip:*/ 1);
   case 'p':
-    return check_keyword("print", TOKEN_PRINT, scanner);
+    return check_keyword("print", TOKEN_PRINT, scanner, /*skip:*/ 1);
   case 'r':
-    return check_keyword("return", TOKEN_RETURN, scanner);
+    return check_keyword("return", TOKEN_RETURN, scanner, /*skip:*/ 1);
   case 's':
-    return check_keyword("super", TOKEN_SUPER, scanner);
+    return check_keyword("super", TOKEN_SUPER, scanner, /*skip:*/ 1);
   case 't':
     if (scanner->current - scanner->start > 1) {
       switch (scanner->start[1]) {
       case 'h':
-        return check_keyword("this", TOKEN_THIS, scanner);
+        return check_keyword("this", TOKEN_THIS, scanner, /*skip:*/ 2);
       case 'r':
-        return check_keyword("true", TOKEN_TRUE, scanner);
+        return check_keyword("true", TOKEN_TRUE, scanner, /*skip:*/ 2);
       }
     }
     break;
   case 'v':
-    return check_keyword("var", TOKEN_VAR, scanner);
+    return check_keyword("var", TOKEN_VAR, scanner, /*skip:*/ 1);
   case 'w':
-    return check_keyword("while", TOKEN_WHILE, scanner);
+    return check_keyword("while", TOKEN_WHILE, scanner, /*skip:*/ 1);
   }
   return TOKEN_IDENTIFIER;
 }
