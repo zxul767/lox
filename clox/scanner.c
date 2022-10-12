@@ -88,12 +88,54 @@ static void skip_whitespace(Scanner *scanner) {
   }
 }
 
-static TokenType identifier_type() { return TOKEN_IDENTIFIER; }
+static bool string__starts_with(const char *string, const char *prefix) {
+  while (*string && *prefix && *string == *prefix) {
+    prefix++;
+    string++;
+  }
+  return *prefix == '\0';
+}
+
+static TokenType check_keyword(Scanner *scanner, const char *keyword,
+                               TokenType type) {
+  if (string__starts_with(scanner->start, keyword)) {
+    return type;
+  }
+  return TOKEN_IDENTIFIER;
+}
+
+static TokenType identifier_type(Scanner *scanner) {
+  switch (scanner->start[0]) {
+  case 'a':
+    return check_keyword(scanner, "and", TOKEN_AND);
+  case 'c':
+    return check_keyword(scanner, "class", TOKEN_CLASS);
+  case 'e':
+    return check_keyword(scanner, "else", TOKEN_ELSE);
+  case 'i':
+    return check_keyword(scanner, "if", TOKEN_IF);
+  case 'n':
+    return check_keyword(scanner, "nil", TOKEN_NIL);
+  case 'o':
+    return check_keyword(scanner, "or", TOKEN_OR);
+  case 'p':
+    return check_keyword(scanner, "print", TOKEN_PRINT);
+  case 'r':
+    return check_keyword(scanner, "return", TOKEN_RETURN);
+  case 's':
+    return check_keyword(scanner, "super", TOKEN_SUPER);
+  case 'v':
+    return check_keyword(scanner, "var", TOKEN_VAR);
+  case 'w':
+    return check_keyword(scanner, "while", TOKEN_WHILE);
+  }
+  return TOKEN_IDENTIFIER;
+}
 
 static Token identifier(Scanner *scanner) {
   while (is_alpha(peek(scanner)) || is_digit(peek(scanner)))
     advance(scanner);
-  return make_token(identifier_type(), scanner);
+  return make_token(identifier_type(scanner), scanner);
 }
 
 static Token number(Scanner *scanner) {

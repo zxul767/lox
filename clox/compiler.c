@@ -5,8 +5,8 @@
 #include "scanner.h"
 #include "vm.h"
 
-static const char *remove_common_prefix(const char *prefix,
-                                        const char *string) {
+static const char *string__remove_prefix(const char *prefix,
+                                         const char *string) {
   while (*string && *prefix && *string == *prefix) {
     prefix++;
     string++;
@@ -28,7 +28,7 @@ void compiler__compile(const char *source, VM *vm) {
       printf("%4s ", "|");
     }
     printf("%15s '%.*s'\n",
-           remove_common_prefix("TOKEN_", TOKEN_TO_STRING[token.type]),
+           string__remove_prefix("TOKEN_", TOKEN_TO_STRING[token.type]),
            token.length, token.start);
 
     if (token.type == TOKEN_EOF)
