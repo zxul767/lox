@@ -1,53 +1,60 @@
 #ifndef SCANNER_H_
 #define SCANNER_H_
 
-typedef enum {
-  // Single-character tokens.
-  TOKEN_LEFT_PAREN,
-  TOKEN_RIGHT_PAREN,
-  TOKEN_LEFT_BRACE,
-  TOKEN_RIGHT_BRACE,
-  TOKEN_COMMA,
-  TOKEN_DOT,
-  TOKEN_MINUS,
-  TOKEN_PLUS,
-  TOKEN_SEMICOLON,
-  TOKEN_SLASH,
-  TOKEN_STAR,
-  // One or two character tokens.
-  TOKEN_BANG,
-  TOKEN_BANG_EQUAL,
-  TOKEN_EQUAL,
-  TOKEN_EQUAL_EQUAL,
-  TOKEN_GREATER,
-  TOKEN_GREATER_EQUAL,
-  TOKEN_LESS,
-  TOKEN_LESS_EQUAL,
-  // Literals.
-  TOKEN_IDENTIFIER,
-  TOKEN_STRING,
-  TOKEN_NUMBER,
-  // Keywords.
-  TOKEN_AND,
-  TOKEN_CLASS,
-  TOKEN_ELSE,
-  TOKEN_FALSE,
-  TOKEN_FOR,
-  TOKEN_FUN,
-  TOKEN_IF,
-  TOKEN_NIL,
-  TOKEN_OR,
-  TOKEN_PRINT,
-  TOKEN_RETURN,
-  TOKEN_SUPER,
-  TOKEN_THIS,
-  TOKEN_TRUE,
-  TOKEN_VAR,
-  TOKEN_WHILE,
+// For details on this peculiar technique to be convert enum symbols to strings
+// without redundancy, see:
+//
+// https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
+#define FOREACH_TOKEN(TOKEN)                                                   \
+  TOKEN(TOKEN_LEFT_PAREN)                                                      \
+  TOKEN(TOKEN_RIGHT_PAREN)                                                     \
+  TOKEN(TOKEN_LEFT_BRACE)                                                      \
+  TOKEN(TOKEN_RIGHT_BRACE)                                                     \
+  TOKEN(TOKEN_COMMA)                                                           \
+  TOKEN(TOKEN_DOT)                                                             \
+  TOKEN(TOKEN_MINUS)                                                           \
+  TOKEN(TOKEN_PLUS)                                                            \
+  TOKEN(TOKEN_SEMICOLON)                                                       \
+  TOKEN(TOKEN_SLASH)                                                           \
+  TOKEN(TOKEN_STAR)                                                            \
+  TOKEN(TOKEN_BANG)                                                            \
+  TOKEN(TOKEN_BANG_EQUAL)                                                      \
+  TOKEN(TOKEN_EQUAL)                                                           \
+  TOKEN(TOKEN_EQUAL_EQUAL)                                                     \
+  TOKEN(TOKEN_GREATER)                                                         \
+  TOKEN(TOKEN_GREATER_EQUAL)                                                   \
+  TOKEN(TOKEN_LESS)                                                            \
+  TOKEN(TOKEN_LESS_EQUAL)                                                      \
+  TOKEN(TOKEN_IDENTIFIER)                                                      \
+  TOKEN(TOKEN_STRING)                                                          \
+  TOKEN(TOKEN_NUMBER)                                                          \
+  TOKEN(TOKEN_AND)                                                             \
+  TOKEN(TOKEN_CLASS)                                                           \
+  TOKEN(TOKEN_ELSE)                                                            \
+  TOKEN(TOKEN_FALSE)                                                           \
+  TOKEN(TOKEN_FOR)                                                             \
+  TOKEN(TOKEN_FUN)                                                             \
+  TOKEN(TOKEN_IF)                                                              \
+  TOKEN(TOKEN_NIL)                                                             \
+  TOKEN(TOKEN_OR)                                                              \
+  TOKEN(TOKEN_PRINT)                                                           \
+  TOKEN(TOKEN_RETURN)                                                          \
+  TOKEN(TOKEN_SUPER)                                                           \
+  TOKEN(TOKEN_THIS)                                                            \
+  TOKEN(TOKEN_TRUE)                                                            \
+  TOKEN(TOKEN_VAR)                                                             \
+  TOKEN(TOKEN_WHILE)                                                           \
+  TOKEN(TOKEN_ERROR)                                                           \
+  TOKEN(TOKEN_EOF)
 
-  TOKEN_ERROR,
-  TOKEN_EOF
-} TokenType;
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(STRING) #STRING,
+
+typedef enum { FOREACH_TOKEN(GENERATE_ENUM) } TokenType;
+
+// We make it `extern` so it can be used from compiler.c;
+// see initialization in scanner.c
+extern const char *TOKEN_TO_STRING[];
 
 typedef struct {
   TokenType type;

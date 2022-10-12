@@ -5,9 +5,17 @@
 #include "scanner.h"
 #include "vm.h"
 
+static const char *remove_common_prefix(const char *prefix,
+                                        const char *string) {
+  while (*string && *prefix && *string == *prefix) {
+    prefix++;
+    string++;
+  }
+  return string;
+}
+
 void compiler__compile(const char *source, VM *vm) {
   Scanner scanner;
-  /* printf("compiling: [%s]", source); */
   scanner__init(&scanner, source);
 
   int line = -1;
@@ -17,9 +25,11 @@ void compiler__compile(const char *source, VM *vm) {
       printf("%4d ", token.line);
       line = token.line;
     } else {
-      printf("   | ");
+      printf("%4s ", "|");
     }
-    printf("%2d '%.*s'\n", token.type, token.length, token.start);
+    printf("%10s '%.*s'\n",
+           remove_common_prefix("TOKEN_", TOKEN_TO_STRING[token.type]),
+           token.length, token.start);
 
     if (token.type == TOKEN_EOF)
       break;
