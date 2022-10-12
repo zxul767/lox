@@ -88,17 +88,27 @@ static void skip_whitespace(Scanner *scanner) {
   }
 }
 
-static bool string__starts_with(const char *string, const char *prefix) {
-  while (*string && *prefix && *string == *prefix) {
-    prefix++;
-    string++;
+// pre-conditions:
+// + `start` and `end` are pointers to sections
+//    of a valid null-terminated string;
+// + the substring to be compared to `other` begins at `start` and ends
+//   at `end-1` (i.e., `end` is a non-inclusive "index")
+// + `other` is a valid null-terminated string;
+static bool string__equals(const char *start, const char *end,
+                           const char *other) {
+  while (*other && start < end) {
+    if (*start != *other)
+      break;
+    other++;
+    start++;
   }
-  return *prefix == '\0';
+  // equality only happens if both strings were fully "consumed"
+  return *other == '\0' && start == end;
 }
 
-static TokenType check_keyword(Scanner *scanner, const char *keyword,
-                               TokenType type) {
-  if (string__starts_with(scanner->start, keyword)) {
+static TokenType check_keyword(const char *keyword, TokenType type,
+                               const Scanner *scanner) {
+  if (string__equals(scanner->start, scanner->current, keyword)) {
     return type;
   }
   return TOKEN_IDENTIFIER;
@@ -107,27 +117,49 @@ static TokenType check_keyword(Scanner *scanner, const char *keyword,
 static TokenType identifier_type(Scanner *scanner) {
   switch (scanner->start[0]) {
   case 'a':
-    return check_keyword(scanner, "and", TOKEN_AND);
+    return check_keyword("and", TOKEN_AND, scanner);
   case 'c':
-    return check_keyword(scanner, "class", TOKEN_CLASS);
+    return check_keyword("class", TOKEN_CLASS, scanner);
   case 'e':
-    return check_keyword(scanner, "else", TOKEN_ELSE);
+    return check_keyword("else", TOKEN_ELSE, scanner);
+  case 'f':
+    if (scanner->current - scanner->start > 1) {
+      switch (scanner->start[1]) {
+      case 'a':
+        return check_keyword("false", TOKEN_FALSE, scanner);
+      case 'o':
+        return check_keyword("for", TOKEN_FOR, scanner);
+      case 'u':
+        return check_keyword("fun", TOKEN_FUN, scanner);
+      }
+    }
+    break;
   case 'i':
-    return check_keyword(scanner, "if", TOKEN_IF);
+    return check_keyword("if", TOKEN_IF, scanner);
   case 'n':
-    return check_keyword(scanner, "nil", TOKEN_NIL);
+    return check_keyword("nil", TOKEN_NIL, scanner);
   case 'o':
-    return check_keyword(scanner, "or", TOKEN_OR);
+    return check_keyword("or", TOKEN_OR, scanner);
   case 'p':
-    return check_keyword(scanner, "print", TOKEN_PRINT);
+    return check_keyword("print", TOKEN_PRINT, scanner);
   case 'r':
-    return check_keyword(scanner, "return", TOKEN_RETURN);
+    return check_keyword("return", TOKEN_RETURN, scanner);
   case 's':
-    return check_keyword(scanner, "super", TOKEN_SUPER);
+    return check_keyword("super", TOKEN_SUPER, scanner);
+  case 't':
+    if (scanner->current - scanner->start > 1) {
+      switch (scanner->start[1]) {
+      case 'h':
+        return check_keyword("this", TOKEN_THIS, scanner);
+      case 'r':
+        return check_keyword("true", TOKEN_TRUE, scanner);
+      }
+    }
+    break;
   case 'v':
-    return check_keyword(scanner, "var", TOKEN_VAR);
+    return check_keyword("var", TOKEN_VAR, scanner);
   case 'w':
-    return check_keyword(scanner, "while", TOKEN_WHILE);
+    return check_keyword("while", TOKEN_WHILE, scanner);
   }
   return TOKEN_IDENTIFIER;
 }
