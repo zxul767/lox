@@ -27,7 +27,7 @@ void compiler__compile(const char *source, VM *vm) {
     } else {
       printf("%4s ", "|");
     }
-    printf("%10s '%.*s'\n",
+    printf("%15s '%.*s'\n",
            remove_common_prefix("TOKEN_", TOKEN_TO_STRING[token.type]),
            token.length, token.start);
 
