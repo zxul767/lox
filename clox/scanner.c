@@ -115,7 +115,7 @@ static TokenType check_keyword(const char *keyword, TokenType type,
 }
 
 static TokenType identifier_type(Scanner *scanner) {
-  // This is a hard-coded trie for keywords for very quick identification.
+  // This is a hard-coded trie of keywords for very quick identification.
   // See https://en.wikipedia.org/wiki/Trie for details.
   switch (scanner->start[0]) {
   case 'a':
