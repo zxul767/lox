@@ -6,7 +6,7 @@
 //
 // https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
 #define FOREACH_TOKEN(TOKEN)                                                   \
-  TOKEN(TOKEN_NULL)                                                            \
+  TOKEN(TOKEN_BOF)                                                             \
   TOKEN(TOKEN_LEFT_PAREN)                                                      \
   TOKEN(TOKEN_RIGHT_PAREN)                                                     \
   TOKEN(TOKEN_LEFT_BRACE)                                                      \
@@ -64,7 +64,7 @@ typedef struct {
   int line;
 } Token;
 
-extern const Token NULL_TOKEN;
+extern const Token BOF_TOKEN;
 
 typedef struct {
   const char *start;

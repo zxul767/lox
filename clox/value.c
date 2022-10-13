@@ -28,5 +28,23 @@ void value_array__dispose(ValueArray *array) {
   value_array__init(array);
 }
 
-void value__print(Value value) { printf("%g", value); }
-void value__println(Value value) { printf("%g\n", value); }
+void value__print(Value value) {
+  switch (value.type) {
+  case VAL_BOOL:
+    printf(AS_BOOL(value) ? "true" : "false");
+    break;
+  case VAL_NIL:
+    printf("nil");
+    break;
+  case VAL_NUMBER:
+    printf("%g", AS_NUMBER(value));
+    break;
+  default:
+    fprintf(stderr, "Cannot print value of unknown type: %d", value.type);
+  }
+}
+
+void value__println(Value value) {
+  value__print(value);
+  putchar('\n');
+}

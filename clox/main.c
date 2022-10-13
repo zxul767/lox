@@ -20,13 +20,13 @@ void bytecode_sample() {
   // 101    / 2.0)
   //
   // load constant: 1.2
-  int index1 = bytecode__store_constant(&code, 1.2);
+  int index1 = bytecode__store_constant(&code, NUMBER_VAL(1.2));
   // the OP_CONSTANT instruction takes one argument: the index of the
   // constant to load (in the code->constants array)
   bytecode__append(&code, OP_CONSTANT, line);
   bytecode__append(&code, index1, line);
   // load constant: 2.1
-  int index2 = bytecode__store_constant(&code, 2.1);
+  int index2 = bytecode__store_constant(&code, NUMBER_VAL(2.1));
   bytecode__append(&code, OP_CONSTANT, line);
   bytecode__append(&code, index2, line);
   // negation: -2.1
@@ -34,7 +34,7 @@ void bytecode_sample() {
   // addition: 1.2 + (-2.1)
   bytecode__append(&code, OP_ADD, line);
   // load constant: 2.0
-  int index3 = bytecode__store_constant(&code, 2.0);
+  int index3 = bytecode__store_constant(&code, NUMBER_VAL(2.0));
   bytecode__append(&code, OP_CONSTANT, line);
   bytecode__append(&code, index3, line);
   line++;

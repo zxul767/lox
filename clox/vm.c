@@ -1,23 +1,69 @@
-#include "vm.h"
+#include <stdarg.h>
+#include <stdio.h>
+
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
-#include <stdio.h>
+#include "vm.h"
 
 static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
+
+static void runtime_error(VM *vm, const char *format, ...) {
+  va_list args;
+  va_start(args, format);
+  fprintf(stderr, "Runtime Error: ");
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fputs("\n", stderr);
+
+  size_t instruction_index =
+      vm->instruction_pointer - vm->bytecode->instructions - 1;
+  int line = vm->bytecode->source_lines[instruction_index];
+  fprintf(stderr, "[line %d] in script\n", line);
+
+  reset_stack(vm);
+}
 
 void vm__init(VM *vm) { reset_stack(vm); }
 
 void vm__dispose(VM *vm) {}
 
+void vm__push(Value value, VM *vm) {
+  *(vm->stack_top) = value;
+  vm->stack_top++;
+}
+
+Value vm__pop(VM *vm) {
+  vm->stack_top--;
+  return *(vm->stack_top);
+}
+
+static Value peek(int distance, const VM *vm) {
+  // we add -1 because `stack_top` actually points to the next free slot,
+  // not to the last occupied slot
+  return vm->stack_top[-1 - distance];
+}
+
+// Lox follows Ruby in that `nil` and `false` are falsey and every other
+// value behaves like `true` (this may throw off users from other languages
+// who may be used to having `0` behave like `false`, e.g., C/C++ users)
+static bool is_falsey(Value value) {
+  return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
 static InterpretResult run(VM *vm) {
+
 #define READ_BYTE() (*vm->instruction_pointer++)
 #define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
-#define BINARY_OP(op)                                                          \
+#define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    double b = vm__pop(vm);                                                    \
-    double a = vm__pop(vm);                                                    \
-    vm__push(a op b, vm);                                                      \
+    if (!IS_NUMBER(peek(0, vm)) || !IS_NUMBER(peek(1, vm))) {                  \
+      runtime_error(vm, "Operands must be numbers.");                          \
+      return INTERPRET_RUNTIME_ERROR;                                          \
+    }                                                                          \
+    double b = AS_NUMBER(vm__pop(vm));                                         \
+    double a = AS_NUMBER(vm__pop(vm));                                         \
+    vm__push(value_type(a op b), vm);                                          \
   } while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -32,6 +78,7 @@ static InterpretResult run(VM *vm) {
         vm->bytecode,
         (int)(vm->instruction_pointer - vm->bytecode->instructions));
 #endif
+
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
     case OP_CONSTANT: {
@@ -39,23 +86,40 @@ static InterpretResult run(VM *vm) {
       vm__push(constant, vm);
       break;
     }
+    case OP_NIL:
+      vm__push(NIL_VAL, vm);
+      break;
+    case OP_TRUE:
+      vm__push(BOOL_VAL(true), vm);
+      break;
+    case OP_FALSE:
+      vm__push(BOOL_VAL(false), vm);
+      break;
       // binary operations
     case OP_ADD:
-      BINARY_OP(+);
+      BINARY_OP(NUMBER_VAL, +);
       break;
     case OP_SUBTRACT:
-      BINARY_OP(-);
+      BINARY_OP(NUMBER_VAL, -);
       break;
     case OP_MULTIPLY:
-      BINARY_OP(*);
+      BINARY_OP(NUMBER_VAL, *);
       break;
     case OP_DIVIDE:
-      BINARY_OP(/);
+      BINARY_OP(NUMBER_VAL, /);
       break;
 
       // unary operations
+    case OP_NOT:
+      vm__push(BOOL_VAL(is_falsey(vm__pop(vm))), vm);
+      break;
+
     case OP_NEGATE: {
-      vm__push(-vm__pop(vm), vm);
+      if (!IS_NUMBER(peek(0, vm))) {
+        runtime_error(vm, "Operand must be a number.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      vm__push(NUMBER_VAL(-AS_NUMBER(vm__pop(vm))), vm);
       break;
     }
     case OP_RETURN: {
@@ -94,14 +158,4 @@ InterpretResult vm__interpret(const char *source, VM *vm) {
 
   bytecode__dispose(&bytecode);
   return result;
-}
-
-void vm__push(Value value, VM *vm) {
-  *(vm->stack_top) = value;
-  vm->stack_top++;
-}
-
-Value vm__pop(VM *vm) {
-  vm->stack_top--;
-  return *(vm->stack_top);
 }

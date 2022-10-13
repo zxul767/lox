@@ -6,8 +6,8 @@
 
 const char *TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
 
-const Token NULL_TOKEN = {
-    .type = TOKEN_NULL, .start = "", .length = 0, .line = 0};
+const Token BOF_TOKEN = {
+    .type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
 
 void scanner__init(Scanner *scanner, const char *source) {
   scanner->start = source;

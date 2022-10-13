@@ -27,9 +27,6 @@ static const char *string__remove_prefix(const char *prefix,
 // `parse` in their names) are actually doing both parsing and compilation
 // in a single place.
 //
-// As result, every time you see comments or code that
-// mentions "parsing", keep in mind that it also means "compiling"
-//
 typedef struct {
   Token current;
   Token previous;
@@ -109,8 +106,8 @@ static void parser__advance(Parser *parser) {
 }
 
 static void parser__init(Parser *parser, Scanner *scanner) {
-  parser->previous = NULL_TOKEN;
-  parser->current = NULL_TOKEN;
+  parser->previous = BOF_TOKEN;
+  parser->current = BOF_TOKEN;
   parser->had_error = false;
   parser->panic_mode = false;
   parser->scanner = scanner;
@@ -168,19 +165,20 @@ static void finish(Compiler *compiler) {
 // Forward declarations to break cyclic references between the set
 // of rules (which reference parsing functions) and `get_parsing_rule`
 // which is invoked in one or more of those parsing functions.
-static void expression(Compiler *);
 static ParseRule *get_parsing_rule(TokenType);
 static void parse_with(Precedence min_precedence, Compiler *);
 
+// parses (and compiles) the operator and right operand of a binary
+// expression in a left-associative manner (i.e., `1+2+3` is parsed
+// as `((1+2)+3)`)
+//
 // pre-conditions:
 // + the left operand for this operation has already been compiled
 // + the operator for this expression has just been consumed (it is in fact
 //   what triggered the invocation to this function via the rules table)
 //
 // post-condition: the smallest expression of higher precedence than
-// that associated with this binary operation has been compiled;
-// this ensures that expressions such as `1 + 2 + 3` are compiled in a
-// left-associative manner (i.e., as `((1 + 2) + 3)`)
+// that associated with this binary operation has been compiled
 static void binary(Compiler *compiler) {
   TokenType operator_type = compiler->parser->previous.type;
   ParseRule *rule = get_parsing_rule(operator_type);
@@ -218,10 +216,26 @@ static void binary(Compiler *compiler) {
   }
 }
 
+static void literal(Compiler *compiler) {
+  switch (compiler->parser->previous.type) {
+  case TOKEN_FALSE:
+    emit_byte(OP_FALSE, compiler);
+    break;
+  case TOKEN_NIL:
+    emit_byte(OP_NIL, compiler);
+    break;
+  case TOKEN_TRUE:
+    emit_byte(OP_TRUE, compiler);
+    break;
+  default:
+    return; // unreachable;
+  }
+}
+
 // parses (and compiles) either a unary expression; or a binary one, as long as
 // the binary operation's precedence is higher than `min_precedence`
 //
-// pre-conditions: compiler->scanner is looking at the first token of a new
+// pre-condition: compiler->scanner is looking at the first token of a new
 // expression to be parsed
 //
 static void parse_with(Precedence min_precedence, Compiler *compiler) {
@@ -272,7 +286,7 @@ static void number(Compiler *compiler) {
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
   double value = strtod(compiler->parser->previous.start, /*residue:*/ NULL);
-  emit_constant(value, compiler);
+  emit_constant(NUMBER_VAL(value), compiler);
 }
 
 // pre-conditions: the operator for this expression has just been consumed (it
@@ -284,12 +298,15 @@ static void number(Compiler *compiler) {
 //
 static void unary(Compiler *compiler) {
   TokenType operator_type = compiler->parser->previous.type;
-  // compile the operand "recursively" (`unary` is always indirectly called from
+  // compile the operand "recursively" (`unary` is indirectly called from
   // `parse_with`) so that expressions such as `---1` are parsed as `-(-(-1))`,
   // i.e., with right-associativity.
   parse_with(/*min_precedence:*/ PREC_UNARY, compiler);
 
   switch (operator_type) {
+  case TOKEN_BANG:
+    emit_byte(OP_NOT, compiler);
+    break;
   case TOKEN_MINUS:
     emit_byte(OP_NEGATE, compiler);
     break;
@@ -312,7 +329,7 @@ ParseRule rules[] = {
   [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
   [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
-  [TOKEN_BANG]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
   [TOKEN_BANG_EQUAL]    = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_EQUAL_EQUAL]   = {NULL,     NULL,   PREC_NONE},
@@ -326,17 +343,17 @@ ParseRule rules[] = {
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FALSE]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
   [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_NIL]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
   [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_TRUE]          = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
