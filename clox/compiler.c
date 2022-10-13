@@ -23,7 +23,12 @@ static const char *string__remove_prefix(const char *prefix,
 // so we don't build explicit intermediate code representations (i.e., ASTs).
 //
 // Therefore, the parsing and code emitting phases are fused into a single
-// module.
+// module. As a result, functions that appear to be doing parsing (or have
+// `parse` in their names) are actually doing both parsing and compilation
+// in a single place.
+//
+// As result, every time you see comments or code that
+// mentions "parsing", keep in mind that it also means "compiling"
 //
 typedef struct {
   Token current;
@@ -97,7 +102,6 @@ static void parser__advance(Parser *parser) {
   parser->previous = parser->current;
   for (;;) {
     parser->current = scanner__next_token(parser->scanner);
-    /* fprintf(stderr, "next: %s\n", TOKEN_TO_STRING[parser->current.type]); */
     if (parser->current.type != TOKEN_ERROR)
       break;
     error_at_current(parser->current.start, parser);
@@ -105,6 +109,8 @@ static void parser__advance(Parser *parser) {
 }
 
 static void parser__init(Parser *parser, Scanner *scanner) {
+  parser->previous = NULL_TOKEN;
+  parser->current = NULL_TOKEN;
   parser->had_error = false;
   parser->panic_mode = false;
   parser->scanner = scanner;
@@ -164,12 +170,35 @@ static void finish(Compiler *compiler) {
 // which is invoked in one or more of those parsing functions.
 static void expression(Compiler *);
 static ParseRule *get_parsing_rule(TokenType);
-static void parse_precedence(Precedence, Compiler *);
+static void parse_with(Precedence min_precedence, Compiler *);
 
+// pre-conditions:
+// + the left operand for this operation has already been compiled
+// + the operator for this expression has just been consumed (it is in fact
+//   what triggered the invocation to this function via the rules table)
+//
+// post-condition: the smallest expression of higher precedence than
+// that associated with this binary operation has been compiled;
+// this ensures that expressions such as `1 + 2 + 3` are compiled in a
+// left-associative manner (i.e., as `((1 + 2) + 3)`)
 static void binary(Compiler *compiler) {
   TokenType operator_type = compiler->parser->previous.type;
   ParseRule *rule = get_parsing_rule(operator_type);
-  parse_precedence((Precedence)(rule->precedence + 1), compiler);
+  // by passing `rule->precedence + 1` we ensure that parsing done by this
+  // function is left-associative.
+  //
+  // this happens because by passing a higher-precedence, we prevent a
+  // recursive call to `binary` via `parse_with`, and instead only `(1 + 2)`
+  // is parsed here, followed by `(... + 3)` in the caller of this function
+  // (i.e., in `parse_with` via `parse_infix` inside the parsing loop)
+  //
+  // notice that if we used `rule->precedence` instead, we would parse
+  // the same kind of expression recursively (binary -> parse_with -> binary),
+  // so `1 + 2 + 3` would parse as right-associative (i.e., as `(1 + (2 + 3))`)
+  //
+  // see https://craftinginterpreters.com/compiling-expressions.html for more
+  // details
+  parse_with(/*min_precedence:*/ (Precedence)(rule->precedence + 1), compiler);
 
   switch (operator_type) {
   case TOKEN_PLUS:
@@ -189,30 +218,48 @@ static void binary(Compiler *compiler) {
   }
 }
 
-static void parse_precedence(Precedence precedence, Compiler *compiler) {
+// parses (and compiles) either a unary expression; or a binary one, as long as
+// the binary operation's precedence is higher than `min_precedence`
+//
+// pre-conditions: compiler->scanner is looking at the first token of a new
+// expression to be parsed
+//
+static void parse_with(Precedence min_precedence, Compiler *compiler) {
   Parser *parser = compiler->parser;
 
+  // consume the next token to decide which parse function we need next
   parser__advance(parser);
-  ParseFn prefix_rule = get_parsing_rule(parser->previous.type)->prefix;
-  if (prefix_rule == NULL) {
-    error("Expected expression", parser);
+  ParseFn parse_prefix = get_parsing_rule(parser->previous.type)->prefix;
+  if (parse_prefix == NULL) {
+    error("Expected parse function for leading token", parser);
     return;
   }
-  prefix_rule(compiler);
+  // we compile what could be a single unary expression, or the first operand of
+  // larger binary expression...
+  parse_prefix(compiler);
 
-  while (precedence <= get_parsing_rule(parser->current.type)->precedence) {
+  // at this point, we've either:
+  // 1) compiled a full expression and we won't enter the loop (since EOF has
+  //    the lowest precedence of all tokens);
+  // 2) compiled the first operand of a binary expression and we may or may not
+  // enter the loop, depending on whether the next token/operator has higher
+  // or equal precedence than required by `min_precedence`
+  while (get_parsing_rule(parser->current.type)->precedence >= min_precedence) {
+    ParseFn parse_infix = get_parsing_rule(parser->current.type)->infix;
+    // we consume the operator and parse the rest of the expression
     parser__advance(parser);
-    ParseFn infix_rule = get_parsing_rule(parser->previous.type)->infix;
-    if (infix_rule == NULL) {
-      error("Expected operator", parser);
+    if (parse_infix == NULL) {
+      error("Expected parse function for operator", parser);
       return;
     }
-    infix_rule(compiler);
+    parse_infix(compiler);
   }
 }
 
 static void expression(Compiler *compiler) {
-  parse_precedence(PREC_ASSIGNMENT, compiler);
+  // assignments have the lowest precedence level of all expressions
+  // so this parses any expression
+  parse_with(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
 static void grouping(Compiler *compiler) {
@@ -223,16 +270,25 @@ static void grouping(Compiler *compiler) {
 
 static void number(Compiler *compiler) {
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
-  // of the string which couldn't be parsed as a double
+  // of the string which couldn't be parsed as a double.
   double value = strtod(compiler->parser->previous.start, /*residue:*/ NULL);
   emit_constant(value, compiler);
 }
 
+// pre-conditions: the operator for this expression has just been consumed (it
+// is what triggered the invocation to this function via the rules table)
+//
+// post-conditions: the expression to which the operator applies (with the right
+// precedence taken into account) has been consumed, and the corresponding
+// bytecode has been emitted.
+//
 static void unary(Compiler *compiler) {
   TokenType operator_type = compiler->parser->previous.type;
-  // compile the operand
-  parse_precedence(PREC_UNARY, compiler);
-  // emit the operator instruction
+  // compile the operand "recursively" (`unary` is always indirectly called from
+  // `parse_with`) so that expressions such as `---1` are parsed as `-(-(-1))`,
+  // i.e., with right-associativity.
+  parse_with(/*min_precedence:*/ PREC_UNARY, compiler);
+
   switch (operator_type) {
   case TOKEN_MINUS:
     emit_byte(OP_NEGATE, compiler);

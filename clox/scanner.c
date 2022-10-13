@@ -6,6 +6,9 @@
 
 const char *TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
 
+const Token NULL_TOKEN = {
+    .type = TOKEN_NULL, .start = "", .length = 0, .line = 0};
+
 void scanner__init(Scanner *scanner, const char *source) {
   scanner->start = source;
   scanner->current = source;
@@ -21,20 +24,20 @@ static bool is_at_end(const Scanner *scanner) {
   return *(scanner->current) == '\0';
 }
 
-static Token make_token(TokenType type, const Scanner *scanner) {
-  Token token;
-  token.type = type;
-  token.start = scanner->start;
-  token.length = (int)(scanner->current - scanner->start);
-  token.line = scanner->line;
-  return token;
-}
-
 static Token error_token(const char *message, const Scanner *scanner) {
   Token token;
   token.type = TOKEN_ERROR;
   token.start = message;
   token.length = (int)strlen(message);
+  token.line = scanner->line;
+  return token;
+}
+
+static Token make_token(TokenType type, const Scanner *scanner) {
+  Token token;
+  token.type = type;
+  token.start = scanner->start;
+  token.length = (int)(scanner->current - scanner->start);
   token.line = scanner->line;
   return token;
 }
