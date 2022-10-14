@@ -28,6 +28,21 @@ void value_array__dispose(ValueArray *array) {
   value_array__init(array);
 }
 
+bool value__equals(Value a, Value b) {
+  if (a.type != b.type)
+    return false;
+  switch (a.type) {
+  case VAL_BOOL:
+    return AS_BOOL(a) == AS_BOOL(b);
+  case VAL_NIL:
+    return true;
+  case VAL_NUMBER:
+    return AS_NUMBER(a) == AS_NUMBER(b);
+  default:
+    return false; // unreachable
+  }
+}
+
 void value__print(Value value) {
   switch (value.type) {
   case VAL_BOOL:

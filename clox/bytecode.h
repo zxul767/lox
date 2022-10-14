@@ -12,6 +12,9 @@ typedef enum {
   OP_NIL,
   OP_TRUE,
   OP_FALSE,
+  OP_EQUAL,
+  OP_GREATER,
+  OP_LESS,
   // all binary operations take their two operands from the top
   // of the stack
   OP_ADD,

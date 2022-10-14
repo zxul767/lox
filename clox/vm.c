@@ -95,7 +95,19 @@ static InterpretResult run(VM *vm) {
     case OP_FALSE:
       vm__push(BOOL_VAL(false), vm);
       break;
-      // binary operations
+    // binary operations
+    case OP_EQUAL: {
+      Value b = vm__pop(vm);
+      Value a = vm__pop(vm);
+      vm__push(BOOL_VAL(value__equals(a, b)), vm);
+      break;
+    }
+    case OP_GREATER:
+      BINARY_OP(BOOL_VAL, >);
+      break;
+    case OP_LESS:
+      BINARY_OP(BOOL_VAL, <);
+      break;
     case OP_ADD:
       BINARY_OP(NUMBER_VAL, +);
       break;
