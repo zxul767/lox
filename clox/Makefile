@@ -1,4 +1,4 @@
-CFLAGS = -g # Optional. Not required for proper compilation
+CFLAGS = -g -Wall # Optional. Not required for proper compilation
 ALL_CFLAGS = -I. $(CFLAGS) # -I. is required for proper compilation
 LDFLAGS = -rdynamic
 CC = gcc
