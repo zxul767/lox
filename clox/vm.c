@@ -1,9 +1,12 @@
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "memory.h"
+#include "object.h"
 #include "vm.h"
 
 static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
@@ -16,17 +19,21 @@ static void runtime_error(VM *vm, const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  size_t instruction_index =
-      vm->instruction_pointer - vm->bytecode->instructions - 1;
+  const Bytecode *bc = vm->bytecode;
+
+  size_t instruction_index = vm->instruction_pointer - bc->instructions - 1;
   int line = vm->bytecode->source_lines[instruction_index];
   fprintf(stderr, "[line %d] in script\n", line);
 
   reset_stack(vm);
 }
 
-void vm__init(VM *vm) { reset_stack(vm); }
+void vm__init(VM *vm) {
+  reset_stack(vm);
+  vm->objects = NULL;
+}
 
-void vm__dispose(VM *vm) {}
+void vm__dispose(VM *vm) { memory__free_objects(vm->objects); }
 
 void vm__push(Value value, VM *vm) {
   *(vm->stack_top) = value;
@@ -49,6 +56,21 @@ static Value peek(int distance, const VM *vm) {
 // who may be used to having `0` behave like `false`, e.g., C/C++ users)
 static bool is_falsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
+}
+
+static void concatenate(VM *vm) {
+  ObjectString *b = AS_STRING(vm__pop(vm));
+  ObjectString *a = AS_STRING(vm__pop(vm));
+
+  int length = a->length + b->length;
+  char *chars = ALLOCATE(char, length + 1);
+  memcpy(chars, a->chars, a->length);
+  memcpy(chars + a->length, b->chars, b->length);
+  chars[length] = '\0';
+
+  ObjectString *result = string__take_ownership(chars, length, vm);
+
+  vm__push(OBJECT_VAL(result), vm);
 }
 
 static InterpretResult run(VM *vm) {
@@ -108,9 +130,19 @@ static InterpretResult run(VM *vm) {
     case OP_LESS:
       BINARY_OP(BOOL_VAL, <);
       break;
-    case OP_ADD:
-      BINARY_OP(NUMBER_VAL, +);
+    case OP_ADD: {
+      if (IS_STRING(peek(0, vm)) && IS_STRING(peek(1, vm))) {
+        concatenate(vm);
+      } else if (IS_NUMBER(peek(0, vm)) && IS_NUMBER(peek(1, vm))) {
+        double b = AS_NUMBER(vm__pop(vm));
+        double a = AS_NUMBER(vm__pop(vm));
+        vm__push(NUMBER_VAL(a + b), vm);
+      } else {
+        runtime_error(vm, "Operands must be two numbers or two strings.");
+        return INTERPRET_RUNTIME_ERROR;
+      }
       break;
+    }
     case OP_SUBTRACT:
       BINARY_OP(NUMBER_VAL, -);
       break;
@@ -157,8 +189,9 @@ InterpretResult vm__interpret(const char *source, VM *vm) {
   Bytecode bytecode;
   bytecode__init(&bytecode);
 
-  // compilation into bytecode
-  if (!compiler__compile(source, &bytecode)) {
+  // we pass `vm` so we can track all heap-allocated
+  // objects and dispose them when the VM shuts down
+  if (!compiler__compile(source, &bytecode, vm)) {
     bytecode__dispose(&bytecode);
     return INTERPRET_COMPILE_ERROR;
   }
@@ -169,5 +202,6 @@ InterpretResult vm__interpret(const char *source, VM *vm) {
   InterpretResult result = run(vm);
 
   bytecode__dispose(&bytecode);
+
   return result;
 }

@@ -11,15 +11,6 @@
 #include "debug.h"
 #endif
 
-static const char *string__remove_prefix(const char *prefix,
-                                         const char *string) {
-  while (*string && *prefix && *string == *prefix) {
-    prefix++;
-    string++;
-  }
-  return string;
-}
-
 // There is no separate parser.c file because this is a single-pass compiler,
 // so we don't build explicit intermediate code representations (i.e., ASTs).
 //
@@ -57,6 +48,11 @@ typedef enum {
 typedef struct {
   Parser *parser;
   Bytecode *current_bytecode;
+
+  // `vm->objects` tracks references to all heap-allocated
+  // objects to be disposed when the VM shuts-down. In the
+  // compiler, such objects are string literals.
+  VM *vm;
 
 } Compiler;
 
@@ -114,9 +110,11 @@ static void parser__init(Parser *parser, Scanner *scanner) {
   parser->scanner = scanner;
 }
 
-static void init(Compiler *compiler, Parser *parser, Bytecode *bytecode) {
+static void init(Compiler *compiler, Parser *parser, Bytecode *bytecode,
+                 VM *vm) {
   compiler->parser = parser;
   compiler->current_bytecode = bytecode;
+  compiler->vm = vm;
 }
 
 static void parser__consume(TokenType type, const char *message,
@@ -309,9 +307,12 @@ static void number(Compiler *compiler) {
 }
 
 static void string(Compiler *compiler) {
-  emit_constant(OBJECT_VAL(string__copy(compiler->parser->previous.start + 1,
-                                        compiler->parser->previous.length - 2)),
-                compiler);
+  Parser *parser = compiler->parser;
+
+  ObjectString *_string = string__copy(
+      parser->previous.start + 1, parser->previous.length - 2, compiler->vm);
+
+  emit_constant(OBJECT_VAL(_string), compiler);
 }
 // pre-conditions: the operator for this expression has just been consumed (it
 // is what triggered the invocation to this function via the rules table)
@@ -387,7 +388,7 @@ ParseRule rules[] = {
 
 static ParseRule *get_parsing_rule(TokenType type) { return &rules[type]; }
 
-bool compiler__compile(const char *source, Bytecode *bytecode) {
+bool compiler__compile(const char *source, Bytecode *bytecode, VM *vm) {
   Scanner scanner;
   scanner__init(&scanner, source);
 
@@ -395,7 +396,7 @@ bool compiler__compile(const char *source, Bytecode *bytecode) {
   parser__init(&parser, &scanner);
 
   Compiler compiler;
-  init(&compiler, &parser, bytecode);
+  init(&compiler, &parser, bytecode, vm);
 
   // kickstart parsing & compilation
   parser__advance(&parser);
@@ -404,27 +405,6 @@ bool compiler__compile(const char *source, Bytecode *bytecode) {
   parser__consume(TOKEN_EOF, "Expected end of expression", &parser);
 
   finish(&compiler);
+
   return !parser.had_error;
-}
-
-static void scan_tokens(const char *source) {
-  Scanner scanner;
-  scanner__init(&scanner, source);
-
-  int line = -1;
-  for (;;) {
-    Token token = scanner__next_token(&scanner);
-    if (token.line != line) {
-      printf("%4d ", token.line);
-      line = token.line;
-    } else {
-      printf("%4s ", "|");
-    }
-    printf("%15s '%.*s'\n",
-           string__remove_prefix("TOKEN_", TOKEN_TO_STRING[token.type]),
-           token.length, token.start);
-
-    if (token.type == TOKEN_EOF)
-      break;
-  }
 }

@@ -1,17 +1,21 @@
 #ifndef VM_H_
 #define VM_H_
 
-#include "bytecode.h"
 #include "value.h"
 
-#define STACK_MAX 256
+typedef struct Bytecode Bytecode;
 
 // Virtual Machine for Lox
-typedef struct {
+#define STACK_MAX 256
+typedef struct VM {
   const Bytecode *bytecode;
   uint8_t *instruction_pointer;
+
   Value stack[STACK_MAX];
   Value *stack_top;
+
+  Object *objects;
+
 } VM;
 
 typedef enum {

@@ -30,7 +30,7 @@ typedef enum {
 
 } OpCode;
 
-typedef struct {
+typedef struct Bytecode {
   int count;
   int capacity;
   uint8_t *instructions;
