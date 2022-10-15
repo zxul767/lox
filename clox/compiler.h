@@ -11,6 +11,6 @@ typedef struct Bytecode Bytecode;
 // post-condition: `vm->objects` points to the linked list of objects
 // allocated during compilation (e.g., literal strings)
 //
-bool compiler__compile(const char *source, Bytecode *bytecode, VM *vm);
+bool compiler__compile(const char* source, Bytecode* bytecode, VM* vm);
 
 #endif // COMPILER_H_

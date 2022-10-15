@@ -5,20 +5,20 @@
 #include <stdio.h>
 #include <string.h>
 
-void value_array__init(ValueArray *array) {
+void value_array__init(ValueArray* array) {
   array->values = NULL;
   array->count = 0;
   array->capacity = 0;
 }
 
-static void grow_capacity(ValueArray *array) {
+static void grow_capacity(ValueArray* array) {
   int old_capacity = array->capacity;
   array->capacity = GROW_CAPACITY(old_capacity);
   array->values =
       GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
 }
 
-void value_array__append(ValueArray *array, Value value) {
+void value_array__append(ValueArray* array, Value value) {
   if (array->count + 1 > array->capacity) {
     grow_capacity(array);
   }
@@ -26,7 +26,7 @@ void value_array__append(ValueArray *array, Value value) {
   array->count++;
 }
 
-void value_array__dispose(ValueArray *array) {
+void value_array__dispose(ValueArray* array) {
   FREE_ARRAY(Value, array->values, array->capacity);
   value_array__init(array);
 }
@@ -42,8 +42,8 @@ bool value__equals(Value a, Value b) {
   case VAL_NUMBER:
     return AS_NUMBER(a) == AS_NUMBER(b);
   case VAL_OBJECT: {
-    ObjectString *a_string = AS_STRING(a);
-    ObjectString *b_string = AS_STRING(b);
+    ObjectString* a_string = AS_STRING(a);
+    ObjectString* b_string = AS_STRING(b);
     return a_string->length == b_string->length &&
            !memcmp(a_string->chars, b_string->chars, a_string->length);
   }

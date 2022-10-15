@@ -8,13 +8,13 @@ typedef struct Bytecode Bytecode;
 // Virtual Machine for Lox
 #define STACK_MAX 256
 typedef struct VM {
-  const Bytecode *bytecode;
-  uint8_t *instruction_pointer;
+  const Bytecode* bytecode;
+  uint8_t* instruction_pointer;
 
   Value stack[STACK_MAX];
-  Value *stack_top;
+  Value* stack_top;
 
-  Object *objects;
+  Object* objects;
 
 } VM;
 
@@ -24,13 +24,13 @@ typedef enum {
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
 
-void vm__init(VM *vm);
-void vm__dispose(VM *vm);
+void vm__init(VM* vm);
+void vm__dispose(VM* vm);
 
-InterpretResult vm__interpret_bytecode(const Bytecode *code, VM *vm);
-InterpretResult vm__interpret(const char *source, VM *vm);
+InterpretResult vm__interpret_bytecode(const Bytecode* code, VM* vm);
+InterpretResult vm__interpret(const char* source, VM* vm);
 
-void vm__push(Value value, VM *vm);
-Value vm__pop(VM *vm);
+void vm__push(Value value, VM* vm);
+Value vm__pop(VM* vm);
 
 #endif // VM_H_

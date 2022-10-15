@@ -55,11 +55,11 @@ typedef enum { FOREACH_TOKEN(GENERATE_ENUM) } TokenType;
 
 // We make it `extern` so it can be used from compiler.c;
 // see initialization in scanner.c
-extern const char *TOKEN_TO_STRING[];
+extern const char* TOKEN_TO_STRING[];
 
 typedef struct {
   TokenType type;
-  const char *start;
+  const char* start;
   int length;
   int line;
 } Token;
@@ -67,12 +67,12 @@ typedef struct {
 extern const Token BOF_TOKEN;
 
 typedef struct {
-  const char *start;
-  const char *current;
+  const char* start;
+  const char* current;
   int line;
 } Scanner;
 
-void scanner__init(Scanner *scanner, const char *source);
-Token scanner__next_token(Scanner *scanner);
+void scanner__init(Scanner* scanner, const char* source);
+Token scanner__next_token(Scanner* scanner);
 
 #endif // SCANNER_H_

@@ -11,7 +11,7 @@ void debug__print_section_divider() {
   putchar('\n');
 }
 
-void debug__disassemble(const Bytecode *code, const char *name) {
+void debug__disassemble(const Bytecode* code, const char* name) {
   printf("%s\n", name);
   debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
@@ -20,12 +20,12 @@ void debug__disassemble(const Bytecode *code, const char *name) {
   debug__print_section_divider();
 }
 
-static int simple_instruction(const char *name, int offset) {
+static int simple_instruction(const char* name, int offset) {
   printf("%s\n", name);
   return offset + 1;
 }
 
-static int constant_instruction(const char *name, const Bytecode *code,
+static int constant_instruction(const char* name, const Bytecode* code,
                                 int offset) {
   uint8_t constant_index = code->instructions[offset + 1];
   printf("%-16s %4d '", name, constant_index);
@@ -35,7 +35,7 @@ static int constant_instruction(const char *name, const Bytecode *code,
   return offset + 2;
 }
 
-int debug__disassemble_instruction(const Bytecode *code, int offset) {
+int debug__disassemble_instruction(const Bytecode* code, int offset) {
   printf("%04d ", offset);
 
   if (offset > 0 &&
@@ -81,9 +81,9 @@ int debug__disassemble_instruction(const Bytecode *code, int offset) {
   }
 }
 
-void debug__dump_stack(const VM *vm) {
+void debug__dump_stack(const VM* vm) {
   printf("          ");
-  for (const Value *slot = vm->stack; slot < vm->stack_top; slot++) {
+  for (const Value* slot = vm->stack; slot < vm->stack_top; slot++) {
     printf("[ ");
     value__print(*slot);
     printf(" ]");

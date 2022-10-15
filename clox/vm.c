@@ -9,9 +9,9 @@
 #include "object.h"
 #include "vm.h"
 
-static void reset_stack(VM *vm) { vm->stack_top = vm->stack; }
+static void reset_stack(VM* vm) { vm->stack_top = vm->stack; }
 
-static void runtime_error(VM *vm, const char *format, ...) {
+static void runtime_error(VM* vm, const char* format, ...) {
   va_list args;
   va_start(args, format);
   fprintf(stderr, "Runtime Error: ");
@@ -19,7 +19,7 @@ static void runtime_error(VM *vm, const char *format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  const Bytecode *bc = vm->bytecode;
+  const Bytecode* bc = vm->bytecode;
 
   size_t instruction_index = vm->instruction_pointer - bc->instructions - 1;
   int line = vm->bytecode->source_lines[instruction_index];
@@ -28,24 +28,24 @@ static void runtime_error(VM *vm, const char *format, ...) {
   reset_stack(vm);
 }
 
-void vm__init(VM *vm) {
+void vm__init(VM* vm) {
   reset_stack(vm);
   vm->objects = NULL;
 }
 
-void vm__dispose(VM *vm) { memory__free_objects(vm->objects); }
+void vm__dispose(VM* vm) { memory__free_objects(vm->objects); }
 
-void vm__push(Value value, VM *vm) {
+void vm__push(Value value, VM* vm) {
   *(vm->stack_top) = value;
   vm->stack_top++;
 }
 
-Value vm__pop(VM *vm) {
+Value vm__pop(VM* vm) {
   vm->stack_top--;
   return *(vm->stack_top);
 }
 
-static Value peek(int distance, const VM *vm) {
+static Value peek(int distance, const VM* vm) {
   // we add -1 because `stack_top` actually points to the next free slot,
   // not to the last occupied slot
   return vm->stack_top[-1 - distance];
@@ -58,22 +58,22 @@ static bool is_falsey(Value value) {
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
-static void concatenate(VM *vm) {
-  ObjectString *b = AS_STRING(vm__pop(vm));
-  ObjectString *a = AS_STRING(vm__pop(vm));
+static void concatenate(VM* vm) {
+  ObjectString* b = AS_STRING(vm__pop(vm));
+  ObjectString* a = AS_STRING(vm__pop(vm));
 
   int length = a->length + b->length;
-  char *chars = ALLOCATE(char, length + 1);
+  char* chars = ALLOCATE(char, length + 1);
   memcpy(chars, a->chars, a->length);
   memcpy(chars + a->length, b->chars, b->length);
   chars[length] = '\0';
 
-  ObjectString *result = string__take_ownership(chars, length, vm);
+  ObjectString* result = string__take_ownership(chars, length, vm);
 
   vm__push(OBJECT_VAL(result), vm);
 }
 
-static InterpretResult run(VM *vm) {
+static InterpretResult run(VM* vm) {
 
 #define READ_BYTE() (*vm->instruction_pointer++)
 #define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
@@ -179,13 +179,13 @@ static InterpretResult run(VM *vm) {
 #undef BINARY_OP
 }
 
-InterpretResult vm__interpret_bytecode(const Bytecode *code, VM *vm) {
+InterpretResult vm__interpret_bytecode(const Bytecode* code, VM* vm) {
   vm->bytecode = code;
   vm->instruction_pointer = vm->bytecode->instructions;
   return run(vm);
 }
 
-InterpretResult vm__interpret(const char *source, VM *vm) {
+InterpretResult vm__interpret(const char* source, VM* vm) {
   Bytecode bytecode;
   bytecode__init(&bytecode);
 

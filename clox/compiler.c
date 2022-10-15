@@ -26,7 +26,7 @@ typedef struct {
   bool had_error;
   bool panic_mode;
 
-  Scanner *scanner;
+  Scanner* scanner;
 
 } Parser;
 
@@ -46,17 +46,17 @@ typedef enum {
 } Precedence;
 
 typedef struct {
-  Parser *parser;
-  Bytecode *current_bytecode;
+  Parser* parser;
+  Bytecode* current_bytecode;
 
   // `vm->objects` tracks references to all heap-allocated
   // objects to be disposed when the VM shuts-down. In the
   // compiler, such objects are string literals.
-  VM *vm;
+  VM* vm;
 
 } Compiler;
 
-typedef void (*ParseFn)(Compiler *);
+typedef void (*ParseFn)(Compiler*);
 typedef struct {
   ParseFn prefix;
   ParseFn infix;
@@ -64,7 +64,7 @@ typedef struct {
 
 } ParseRule;
 
-static void error_at(Token *token, const char *message, Parser *parser) {
+static void error_at(Token* token, const char* message, Parser* parser) {
   // Don't report errors which are likely to be cascade errors (panic mode
   // means we failed to parse a rule and we're lost until we perform a
   // synchronization, so intermediate errors are likely to be spurious)
@@ -84,15 +84,15 @@ static void error_at(Token *token, const char *message, Parser *parser) {
   parser->had_error = true;
 }
 
-static void error(const char *message, Parser *parser) {
+static void error(const char* message, Parser* parser) {
   error_at(&parser->previous, message, parser);
 }
 
-static void error_at_current(const char *message, Parser *parser) {
+static void error_at_current(const char* message, Parser* parser) {
   error_at(&parser->current, message, parser);
 }
 
-static void parser__advance(Parser *parser) {
+static void parser__advance(Parser* parser) {
   parser->previous = parser->current;
   for (;;) {
     parser->current = scanner__next_token(parser->scanner);
@@ -102,7 +102,7 @@ static void parser__advance(Parser *parser) {
   }
 }
 
-static void parser__init(Parser *parser, Scanner *scanner) {
+static void parser__init(Parser* parser, Scanner* scanner) {
   parser->previous = BOF_TOKEN;
   parser->current = BOF_TOKEN;
   parser->had_error = false;
@@ -110,15 +110,15 @@ static void parser__init(Parser *parser, Scanner *scanner) {
   parser->scanner = scanner;
 }
 
-static void init(Compiler *compiler, Parser *parser, Bytecode *bytecode,
-                 VM *vm) {
+static void init(Compiler* compiler, Parser* parser, Bytecode* bytecode,
+                 VM* vm) {
   compiler->parser = parser;
   compiler->current_bytecode = bytecode;
   compiler->vm = vm;
 }
 
-static void parser__consume(TokenType type, const char *message,
-                            Parser *parser) {
+static void parser__consume(TokenType type, const char* message,
+                            Parser* parser) {
   if (parser->current.type == type) {
     parser__advance(parser);
     return;
@@ -126,19 +126,19 @@ static void parser__consume(TokenType type, const char *message,
   error_at_current(message, parser);
 }
 
-static void emit_byte(uint8_t byte, Compiler *compiler) {
+static void emit_byte(uint8_t byte, Compiler* compiler) {
   bytecode__append(compiler->current_bytecode, byte,
                    compiler->parser->previous.line);
 }
 
-static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler *compiler) {
+static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
   emit_byte(byte1, compiler);
   emit_byte(byte2, compiler);
 }
 
-static void emit_return(Compiler *compiler) { emit_byte(OP_RETURN, compiler); }
+static void emit_return(Compiler* compiler) { emit_byte(OP_RETURN, compiler); }
 
-static uint8_t make_constant(Value value, Compiler *compiler) {
+static uint8_t make_constant(Value value, Compiler* compiler) {
   int index = bytecode__store_constant(compiler->current_bytecode, value);
   if (index > UINT8_MAX) {
     error("Too many constants in one chunk", compiler->parser);
@@ -147,11 +147,11 @@ static uint8_t make_constant(Value value, Compiler *compiler) {
   return (uint8_t)index;
 }
 
-static void emit_constant(Value value, Compiler *compiler) {
+static void emit_constant(Value value, Compiler* compiler) {
   emit_bytes(OP_CONSTANT, make_constant(value, compiler), compiler);
 }
 
-static void finish(Compiler *compiler) {
+static void finish(Compiler* compiler) {
   emit_return(compiler);
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error) {
@@ -164,8 +164,8 @@ static void finish(Compiler *compiler) {
 // Forward declarations to break cyclic references between the set
 // of rules (which reference parsing functions) and `get_parsing_rule`
 // which is invoked in one or more of those parsing functions.
-static ParseRule *get_parsing_rule(TokenType);
-static void parse_with(Precedence min_precedence, Compiler *);
+static ParseRule* get_parsing_rule(TokenType);
+static void parse_with(Precedence min_precedence, Compiler*);
 
 // parses (and compiles) the operator and right operand of a binary
 // expression in a left-associative manner (i.e., `1+2+3` is parsed
@@ -178,9 +178,9 @@ static void parse_with(Precedence min_precedence, Compiler *);
 //
 // post-condition: the smallest expression of higher precedence than
 // that associated with this binary operation has been compiled
-static void binary(Compiler *compiler) {
+static void binary(Compiler* compiler) {
   TokenType operator_type = compiler->parser->previous.type;
-  ParseRule *rule = get_parsing_rule(operator_type);
+  ParseRule* rule = get_parsing_rule(operator_type);
   // by passing `rule->precedence + 1` we ensure that parsing done by this
   // function is left-associative.
   //
@@ -233,7 +233,7 @@ static void binary(Compiler *compiler) {
   }
 }
 
-static void literal(Compiler *compiler) {
+static void literal(Compiler* compiler) {
   switch (compiler->parser->previous.type) {
   case TOKEN_FALSE:
     emit_byte(OP_FALSE, compiler);
@@ -255,8 +255,8 @@ static void literal(Compiler *compiler) {
 // pre-condition: compiler->scanner is looking at the first token of a new
 // expression to be parsed
 //
-static void parse_with(Precedence min_precedence, Compiler *compiler) {
-  Parser *parser = compiler->parser;
+static void parse_with(Precedence min_precedence, Compiler* compiler) {
+  Parser* parser = compiler->parser;
 
   // consume the next token to decide which parse function we need next
   parser__advance(parser);
@@ -287,29 +287,29 @@ static void parse_with(Precedence min_precedence, Compiler *compiler) {
   }
 }
 
-static void expression(Compiler *compiler) {
+static void expression(Compiler* compiler) {
   // assignments have the lowest precedence level of all expressions
   // so this parses any expression
   parse_with(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
-static void grouping(Compiler *compiler) {
+static void grouping(Compiler* compiler) {
   expression(compiler);
   parser__consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.",
                   compiler->parser);
 }
 
-static void number(Compiler *compiler) {
+static void number(Compiler* compiler) {
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
   double value = strtod(compiler->parser->previous.start, /*residue:*/ NULL);
   emit_constant(NUMBER_VAL(value), compiler);
 }
 
-static void string(Compiler *compiler) {
-  Parser *parser = compiler->parser;
+static void string(Compiler* compiler) {
+  Parser* parser = compiler->parser;
 
-  ObjectString *_string = string__copy(
+  ObjectString* _string = string__copy(
       parser->previous.start + 1, parser->previous.length - 2, compiler->vm);
 
   emit_constant(OBJECT_VAL(_string), compiler);
@@ -321,7 +321,7 @@ static void string(Compiler *compiler) {
 // precedence taken into account) has been consumed, and the corresponding
 // bytecode has been emitted.
 //
-static void unary(Compiler *compiler) {
+static void unary(Compiler* compiler) {
   TokenType operator_type = compiler->parser->previous.type;
   // compile the operand "recursively" (`unary` is indirectly called from
   // `parse_with`) so that expressions such as `---1` are parsed as `-(-(-1))`,
@@ -386,9 +386,9 @@ ParseRule rules[] = {
 };
 /* clang-format on */
 
-static ParseRule *get_parsing_rule(TokenType type) { return &rules[type]; }
+static ParseRule* get_parsing_rule(TokenType type) { return &rules[type]; }
 
-bool compiler__compile(const char *source, Bytecode *bytecode, VM *vm) {
+bool compiler__compile(const char* source, Bytecode* bytecode, VM* vm) {
   Scanner scanner;
   scanner__init(&scanner, source);
 

@@ -4,12 +4,12 @@
 #include <stdio.h>
 #include <string.h>
 
-const char *TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
+const char* TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
 
 const Token BOF_TOKEN = {
     .type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
 
-void scanner__init(Scanner *scanner, const char *source) {
+void scanner__init(Scanner* scanner, const char* source) {
   scanner->start = source;
   scanner->current = source;
   scanner->line = 1;
@@ -20,11 +20,11 @@ static bool is_alpha(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-static bool is_at_end(const Scanner *scanner) {
+static bool is_at_end(const Scanner* scanner) {
   return *(scanner->current) == '\0';
 }
 
-static Token error_token(const char *message, const Scanner *scanner) {
+static Token error_token(const char* message, const Scanner* scanner) {
   Token token;
   token.type = TOKEN_ERROR;
   token.start = message;
@@ -33,7 +33,7 @@ static Token error_token(const char *message, const Scanner *scanner) {
   return token;
 }
 
-static Token make_token(TokenType type, const Scanner *scanner) {
+static Token make_token(TokenType type, const Scanner* scanner) {
   Token token;
   token.type = type;
   token.start = scanner->start;
@@ -42,19 +42,19 @@ static Token make_token(TokenType type, const Scanner *scanner) {
   return token;
 }
 
-static char advance(Scanner *scanner) {
+static char advance(Scanner* scanner) {
   scanner->current++;
   return scanner->current[-1];
 }
 
-static char peek(Scanner *scanner) { return *(scanner->current); }
-static char peek_next(Scanner *scanner) {
+static char peek(Scanner* scanner) { return *(scanner->current); }
+static char peek_next(Scanner* scanner) {
   if (is_at_end(scanner))
     return '\0';
   return scanner->current[1];
 }
 
-static bool match(char expected, Scanner *scanner) {
+static bool match(char expected, Scanner* scanner) {
   if (is_at_end(scanner))
     return false;
   if (*scanner->current != expected)
@@ -63,7 +63,7 @@ static bool match(char expected, Scanner *scanner) {
   return true;
 }
 
-static void skip_whitespace(Scanner *scanner) {
+static void skip_whitespace(Scanner* scanner) {
   for (;;) {
     char c = peek(scanner);
     switch (c) {
@@ -98,8 +98,8 @@ static void skip_whitespace(Scanner *scanner) {
 // + the substring to be compared to `that` begins at `this_start` and ends
 //   at `this_end-1` (i.e., `this_end` is a non-inclusive "index")
 // + `that` is a null-terminated c-string;
-static bool string__equals(const char *this_start, const char *this_end,
-                           const char *that) {
+static bool string__equals(const char* this_start, const char* this_end,
+                           const char* that) {
   while (*that && this_start < this_end) {
     if (*this_start != *that)
       break;
@@ -110,8 +110,8 @@ static bool string__equals(const char *this_start, const char *this_end,
   return *that == '\0' && this_start == this_end;
 }
 
-static TokenType check_keyword(const char *keyword, TokenType type,
-                               const Scanner *scanner, int skip) {
+static TokenType check_keyword(const char* keyword, TokenType type,
+                               const Scanner* scanner, int skip) {
   // `skip` is the size of the prefix we've already verified for equality
   if (string__equals(scanner->start + skip, scanner->current, keyword + skip)) {
     return type;
@@ -119,7 +119,7 @@ static TokenType check_keyword(const char *keyword, TokenType type,
   return TOKEN_IDENTIFIER;
 }
 
-static TokenType identifier_type(Scanner *scanner) {
+static TokenType identifier_type(Scanner* scanner) {
   // This is a hard-coded trie of keywords for very quick identification.
   // See https://en.wikipedia.org/wiki/Trie for details.
   switch (scanner->start[0]) {
@@ -171,13 +171,13 @@ static TokenType identifier_type(Scanner *scanner) {
   return TOKEN_IDENTIFIER;
 }
 
-static Token identifier(Scanner *scanner) {
+static Token identifier(Scanner* scanner) {
   while (is_alpha(peek(scanner)) || is_digit(peek(scanner)))
     advance(scanner);
   return make_token(identifier_type(scanner), scanner);
 }
 
-static Token number(Scanner *scanner) {
+static Token number(Scanner* scanner) {
   // consume the integral part...
   while (is_digit(peek(scanner)))
     advance(scanner);
@@ -193,7 +193,7 @@ static Token number(Scanner *scanner) {
   return make_token(TOKEN_NUMBER, scanner);
 }
 
-static Token string(Scanner *scanner) {
+static Token string(Scanner* scanner) {
   while (peek(scanner) != '"' && !is_at_end(scanner)) {
     if (peek(scanner) == '\n')
       scanner->line++;
@@ -207,7 +207,7 @@ static Token string(Scanner *scanner) {
   return make_token(TOKEN_STRING, scanner);
 }
 
-Token scanner__next_token(Scanner *scanner) {
+Token scanner__next_token(Scanner* scanner) {
   skip_whitespace(scanner);
 
   scanner->start = scanner->current;
