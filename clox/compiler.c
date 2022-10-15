@@ -4,6 +4,7 @@
 
 #include "common.h"
 #include "compiler.h"
+#include "object.h"
 #include "scanner.h"
 
 #ifdef DEBUG_PRINT_CODE
@@ -307,6 +308,11 @@ static void number(Compiler *compiler) {
   emit_constant(NUMBER_VAL(value), compiler);
 }
 
+static void string(Compiler *compiler) {
+  emit_constant(OBJECT_VAL(string__copy(compiler->parser->previous.start + 1,
+                                        compiler->parser->previous.length - 2)),
+                compiler);
+}
 // pre-conditions: the operator for this expression has just been consumed (it
 // is what triggered the invocation to this function via the rules table)
 //
@@ -356,7 +362,7 @@ ParseRule rules[] = {
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_STRING]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},

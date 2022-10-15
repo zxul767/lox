@@ -1,6 +1,9 @@
 #include "value.h"
 #include "memory.h"
+#include "object.h"
+
 #include <stdio.h>
+#include <string.h>
 
 void value_array__init(ValueArray *array) {
   array->values = NULL;
@@ -38,6 +41,12 @@ bool value__equals(Value a, Value b) {
     return true;
   case VAL_NUMBER:
     return AS_NUMBER(a) == AS_NUMBER(b);
+  case VAL_OBJECT: {
+    ObjectString *a_string = AS_STRING(a);
+    ObjectString *b_string = AS_STRING(b);
+    return a_string->length == b_string->length &&
+           !memcmp(a_string->chars, b_string->chars, a_string->length);
+  }
   default:
     return false; // unreachable
   }
@@ -53,6 +62,9 @@ void value__print(Value value) {
     break;
   case VAL_NUMBER:
     printf("%g", AS_NUMBER(value));
+    break;
+  case VAL_OBJECT:
+    object__print(value);
     break;
   default:
     fprintf(stderr, "Cannot print value of unknown type: %d", value.type);

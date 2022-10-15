@@ -6,8 +6,8 @@ CC = gcc
 #
 # TODO: investigate how to remove all redundancy in this file
 #
-main: main.o vm.o scanner.o compiler.o bytecode.o value.o memory.o debug.o
-	$(CC) -o main $(CFLAGS) $(LDFLAGS) main.o vm.o scanner.o compiler.o value.o bytecode.o memory.o debug.o
+main: main.o vm.o scanner.o compiler.o bytecode.o value.o object.o memory.o debug.o
+	$(CC) -o main $(CFLAGS) $(LDFLAGS) main.o vm.o scanner.o compiler.o value.o object.o bytecode.o memory.o debug.o
 
 test: main
 	./main
@@ -29,6 +29,9 @@ bytecode.o: bytecode.c bytecode.h memory.h value.h
 
 value.o: value.c value.h memory.h
 	$(CC) -c $(ALL_CFLAGS) value.c
+
+object.o: object.c object.h memory.h
+	$(CC) -c $(ALL_CFLAGS) object.c
 
 debug.o: debug.c debug.h
 	$(CC) -c $(ALL_CFLAGS) debug.c
