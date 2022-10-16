@@ -28,24 +28,37 @@ static Object* object__allocate(size_t size, ObjectType type, VM* vm) {
   return object;
 }
 
-static ObjectString* string__allocate(char* chars, int length, VM* vm) {
+static ObjectString* string__allocate(char* chars, int length, uint32_t hash,
+                                      VM* vm) {
   ObjectString* string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING, vm);
   string->length = length;
   string->chars = chars;
+  string->hash = hash;
 
   return string;
+}
+
+static uint32_t string__hash(const char* key, int length) {
+  uint32_t hash = 2166136261u;
+  for (int i = 0; i < length; i++) {
+    hash ^= (uint8_t)key[i];
+    hash *= 16777619;
+  }
+  return hash;
 }
 
 ObjectString* string__copy(const char* chars, int length, VM* vm) {
   char* heap_chars = ALLOCATE(char, length + 1);
   memcpy(heap_chars, chars, length);
   heap_chars[length] = '\0';
+  uint32_t hash = string__hash(chars, length);
 
-  return string__allocate(heap_chars, length, vm);
+  return string__allocate(heap_chars, length, hash, vm);
 }
 
 ObjectString* string__take_ownership(char* chars, int length, VM* vm) {
-  return string__allocate(chars, length, vm);
+  uint32_t hash = string__hash(chars, length);
+  return string__allocate(chars, length, hash, vm);
 }
 
 void object__print(Value value) {

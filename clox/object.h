@@ -28,6 +28,7 @@ struct ObjectString {
   Object object;
   int length;
   char* chars;
+  uint32_t hash;
 };
 
 ObjectString* string__copy(const char* chars, int length, VM* vm);
