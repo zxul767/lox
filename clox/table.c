@@ -87,19 +87,19 @@ static Entry* allocate_entries(int capacity) {
   return entries;
 }
 
-static int copy_entries_from(const Table* table, Entry* entries,
+static int copy_entries_from(const Table* table, Entry* new_entries,
                              int new_capacity) {
   // since we're not copying tombstones, the count will need to be recomputed
   int new_count = 0;
   for (int i = 0; i < table->capacity; i++) {
     Entry* old_entry = &table->entries[i];
-    // this excludes copying empty entries but also tombstones (copying
+    // this excludes copying empty new_entries but also tombstones (copying
     // tombstones doesn't add any value since we're rebuilding the probe
     // sequences anyway)
     if (old_entry->key == NULL)
       continue;
 
-    Entry* new_entry = find_entry(entries, new_capacity, old_entry->key);
+    Entry* new_entry = find_entry(new_entries, new_capacity, old_entry->key);
     new_entry->key = old_entry->key;
     new_entry->value = old_entry->value;
     new_count++;
@@ -118,6 +118,8 @@ static void adjust_capacity(Table* table, int new_capacity) {
   table->capacity = new_capacity;
 }
 
+// returns true if a new entry was set; otherwise false (i.e., when an
+// existing entry was simply updated)
 bool table__set(Table* table, ObjectString* key, Value value) {
   // grow table if overly loaded
   if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
@@ -128,9 +130,9 @@ bool table__set(Table* table, ObjectString* key, Value value) {
   Entry* entry = find_entry(table->entries, table->capacity, key);
   bool is_new_key = entry->key == NULL;
 
-  // we only increment the count for freshly unused entries because
-  // tombstones are part of the count (see the OVERVIEW at the top
-  // of this file for more details.)
+  // we only increment the count for never-before used entries because
+  // tombstones are considered full buckets for the purposes of the loading
+  // factor (see the OVERVIEW at the top of this file for more details.)
   if (is_new_key && IS_NIL(entry->value))
     table->count++;
 
