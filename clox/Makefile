@@ -1,46 +1,98 @@
-CFLAGS = -g -Wall # Optional. Not required for proper compilation
-ALL_CFLAGS = -I. $(CFLAGS) # -I. is required for proper compilation
-LDFLAGS = -rdynamic
+###############################################################################
+# COMPILER
+###############################################################################
+
+# we only support gcc for the time being
 CC = gcc
 
+###############################################################################
+# PROJECT LAYOUT
 #
-# TODO: investigate how to remove all redundancy in this file
-#
-main: main.o vm.o scanner.o compiler.o bytecode.o value.o object.o memory.o debug.o table.o
-	$(CC) -o main $(CFLAGS) $(LDFLAGS) main.o vm.o scanner.o compiler.o value.o object.o bytecode.o memory.o debug.o table.o
+# src/*.{c,h}
+# build/
+# |---obj/*.o
+# |   |---.deps/*.d
+# |---bin/clox
+###############################################################################
+TARGET_NAME := clox
 
-test: main
-	./main
+BUILD_DIR := build
+SRC_DIR := src
+OBJ_DIR := $(BUILD_DIR)/obj
+DEPS_DIR := $(OBJ_DIR)/.deps
+BIN_DIR := $(BUILD_DIR)/bin
+MAIN_TARGET := $(BIN_DIR)/$(TARGET_NAME)
 
-main.o: main.c bytecode.h common.h
-	$(CC) -c $(ALL_CFLAGS) main.c
+###############################################################################
+# COMPILATION FLAGS
+###############################################################################
 
-vm.o: vm.c vm.h
-	$(CC) -c $(ALL_CFLAGS) vm.c
+# include debugging symbols and all warnings
+CFLAGS = -g -Wall -I$(SRC_DIR)
 
-compiler.o: compiler.c common.h scanner.h
-	$(CC) -c $(ALL_CFLAGS) compiler.c
+# keep symbols in the final executable so we can debug
+LDFLAGS = -rdynamic
 
-table.o: table.c table.h memory.h value.h object.h
-	$(CC) -c $(ALL_CFLAGS) table.c
+# generate dependencies information while compiling
+DEPS_FLAGS = -MT $@ -MMD -MF $(DEPS_DIR)/$*.Td
 
-scanner.o: scanner.c scanner.h common.h
-	$(CC) -c $(ALL_CFLAGS) scanner.c
+###############################################################################
+# FILES
+###############################################################################
 
-bytecode.o: bytecode.c bytecode.h memory.h value.h
-	$(CC) -c $(ALL_CFLAGS) bytecode.c
+SOURCE_FILES := $(wildcard $(SRC_DIR)/*.c)
+OBJ_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+DEPS_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(DEPS_DIR)/%.d)
 
-value.o: value.c value.h memory.h
-	$(CC) -c $(ALL_CFLAGS) value.c
+###############################################################################
+# BUILD RULES
+###############################################################################
 
-object.o: object.c object.h memory.h
-	$(CC) -c $(ALL_CFLAGS) object.c
+POST_COMPILE = mv -f $(DEPS_DIR)/$*.Td $(DEPS_DIR)/$*.d && touch $@
+COMPILE = $(CC) $(DEPS_FLAGS) $(CFLAGS) -c
+LINK = $(CC) $(LDFLAGS)
 
-debug.o: debug.c debug.h
-	$(CC) -c $(ALL_CFLAGS) debug.c
+# main target (entry point for bare `make` invocation)
+$(MAIN_TARGET) : $(OBJ_FILES) | $(BIN_DIR)
+	$(LINK) -o $@ $^
 
-memory.o: memory.c memory.h
-	$(CC) -c $(ALL_CFLAGS) memory.c
+# cancel predefined rule
+%.o : %.c
+
+# build object files
+$(OBJ_DIR)/%.o :: $(SRC_DIR)/%.c $(DEPS_DIR)/%.d | $(DEPS_DIR)
+	$(COMPILE) $< -o $@
+	$(POST_COMPILE)
+
+# this target is only for debugging purposes; invoke it as: `make print-VAR-NAME`
+print-%  : ; @echo $* = $($*)
+
+###############################################################################
+# AUTO-COMPUTED DEPENDENCIES RULES
+###############################################################################
+
+$(DEPS_FILES):
+include $(wildcard $(DEPS_FILES))
+
+###############################################################################
+# TASKS
+###############################################################################
+
+# create directories if necessary
+$(BIN_DIR): ; @mkdir -p $@
+$(DEPS_DIR): ; @mkdir -p $@
+
+.PHONY: repl run clean
+
+# run the REPL
+repl: $(MAIN_TARGET)
+	./$<
+
+# run a program
+run: $(MAIN_TARGET)
+	@echo "running a program"
+	./$< $(NAME)
 
 clean:
-	rm main *.o
+	rm -f $(MAIN_TARGET) $(OBJ_DIR)/*.o $(DEPS_DIR)/*.d
+	rm -rf $(BUILD_DIR)
