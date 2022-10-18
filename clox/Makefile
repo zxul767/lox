@@ -46,6 +46,8 @@ DEPS_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(DEPS_DIR)/%.d)
 
 ###############################################################################
 # BUILD RULES
+# for details on pattern rules, see:
+# https://www.gnu.org/software/make/manual/html_node/Pattern-Rules.html
 ###############################################################################
 
 POST_COMPILE = mv -f $(DEPS_DIR)/$*.Td $(DEPS_DIR)/$*.d && touch $@
@@ -64,11 +66,10 @@ $(OBJ_DIR)/%.o :: $(SRC_DIR)/%.c $(DEPS_DIR)/%.d | $(DEPS_DIR)
 	$(COMPILE) $< -o $@
 	$(POST_COMPILE)
 
-# this target is only for debugging purposes; invoke it as: `make print-VAR-NAME`
-print-%  : ; @echo $* = $($*)
-
 ###############################################################################
 # AUTO-COMPUTED DEPENDENCIES RULES
+# for details on the whole solution implemented in this Makefile, see:
+# https://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
 ###############################################################################
 
 $(DEPS_FILES):
@@ -82,7 +83,10 @@ include $(wildcard $(DEPS_FILES))
 $(BIN_DIR): ; @mkdir -p $@
 $(DEPS_DIR): ; @mkdir -p $@
 
-.PHONY: repl run clean
+.PHONY: repl run clean print-%
+
+# this target is only for debugging purposes; invoke it as: `make print-VAR-NAME`
+print-%  : ; @echo $* = $($*)
 
 # run the REPL
 repl: $(MAIN_TARGET)
