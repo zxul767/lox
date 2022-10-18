@@ -180,3 +180,50 @@ void table__add_all(Table* from, Table* to) {
     }
   }
 }
+
+// The implementation of `find_entry` relies on comparing `entry->key == key`,
+// but this comparison only returns true when both strings are the exact same
+// object in memory, not when they are different objects with the same
+// characters. One way to fix this would be to change the comparison to be
+// character-based, but that would be slow. Instead, by "interning" all strings
+// in the VM, we ensure that any two strings with the same characters actually
+// point to the same object in memory, thereby fixing `find_entry`.
+//
+// This function is here to help us implement "string interning", so it's quite
+// similar to `find_entry`. Unlike `find_entry` though, we only need it to
+// either find an existing string or return NULL when the string hasn't been
+// interned yet, so the loop can be a bit simpler.
+//
+// See https://craftinginterpreters.com/hash-tables.html#string-interning for
+// details.
+//
+ObjectString* table__find_string(Table* table, const char* chars, int length,
+                                 uint32_t hash) {
+  if (table->count == 0)
+    return NULL;
+
+  uint32_t index = hash % table->capacity;
+  for (;;) {
+    Entry* entry = &table->entries[index];
+    if (entry->key == NULL) {
+      // stop if we found an empty non-tombstone entry (probe sequences always
+      // terminate at [key:NULL, value:NIL] entries)
+      if (IS_NIL(entry->value))
+        return NULL;
+
+      // because string interning will be a frequent operation in every program
+      // (remember that they're used not just for string literals, but also for
+      // variables), it's very important that it is as efficient as possible,
+      // hence why we do simpler comparisons (length and hash) first so we can
+      // rule out negative cases faster.
+    } else if (entry->key->length == length && entry->key->hash == hash &&
+               !memcmp(entry->key->chars, chars, length)) {
+      // we found it
+      return entry->key;
+    }
+    index = (index + 1) % table->capacity;
+  }
+  // in theory, we should never get here, since the table will always have
+  // empty entries that terminate probe sequences.
+  return NULL; // unreachable
+}

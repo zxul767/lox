@@ -1,6 +1,7 @@
 #ifndef VM_H_
 #define VM_H_
 
+#include "table.h"
 #include "value.h"
 
 typedef struct Bytecode Bytecode;
@@ -15,6 +16,7 @@ typedef struct VM {
   Value* stack_top;
 
   Object* objects;
+  Table interned_strings;
 
 } VM;
 

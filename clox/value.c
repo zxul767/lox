@@ -41,12 +41,8 @@ bool value__equals(Value a, Value b) {
     return true;
   case VAL_NUMBER:
     return AS_NUMBER(a) == AS_NUMBER(b);
-  case VAL_OBJECT: {
-    ObjectString* a_string = AS_STRING(a);
-    ObjectString* b_string = AS_STRING(b);
-    return a_string->length == b_string->length &&
-           !memcmp(a_string->chars, b_string->chars, a_string->length);
-  }
+  case VAL_OBJECT:
+    return AS_OBJECT(a) == AS_OBJECT(b);
   default:
     return false; // unreachable
   }

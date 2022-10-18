@@ -24,6 +24,9 @@ bool table__set(Table* table, ObjectString* key, Value value);
 bool table__get(Table* table, ObjectString* key, Value* out_value);
 bool table__delete(Table* table, ObjectString* key);
 
+ObjectString* table__find_string(Table* table, const char* chars, int length,
+                                 uint32_t hash);
+
 void table__add_all(Table* from, Table* to);
 
 #endif // TABLE_H_

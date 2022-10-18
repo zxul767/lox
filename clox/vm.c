@@ -31,9 +31,13 @@ static void runtime_error(VM* vm, const char* format, ...) {
 void vm__init(VM* vm) {
   reset_stack(vm);
   vm->objects = NULL;
+  table__init(&vm->interned_strings);
 }
 
-void vm__dispose(VM* vm) { memory__free_objects(vm->objects); }
+void vm__dispose(VM* vm) {
+  table__dispose(&vm->interned_strings);
+  memory__free_objects(vm->objects);
+}
 
 void vm__push(Value value, VM* vm) {
   *(vm->stack_top) = value;

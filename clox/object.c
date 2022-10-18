@@ -3,6 +3,7 @@
 
 #include "memory.h"
 #include "object.h"
+#include "table.h"
 #include "vm.h"
 
 #define ALLOCATE_OBJECT(type, object_type, vm)                                 \
@@ -34,10 +35,13 @@ static ObjectString* string__allocate(char* chars, int length, uint32_t hash,
   string->length = length;
   string->chars = chars;
   string->hash = hash;
+  table__set(&vm->interned_strings, string, NIL_VAL);
 
   return string;
 }
 
+// FNV-1a hash function. For details, see:
+// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
 static uint32_t string__hash(const char* key, int length) {
   uint32_t hash = 2166136261u;
   for (int i = 0; i < length; i++) {
@@ -48,16 +52,27 @@ static uint32_t string__hash(const char* key, int length) {
 }
 
 ObjectString* string__copy(const char* chars, int length, VM* vm) {
+  uint32_t hash = string__hash(chars, length);
+  ObjectString* interned =
+      table__find_string(&vm->interned_strings, chars, length, hash);
+  if (interned != NULL) {
+    return interned;
+  }
   char* heap_chars = ALLOCATE(char, length + 1);
   memcpy(heap_chars, chars, length);
   heap_chars[length] = '\0';
-  uint32_t hash = string__hash(chars, length);
 
   return string__allocate(heap_chars, length, hash, vm);
 }
 
 ObjectString* string__take_ownership(char* chars, int length, VM* vm) {
   uint32_t hash = string__hash(chars, length);
+  ObjectString* interned =
+      table__find_string(&vm->interned_strings, chars, length, hash);
+  if (interned != NULL) {
+    FREE_ARRAY(char, chars, length + 1);
+    return interned;
+  }
   return string__allocate(chars, length, hash, vm);
 }
 
