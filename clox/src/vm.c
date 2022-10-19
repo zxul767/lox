@@ -140,6 +140,7 @@ static InterpretResult run(VM* vm) {
     case OP_DEFINE_GLOBAL: {
       ObjectString* name = READ_STRING();
       table__set(&vm->global_vars, name, peek(0, vm));
+      pop(vm);
       break;
     }
     // binary operations
