@@ -105,7 +105,8 @@ static InterpretResult run(VM* vm) {
     debug__dump_stack(vm);
     debug__disassemble_instruction(
         vm->bytecode,
-        (int)(vm->instruction_pointer - vm->bytecode->instructions));
+        (int)(vm->instruction_pointer - vm->bytecode->instructions)
+    );
 #endif
 
     uint8_t instruction;
@@ -141,6 +142,17 @@ static InterpretResult run(VM* vm) {
       ObjectString* name = READ_STRING();
       table__set(&vm->global_vars, name, peek(0, vm));
       pop(vm);
+      break;
+    }
+    case OP_SET_GLOBAL: {
+      ObjectString* name = READ_STRING();
+      if (table__set(&vm->global_vars, name, peek(0, vm))) {
+        // table__set returns true when assigning for the first time, which
+        // means the variable hadn't been declared
+        table__delete(&vm->global_vars, name);
+        runtime_error(vm, "Undefined variable '%s'", name->chars);
+        return INTERPRET_RUNTIME_ERROR;
+      }
       break;
     }
     // binary operations
@@ -198,7 +210,9 @@ static InterpretResult run(VM* vm) {
       break;
     }
     case OP_RETURN: {
+#ifdef DEBUG_TRACE_EXECUTION
       debug__print_section_divider();
+#endif
       return INTERPRET_OK;
     }
     }

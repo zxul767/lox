@@ -28,7 +28,7 @@ MAIN_TARGET := $(BIN_DIR)/$(TARGET_NAME)
 ###############################################################################
 
 # include debugging symbols and all warnings
-CFLAGS = -g -Wall -I$(SRC_DIR)
+CFLAGS = -g -Wall -Werror -I$(SRC_DIR)
 
 # keep symbols in the final executable so we can debug
 LDFLAGS = -rdynamic

@@ -27,9 +27,9 @@ static int simple_instruction(const char* name, int offset) {
 
 static int constant_instruction(const char* name, const Bytecode* code,
                                 int offset) {
-  uint8_t constant_index = code->instructions[offset + 1];
-  printf("%-16s %4d '", name, constant_index);
-  value__print(code->constants.values[constant_index]);
+  uint8_t constant_location = code->instructions[offset + 1];
+  printf("%-16s %4d '", name, constant_location);
+  value__print(code->constants.values[constant_location]);
   printf("'\n");
 
   return offset + 2;
@@ -61,6 +61,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
     return constant_instruction("OP_GET_GLOBAL", code, offset);
   case OP_DEFINE_GLOBAL:
     return constant_instruction("OP_DEFINE_GLOBAL", code, offset);
+  case OP_SET_GLOBAL:
+    return constant_instruction("OP_SET_GLOBAL", code, offset);
   case OP_EQUAL:
     return simple_instruction("OP_EQUAL", offset);
   case OP_GREATER:
