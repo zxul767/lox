@@ -121,6 +121,9 @@ static InterpretResult run(VM* vm) {
     case OP_FALSE:
       vm__push(BOOL_VAL(false), vm);
       break;
+    case OP_POP:
+      vm__pop(vm);
+      break;
     // binary operations
     case OP_EQUAL: {
       Value b = vm__pop(vm);

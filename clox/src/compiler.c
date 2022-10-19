@@ -308,6 +308,13 @@ static void expression(Compiler* compiler) {
   parse_with(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
+static void expression_statement(Compiler* compiler) {
+  expression(compiler);
+  parser__consume(TOKEN_SEMICOLON, "Expected ';' after expression",
+                  compiler->parser);
+  emit_byte(OP_POP, compiler);
+}
+
 static void print_statement(Compiler* compiler) {
   expression(compiler);
   parser__consume(TOKEN_SEMICOLON, "Expected ';' after value",
@@ -320,6 +327,8 @@ static void declaration(Compiler* compiler) { statement(compiler); }
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
+  } else {
+    expression_statement(compiler);
   }
 }
 
