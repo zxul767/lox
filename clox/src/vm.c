@@ -32,19 +32,21 @@ void vm__init(VM* vm) {
   reset_stack(vm);
   vm->objects = NULL;
   table__init(&vm->interned_strings);
+  table__init(&vm->global_vars);
 }
 
 void vm__dispose(VM* vm) {
   table__dispose(&vm->interned_strings);
+  table__dispose(&vm->global_vars);
   memory__free_objects(vm->objects);
 }
 
-void vm__push(Value value, VM* vm) {
+void push(Value value, VM* vm) {
   *(vm->stack_top) = value;
   vm->stack_top++;
 }
 
-Value vm__pop(VM* vm) {
+Value pop(VM* vm) {
   vm->stack_top--;
   return *(vm->stack_top);
 }
@@ -63,8 +65,8 @@ static bool is_falsey(Value value) {
 }
 
 static void concatenate(VM* vm) {
-  ObjectString* b = AS_STRING(vm__pop(vm));
-  ObjectString* a = AS_STRING(vm__pop(vm));
+  ObjectString* b = AS_STRING(pop(vm));
+  ObjectString* a = AS_STRING(pop(vm));
 
   int length = a->length + b->length;
   char* chars = ALLOCATE(char, length + 1);
@@ -74,22 +76,23 @@ static void concatenate(VM* vm) {
 
   ObjectString* result = string__take_ownership(chars, length, vm);
 
-  vm__push(OBJECT_VAL(result), vm);
+  push(OBJECT_VAL(result), vm);
 }
 
 static InterpretResult run(VM* vm) {
 
 #define READ_BYTE() (*vm->instruction_pointer++)
 #define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
+#define READ_STRING() AS_STRING(READ_CONSTANT())
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek(0, vm)) || !IS_NUMBER(peek(1, vm))) {                  \
       runtime_error(vm, "Operands must be numbers.");                          \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = AS_NUMBER(vm__pop(vm));                                         \
-    double a = AS_NUMBER(vm__pop(vm));                                         \
-    vm__push(value_type(a op b), vm);                                          \
+    double b = AS_NUMBER(pop(vm));                                             \
+    double a = AS_NUMBER(pop(vm));                                             \
+    push(value_type(a op b), vm);                                              \
   } while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -109,26 +112,41 @@ static InterpretResult run(VM* vm) {
     switch (instruction = READ_BYTE()) {
     case OP_CONSTANT: {
       Value constant = READ_CONSTANT();
-      vm__push(constant, vm);
+      push(constant, vm);
       break;
     }
     case OP_NIL:
-      vm__push(NIL_VAL, vm);
+      push(NIL_VAL, vm);
       break;
     case OP_TRUE:
-      vm__push(BOOL_VAL(true), vm);
+      push(BOOL_VAL(true), vm);
       break;
     case OP_FALSE:
-      vm__push(BOOL_VAL(false), vm);
+      push(BOOL_VAL(false), vm);
       break;
     case OP_POP:
-      vm__pop(vm);
+      pop(vm);
       break;
+    case OP_GET_GLOBAL: {
+      ObjectString* name = READ_STRING();
+      Value value;
+      if (!table__get(&vm->global_vars, name, &value)) {
+        runtime_error(vm, "Undefined variable '%s'", name->chars);
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      push(value, vm);
+      break;
+    }
+    case OP_DEFINE_GLOBAL: {
+      ObjectString* name = READ_STRING();
+      table__set(&vm->global_vars, name, peek(0, vm));
+      break;
+    }
     // binary operations
     case OP_EQUAL: {
-      Value b = vm__pop(vm);
-      Value a = vm__pop(vm);
-      vm__push(BOOL_VAL(value__equals(a, b)), vm);
+      Value b = pop(vm);
+      Value a = pop(vm);
+      push(BOOL_VAL(value__equals(a, b)), vm);
       break;
     }
     case OP_GREATER:
@@ -141,9 +159,9 @@ static InterpretResult run(VM* vm) {
       if (IS_STRING(peek(0, vm)) && IS_STRING(peek(1, vm))) {
         concatenate(vm);
       } else if (IS_NUMBER(peek(0, vm)) && IS_NUMBER(peek(1, vm))) {
-        double b = AS_NUMBER(vm__pop(vm));
-        double a = AS_NUMBER(vm__pop(vm));
-        vm__push(NUMBER_VAL(a + b), vm);
+        double b = AS_NUMBER(pop(vm));
+        double a = AS_NUMBER(pop(vm));
+        push(NUMBER_VAL(a + b), vm);
       } else {
         runtime_error(vm, "Operands must be two numbers or two strings.");
         return INTERPRET_RUNTIME_ERROR;
@@ -162,7 +180,7 @@ static InterpretResult run(VM* vm) {
 
       // unary operations
     case OP_NOT:
-      vm__push(BOOL_VAL(is_falsey(vm__pop(vm))), vm);
+      push(BOOL_VAL(is_falsey(pop(vm))), vm);
       break;
 
     case OP_NEGATE: {
@@ -170,12 +188,12 @@ static InterpretResult run(VM* vm) {
         runtime_error(vm, "Operand must be a number.");
         return INTERPRET_RUNTIME_ERROR;
       }
-      vm__push(NUMBER_VAL(-AS_NUMBER(vm__pop(vm))), vm);
+      push(NUMBER_VAL(-AS_NUMBER(pop(vm))), vm);
       break;
     }
     case OP_PRINT: {
       printf(">> ");
-      value__println(vm__pop(vm));
+      value__println(pop(vm));
       break;
     }
     case OP_RETURN: {
@@ -186,6 +204,7 @@ static InterpretResult run(VM* vm) {
   }
 #undef READ_BYTE
 #undef READ_CONSTANT
+#undef READ_STRING
 #undef BINARY_OP
 }
 

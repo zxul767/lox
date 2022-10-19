@@ -17,6 +17,7 @@ typedef struct VM {
 
   Object* objects;
   Table interned_strings;
+  Table global_vars;
 
 } VM;
 
@@ -29,10 +30,6 @@ typedef enum {
 void vm__init(VM* vm);
 void vm__dispose(VM* vm);
 
-InterpretResult vm__interpret_bytecode(const Bytecode* code, VM* vm);
 InterpretResult vm__interpret(const char* source, VM* vm);
-
-void vm__push(Value value, VM* vm);
-Value vm__pop(VM* vm);
 
 #endif // VM_H_

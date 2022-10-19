@@ -20,8 +20,8 @@
 // in a single place.
 //
 typedef struct {
-  Token current;
-  Token previous;
+  Token current_token;
+  Token previous_token;
 
   bool had_error;
   bool panic_mode;
@@ -47,7 +47,7 @@ typedef enum {
 
 typedef struct {
   Parser* parser;
-  Bytecode* current_bytecode;
+  Bytecode* output_bytecode;
 
   // `vm->objects` tracks references to all heap-allocated
   // objects to be disposed when the VM shuts-down. In the
@@ -85,26 +85,26 @@ static void error_at(Token* token, const char* message, Parser* parser) {
 }
 
 static void error(const char* message, Parser* parser) {
-  error_at(&parser->previous, message, parser);
+  error_at(&parser->previous_token, message, parser);
 }
 
 static void error_at_current(const char* message, Parser* parser) {
-  error_at(&parser->current, message, parser);
+  error_at(&parser->current_token, message, parser);
 }
 
 static void parser__advance(Parser* parser) {
-  parser->previous = parser->current;
+  parser->previous_token = parser->current_token;
   for (;;) {
-    parser->current = scanner__next_token(parser->scanner);
-    if (parser->current.type != TOKEN_ERROR)
+    parser->current_token = scanner__next_token(parser->scanner);
+    if (parser->current_token.type != TOKEN_ERROR)
       break;
-    error_at_current(parser->current.start, parser);
+    error_at_current(parser->current_token.start, parser);
   }
 }
 
 static void parser__init(Parser* parser, Scanner* scanner) {
-  parser->previous = BOF_TOKEN;
-  parser->current = BOF_TOKEN;
+  parser->previous_token = BOF_TOKEN;
+  parser->current_token = BOF_TOKEN;
   parser->had_error = false;
   parser->panic_mode = false;
   parser->scanner = scanner;
@@ -113,13 +113,13 @@ static void parser__init(Parser* parser, Scanner* scanner) {
 static void init(Compiler* compiler, Parser* parser, Bytecode* bytecode,
                  VM* vm) {
   compiler->parser = parser;
-  compiler->current_bytecode = bytecode;
+  compiler->output_bytecode = bytecode;
   compiler->vm = vm;
 }
 
 static void parser__consume(TokenType type, const char* message,
                             Parser* parser) {
-  if (parser->current.type == type) {
+  if (parser->current_token.type == type) {
     parser__advance(parser);
     return;
   }
@@ -127,7 +127,7 @@ static void parser__consume(TokenType type, const char* message,
 }
 
 static bool parser__check(TokenType type, Parser* parser) {
-  return parser->current.type == type;
+  return parser->current_token.type == type;
 }
 
 static bool parser__match(TokenType type, Parser* parser) {
@@ -138,8 +138,8 @@ static bool parser__match(TokenType type, Parser* parser) {
 }
 
 static void emit_byte(uint8_t byte, Compiler* compiler) {
-  bytecode__append(compiler->current_bytecode, byte,
-                   compiler->parser->previous.line);
+  bytecode__append(compiler->output_bytecode, byte,
+                   compiler->parser->previous_token.line);
 }
 
 static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
@@ -150,7 +150,7 @@ static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
 static void emit_return(Compiler* compiler) { emit_byte(OP_RETURN, compiler); }
 
 static uint8_t make_constant(Value value, Compiler* compiler) {
-  int index = bytecode__store_constant(compiler->current_bytecode, value);
+  int index = bytecode__store_constant(compiler->output_bytecode, value);
   if (index > UINT8_MAX) {
     error("Too many constants in one chunk", compiler->parser);
     return 0;
@@ -166,7 +166,7 @@ static void finish(Compiler* compiler) {
   emit_return(compiler);
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error) {
-    debug__disassemble(compiler->current_bytecode, "COMPILED CODE");
+    debug__disassemble(compiler->output_bytecode, "COMPILED CODE");
     putchar('\n');
   }
 #endif
@@ -182,6 +182,22 @@ static void parse_with(Precedence min_precedence, Compiler*);
 static void statement();
 static void declaration();
 
+static uint8_t identifier_constant(Token* identifier, Compiler* compiler) {
+  return make_constant(
+      OBJECT_VAL(
+          string__copy(identifier->start, identifier->length, compiler->vm)),
+      compiler);
+}
+
+static uint8_t parse_variable(const char* error_message, Compiler* compiler) {
+  parser__consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
+  return identifier_constant(&compiler->parser->previous_token, compiler);
+}
+
+static void define_global(uint8_t index, Compiler* compiler) {
+  emit_bytes(OP_DEFINE_GLOBAL, index, compiler);
+}
+
 // parses (and compiles) the operator and right operand of a binary
 // expression in a left-associative manner (i.e., `1+2+3` is parsed
 // as `((1+2)+3)`)
@@ -194,7 +210,7 @@ static void declaration();
 // post-condition: the smallest expression of higher precedence than
 // that associated with this binary operation has been compiled
 static void binary(Compiler* compiler) {
-  TokenType operator_type = compiler->parser->previous.type;
+  TokenType operator_type = compiler->parser->previous_token.type;
   ParseRule* rule = get_parsing_rule(operator_type);
   // by passing `rule->precedence + 1` we ensure that parsing done by this
   // function is left-associative.
@@ -249,7 +265,7 @@ static void binary(Compiler* compiler) {
 }
 
 static void literal(Compiler* compiler) {
-  switch (compiler->parser->previous.type) {
+  switch (compiler->parser->previous_token.type) {
   case TOKEN_FALSE:
     emit_byte(OP_FALSE, compiler);
     break;
@@ -275,7 +291,7 @@ static void parse_with(Precedence min_precedence, Compiler* compiler) {
 
   // consume the next token to decide which parse function we need next
   parser__advance(parser);
-  ParseFn parse_prefix = get_parsing_rule(parser->previous.type)->prefix;
+  ParseFn parse_prefix = get_parsing_rule(parser->previous_token.type)->prefix;
   if (parse_prefix == NULL) {
     error("Unexpected token in primary expression", parser);
     return;
@@ -290,8 +306,9 @@ static void parse_with(Precedence min_precedence, Compiler* compiler) {
   // 2) compiled the first operand of a binary expression and we may or may not
   // enter the loop, depending on whether the next token/operator has higher
   // or equal precedence than required by `min_precedence`
-  while (get_parsing_rule(parser->current.type)->precedence >= min_precedence) {
-    ParseFn parse_infix = get_parsing_rule(parser->current.type)->infix;
+  while (get_parsing_rule(parser->current_token.type)->precedence >=
+         min_precedence) {
+    ParseFn parse_infix = get_parsing_rule(parser->current_token.type)->infix;
     // we consume the operator and parse the rest of the expression
     parser__advance(parser);
     if (parse_infix == NULL) {
@@ -306,6 +323,21 @@ static void expression(Compiler* compiler) {
   // assignments have the lowest precedence level of all expressions
   // so this parses any expression
   parse_with(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
+}
+
+static void var_declaration(Compiler* compiler) {
+  uint8_t global = parse_variable("Expected variable name.", compiler);
+
+  if (parser__match(TOKEN_EQUAL, compiler->parser)) {
+    expression(compiler);
+  } else {
+    // implicit nil initialization
+    emit_byte(OP_NIL, compiler);
+  }
+  parser__consume(TOKEN_SEMICOLON, "Expected '; after variable declaration'",
+                  compiler->parser);
+
+  define_global(global, compiler);
 }
 
 static void expression_statement(Compiler* compiler) {
@@ -324,10 +356,10 @@ static void print_statement(Compiler* compiler) {
 
 static void synchronize(Parser* parser) {
   parser->panic_mode = false;
-  while (parser->current.type != TOKEN_EOF) {
-    if (parser->previous.type == TOKEN_SEMICOLON)
+  while (parser->current_token.type != TOKEN_EOF) {
+    if (parser->previous_token.type == TOKEN_SEMICOLON)
       return;
-    switch (parser->current.type) {
+    switch (parser->current_token.type) {
     case TOKEN_CLASS:
     case TOKEN_FUN:
     case TOKEN_VAR:
@@ -344,7 +376,11 @@ static void synchronize(Parser* parser) {
 }
 
 static void declaration(Compiler* compiler) {
-  statement(compiler);
+  if (parser__match(TOKEN_VAR, compiler->parser)) {
+    var_declaration(compiler);
+  } else {
+    statement(compiler);
+  }
   if (compiler->parser->panic_mode) {
     synchronize(compiler->parser);
   }
@@ -367,17 +403,28 @@ static void grouping(Compiler* compiler) {
 static void number(Compiler* compiler) {
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
-  double value = strtod(compiler->parser->previous.start, /*residue:*/ NULL);
+  double value =
+      strtod(compiler->parser->previous_token.start, /*residue:*/ NULL);
   emit_constant(NUMBER_VAL(value), compiler);
 }
 
 static void string(Compiler* compiler) {
   Parser* parser = compiler->parser;
 
-  ObjectString* _string = string__copy(
-      parser->previous.start + 1, parser->previous.length - 2, compiler->vm);
+  ObjectString* _string =
+      string__copy(parser->previous_token.start + 1,
+                   parser->previous_token.length - 2, compiler->vm);
 
   emit_constant(OBJECT_VAL(_string), compiler);
+}
+
+static void named_variable(Token name, Compiler* compiler) {
+  uint8_t index = identifier_constant(&name, compiler);
+  emit_bytes(OP_GET_GLOBAL, index, compiler);
+}
+
+static void variable(Compiler* compiler) {
+  named_variable(compiler->parser->previous_token, compiler);
 }
 
 // pre-conditions: the operator for this expression has just been consumed (it
@@ -388,7 +435,7 @@ static void string(Compiler* compiler) {
 // bytecode has been emitted.
 //
 static void unary(Compiler* compiler) {
-  TokenType operator_type = compiler->parser->previous.type;
+  TokenType operator_type = compiler->parser->previous_token.type;
   // compile the operand "recursively" (`unary` is indirectly called from
   // `parse_with`) so that expressions such as `---1` are parsed as `-(-(-1))`,
   // i.e., with right-associativity.
@@ -428,7 +475,7 @@ ParseRule rules[] = {
   [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
   [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_IDENTIFIER]    = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
   [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
