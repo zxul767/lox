@@ -258,5 +258,6 @@ Token scanner__next_token(Scanner* scanner) {
   case '"':
     return string(scanner);
   }
+  // TODO: include the unexpected token in the error message
   return error_token("Unexpected character.", scanner);
 }

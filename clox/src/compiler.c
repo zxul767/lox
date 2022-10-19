@@ -277,7 +277,7 @@ static void parse_with(Precedence min_precedence, Compiler* compiler) {
   parser__advance(parser);
   ParseFn parse_prefix = get_parsing_rule(parser->previous.type)->prefix;
   if (parse_prefix == NULL) {
-    error("Expected parse function for leading token", parser);
+    error("Unexpected token in primary expression", parser);
     return;
   }
   // we compile what could be a single unary expression, or the first operand of
@@ -295,7 +295,7 @@ static void parse_with(Precedence min_precedence, Compiler* compiler) {
     // we consume the operator and parse the rest of the expression
     parser__advance(parser);
     if (parse_infix == NULL) {
-      error("Expected parse function for operator", parser);
+      error("Expected valid operator after expression", parser);
       return;
     }
     parse_infix(compiler);
@@ -317,12 +317,38 @@ static void expression_statement(Compiler* compiler) {
 
 static void print_statement(Compiler* compiler) {
   expression(compiler);
-  parser__consume(TOKEN_SEMICOLON, "Expected ';' after value",
+  parser__consume(TOKEN_SEMICOLON, "Expected ';' after expression",
                   compiler->parser);
   emit_byte(OP_PRINT, compiler);
 }
 
-static void declaration(Compiler* compiler) { statement(compiler); }
+static void synchronize(Parser* parser) {
+  parser->panic_mode = false;
+  while (parser->current.type != TOKEN_EOF) {
+    if (parser->previous.type == TOKEN_SEMICOLON)
+      return;
+    switch (parser->current.type) {
+    case TOKEN_CLASS:
+    case TOKEN_FUN:
+    case TOKEN_VAR:
+    case TOKEN_FOR:
+    case TOKEN_IF:
+    case TOKEN_WHILE:
+    case TOKEN_PRINT:
+    case TOKEN_RETURN:
+      return;
+    default:; // do nothing
+    }
+    parser__advance(parser);
+  }
+}
+
+static void declaration(Compiler* compiler) {
+  statement(compiler);
+  if (compiler->parser->panic_mode) {
+    synchronize(compiler->parser);
+  }
+}
 
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
