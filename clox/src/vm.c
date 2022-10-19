@@ -170,10 +170,13 @@ static InterpretResult run(VM* vm) {
       vm__push(NUMBER_VAL(-AS_NUMBER(vm__pop(vm))), vm);
       break;
     }
+    case OP_PRINT: {
+      printf(">> ");
+      value__println(vm__pop(vm));
+      break;
+    }
     case OP_RETURN: {
       debug__print_section_divider();
-      printf("RESULT: ");
-      value__println(vm__pop(vm));
       return INTERPRET_OK;
     }
     }
@@ -181,12 +184,6 @@ static InterpretResult run(VM* vm) {
 #undef READ_BYTE
 #undef READ_CONSTANT
 #undef BINARY_OP
-}
-
-InterpretResult vm__interpret_bytecode(const Bytecode* code, VM* vm) {
-  vm->bytecode = code;
-  vm->instruction_pointer = vm->bytecode->instructions;
-  return run(vm);
 }
 
 InterpretResult vm__interpret(const char* source, VM* vm) {

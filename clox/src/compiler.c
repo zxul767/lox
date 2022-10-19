@@ -126,6 +126,17 @@ static void parser__consume(TokenType type, const char* message,
   error_at_current(message, parser);
 }
 
+static bool parser__check(TokenType type, Parser* parser) {
+  return parser->current.type == type;
+}
+
+static bool parser__match(TokenType type, Parser* parser) {
+  if (!parser__check(type, parser))
+    return false;
+  parser__advance(parser);
+  return true;
+}
+
 static void emit_byte(uint8_t byte, Compiler* compiler) {
   bytecode__append(compiler->current_bytecode, byte,
                    compiler->parser->previous.line);
@@ -166,6 +177,10 @@ static void finish(Compiler* compiler) {
 // which is invoked in one or more of those parsing functions.
 static ParseRule* get_parsing_rule(TokenType);
 static void parse_with(Precedence min_precedence, Compiler*);
+// blocks can contain declarations, and control flow statements can contain
+// other statements; that means these two functions will eventually be recursive
+static void statement();
+static void declaration();
 
 // parses (and compiles) the operator and right operand of a binary
 // expression in a left-associative manner (i.e., `1+2+3` is parsed
@@ -293,6 +308,21 @@ static void expression(Compiler* compiler) {
   parse_with(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
+static void print_statement(Compiler* compiler) {
+  expression(compiler);
+  parser__consume(TOKEN_SEMICOLON, "Expected ';' after value",
+                  compiler->parser);
+  emit_byte(OP_PRINT, compiler);
+}
+
+static void declaration(Compiler* compiler) { statement(compiler); }
+
+static void statement(Compiler* compiler) {
+  if (parser__match(TOKEN_PRINT, compiler->parser)) {
+    print_statement(compiler);
+  }
+}
+
 static void grouping(Compiler* compiler) {
   expression(compiler);
   parser__consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.",
@@ -314,6 +344,7 @@ static void string(Compiler* compiler) {
 
   emit_constant(OBJECT_VAL(_string), compiler);
 }
+
 // pre-conditions: the operator for this expression has just been consumed (it
 // is what triggered the invocation to this function via the rules table)
 //
@@ -401,8 +432,9 @@ bool compiler__compile(const char* source, Bytecode* bytecode, VM* vm) {
   // kickstart parsing & compilation
   parser__advance(&parser);
 
-  expression(&compiler);
-  parser__consume(TOKEN_EOF, "Expected end of expression", &parser);
+  while (!parser__match(TOKEN_EOF, &parser)) {
+    declaration(&compiler);
+  }
 
   finish(&compiler);
 
