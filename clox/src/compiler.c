@@ -320,27 +320,27 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
     return;
   }
 
-  // we could pass the `can_assign` value to all downstream functions, but it
-  // adds cognitive clutter since most functions don't need it. the idea is to
-  // prevent expression such as `a+b=1` from being parsed as `a+(b=1)` (see the
-  // comment in the definition of `Compiler` for more details.)
-  bool can_assign = compiler->can_assign;
+  // We could pass the `upstream_can_assign` value to all downstream functions,
+  // but it adds cognitive clutter since most functions don't need it. The idea
+  // is to prevent expression such as `a+b=1` from being parsed as `a+(b=1)`
+  // (see the comment in the definition of `Compiler` for more details.)
+  bool upstream_can_assign = compiler->can_assign;
   compiler->can_assign = min_precedence <= PREC_ASSIGNMENT;
 
-  // we compile what could be a single unary expression, or the first operand of
+  // We compile what could be a single unary expression, or the first operand of
   // larger binary expression...
   parse_prefix(compiler);
 
-  // at this point, we've either:
+  // At this point, we've either:
   // 1) compiled a full expression and we won't enter the loop (since EOF has
   //    the lowest precedence of all tokens);
   // 2) compiled the first operand of a binary expression and we may or may not
   // enter the loop, depending on whether the next token/operator has higher
-  // or equal precedence than required by `min_precedence`
+  // or equal precedence than required by `min_precedence`.
   while (get_parse_rule(parser->current_token.type)->precedence >=
          min_precedence) {
     ParseFn parse_infix = get_parse_rule(parser->current_token.type)->infix;
-    // we consume the operator and parse the rest of the expression
+    // We consume the operator and parse the rest of the expression.
     parser__advance(parser);
     if (parse_infix == NULL) {
       error("Expected valid operator after expression", parser);
@@ -351,9 +351,9 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
   if (compiler->can_assign && parser__match(TOKEN_EQUAL, parser)) {
     error("Invalid assignment target.", parser);
   }
-  // keep in mind this function is recursive, so we don't want to clobber values
-  // "upstream"
-  compiler->can_assign = can_assign;
+  // Keep in mind this function is recursive, so we don't want to clobber values
+  // "upstream".
+  compiler->can_assign = upstream_can_assign;
 }
 
 static void expression(Compiler* compiler) {
