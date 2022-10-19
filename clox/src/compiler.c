@@ -322,7 +322,8 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
 
   // we could pass the `can_assign` value to all downstream functions, but it
   // adds cognitive clutter since most functions don't need it. the idea is to
-  // prevent expression such as `a+b=1` from being parsed as `a+(b=1)` because
+  // prevent expression such as `a+b=1` from being parsed as `a+(b=1)` (see the
+  // comment in the definition of `Compiler` for more details.)
   bool can_assign = compiler->can_assign;
   compiler->can_assign = min_precedence <= PREC_ASSIGNMENT;
 
