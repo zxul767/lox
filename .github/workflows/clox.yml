@@ -3,15 +3,19 @@ name: clox
 on:
   push:
     branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - 'jlox/**'
+    paths:
+      - 'clox/**'
+      - 'listoy/**'
+      - '.github/workflows/clox.yml'
+      - '!clox/**.md'
 
   pull_request:
     branches: [ "main" ]
-    paths-ignore:
-      - '**.md'
-      - 'jlox/**'
+    paths:
+      - 'clox/**'
+      - 'listoy/**'
+      - '.github/workflows/clox.yml'
+      - '!clox/**.md'
 
 jobs:
   build:
