@@ -69,7 +69,7 @@ extern const Token BOF_TOKEN;
 typedef struct {
   const char* start;
   const char* current;
-  int line;
+  int current_line;
 } Scanner;
 
 void scanner__init(Scanner* scanner, const char* source);

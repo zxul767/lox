@@ -12,7 +12,7 @@ const Token BOF_TOKEN = {
 void scanner__init(Scanner* scanner, const char* source) {
   scanner->start = source;
   scanner->current = source;
-  scanner->line = 1;
+  scanner->current_line = 1;
 }
 
 static bool is_digit(char c) { return c >= '0' && c <= '9'; }
@@ -29,7 +29,7 @@ static Token error_token(const char* message, const Scanner* scanner) {
   token.type = TOKEN_ERROR;
   token.start = message;
   token.length = (int)strlen(message);
-  token.line = scanner->line;
+  token.line = scanner->current_line;
   return token;
 }
 
@@ -38,7 +38,7 @@ static Token make_token(TokenType type, const Scanner* scanner) {
   token.type = type;
   token.start = scanner->start;
   token.length = (int)(scanner->current - scanner->start);
-  token.line = scanner->line;
+  token.line = scanner->current_line;
   return token;
 }
 
@@ -73,7 +73,7 @@ static void skip_whitespace(Scanner* scanner) {
       advance(scanner);
       break;
     case '\n':
-      scanner->line++;
+      scanner->current_line++;
       advance(scanner);
       break;
     case '/':
@@ -98,8 +98,8 @@ static void skip_whitespace(Scanner* scanner) {
 // + the substring to be compared to `that` begins at `this_start` and ends
 //   at `this_end-1` (i.e., `this_end` is a non-inclusive "index")
 // + `that` is a null-terminated c-string;
-static bool string__equals(const char* this_start, const char* this_end,
-                           const char* that) {
+static bool
+string__equals(const char* this_start, const char* this_end, const char* that) {
   while (*that && this_start < this_end) {
     if (*this_start != *that)
       break;
@@ -110,8 +110,9 @@ static bool string__equals(const char* this_start, const char* this_end,
   return *that == '\0' && this_start == this_end;
 }
 
-static TokenType check_keyword(const char* keyword, TokenType type,
-                               const Scanner* scanner, int skip) {
+static TokenType check_keyword(
+    const char* keyword, TokenType type, const Scanner* scanner, int skip
+) {
   // `skip` is the size of the prefix we've already verified for equality
   if (string__equals(scanner->start + skip, scanner->current, keyword + skip)) {
     return type;
@@ -196,7 +197,7 @@ static Token number(Scanner* scanner) {
 static Token string(Scanner* scanner) {
   while (peek(scanner) != '"' && !is_at_end(scanner)) {
     if (peek(scanner) == '\n')
-      scanner->line++;
+      scanner->current_line++;
     advance(scanner);
   }
   if (is_at_end(scanner))
@@ -244,17 +245,21 @@ Token scanner__next_token(Scanner* scanner) {
   case '*':
     return make_token(TOKEN_STAR, scanner);
   case '!':
-    return make_token(match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG,
-                      scanner);
+    return make_token(
+        match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG, scanner
+    );
   case '=':
-    return make_token(match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL,
-                      scanner);
+    return make_token(
+        match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL, scanner
+    );
   case '<':
-    return make_token(match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS,
-                      scanner);
+    return make_token(
+        match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS, scanner
+    );
   case '>':
-    return make_token(match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER,
-                      scanner);
+    return make_token(
+        match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER, scanner
+    );
   case '"':
     return string(scanner);
   }

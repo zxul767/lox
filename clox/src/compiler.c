@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -45,9 +46,21 @@ typedef enum {
 
 } Precedence;
 
+typedef struct Local {
+  Token name;
+  int depth;
+} Local;
+
+typedef struct FunctionCompiler {
+  Local locals[UINT8_COUNT];
+  int locals_count;
+  int scope_depth;
+} FunctionCompiler;
+
 typedef struct {
   Parser* parser;
   Bytecode* output_bytecode;
+  FunctionCompiler* current_subcompiler;
 
   // `vm->objects` tracks references to all heap-allocated
   // objects to be disposed when the VM shuts-down. In the
@@ -128,11 +141,19 @@ static void parser__init(Parser* parser, Scanner* scanner) {
   parser->scanner = scanner;
 }
 
-static void
-init(Compiler* compiler, Parser* parser, Bytecode* output_bytecode, VM* vm) {
-  compiler->parser = parser;
-  compiler->output_bytecode = output_bytecode;
+static void function_compiler__init(FunctionCompiler* subcompiler) {
+  subcompiler->locals_count = 0;
+  subcompiler->scope_depth = 0;
+}
+
+static void init(
+    Compiler* compiler, Parser* parser, FunctionCompiler* subcompiler,
+    Bytecode* output_bytecode, VM* vm
+) {
   compiler->vm = vm;
+  compiler->parser = parser;
+  compiler->current_subcompiler = subcompiler;
+  compiler->output_bytecode = output_bytecode;
   compiler->can_assign = false;
 }
 
@@ -192,6 +213,25 @@ static void finish(Compiler* compiler) {
 #endif
 }
 
+static void begin_scope(Compiler* compiler) {
+  compiler->current_subcompiler->scope_depth++;
+}
+
+static void pop_all_locals_in_scope(Compiler* compiler) {
+  FunctionCompiler* current = compiler->current_subcompiler;
+  while (current->locals_count > 0 &&
+         current->locals[current->locals_count - 1].depth > current->scope_depth
+  ) {
+    emit_byte(OP_POP, compiler);
+    current->locals_count--;
+  }
+}
+
+static void end_scope(Compiler* compiler) {
+  compiler->current_subcompiler->scope_depth--;
+  pop_all_locals_in_scope(compiler);
+}
+
 // Forward declarations to break cyclic references between the set
 // of rules (which reference parsing functions) and `get_parse_rule`
 // which is invoked in one or more of those parsing functions.
@@ -210,12 +250,80 @@ store_identifier_constant(Token* identifier, Compiler* compiler) {
   );
 }
 
-static uint8_t identifier(const char* error_message, Compiler* compiler) {
+static bool identifiers_equal(const Token* a, const Token* b) {
+  if (a->length != b->length)
+    return false;
+  return !memcmp(a->start, b->start, a->length);
+}
+
+static int resolve_local(Token* name, FunctionCompiler* subcompiler) {
+  for (int i = subcompiler->locals_count - 1; i >= 0; i--) {
+    Local* local = &subcompiler->locals[i];
+    if (identifiers_equal(name, &local->name)) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static void add_local_variable(Token name, Compiler* compiler) {
+  FunctionCompiler* current = compiler->current_subcompiler;
+
+  if (current->locals_count == UINT8_COUNT) {
+    error("Too many local variables in function.", compiler->parser);
+    return;
+  }
+  Local* local = &current->locals[current->locals_count++];
+  local->name = name;
+  local->depth = current->scope_depth;
+}
+
+static void
+check_duplicate_declaration(const Token* name, const Compiler* compiler) {
+  FunctionCompiler* subcompiler = compiler->current_subcompiler;
+
+  for (int i = subcompiler->locals_count - 1; i >= 0; i--) {
+    Local* local = &subcompiler->locals[i];
+    // TODO: what does local->depth == -1 mean?
+    if (local->depth != -1 && local->depth < subcompiler->scope_depth) {
+      // we only care about duplicate declarations in the same scope
+      break;
+    }
+    if (identifiers_equal(name, &local->name)) {
+      error(
+          "Already a variable with this name in this scope.", compiler->parser
+      );
+    }
+  }
+}
+
+static void declare_local_variable(Compiler* compiler) {
+  assert(compiler->current_subcompiler->scope_depth > 0);
+
+  Token* name = &compiler->parser->previous_token;
+  check_duplicate_declaration(name, compiler);
+
+  add_local_variable(*name, compiler);
+}
+
+static uint8_t
+consume_var_identifier(const char* error_message, Compiler* compiler) {
   parser__consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
+
+  // local variables
+  if (compiler->current_subcompiler->scope_depth > 0) {
+    declare_local_variable(compiler);
+    return 0; // locals don't need to explicitly store their name
+  }
+  // global variables
   return store_identifier_constant(&compiler->parser->previous_token, compiler);
 }
 
-static void define_global(uint8_t location, Compiler* compiler) {
+static void define_variable(uint8_t location, Compiler* compiler) {
+  if (compiler->current_subcompiler->scope_depth > 0) {
+    return; // it's a local variable, it will get resolved via the "locals
+            // stack"
+  }
   emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
 }
 
@@ -362,9 +470,21 @@ static void expression(Compiler* compiler) {
   parse_only(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
-static void var_declaration(Compiler* compiler) {
-  uint8_t location = identifier("Expected variable name.", compiler);
+static void block(Compiler* compiler) {
+  while (!parser__check(TOKEN_RIGHT_BRACE, compiler->parser) &
+         !parser__check(TOKEN_EOF, compiler->parser)) {
+    declaration(compiler);
+  }
+  parser__consume(
+      TOKEN_RIGHT_BRACE, "Expect '}' after block", compiler->parser
+  );
+}
 
+static void var_declaration(Compiler* compiler) {
+  uint8_t location =
+      consume_var_identifier("Expected variable name.", compiler);
+
+  // optional initialization
   if (parser__match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
   } else {
@@ -375,7 +495,8 @@ static void var_declaration(Compiler* compiler) {
       TOKEN_SEMICOLON, "Expected '; after variable declaration'",
       compiler->parser
   );
-  define_global(location, compiler);
+
+  define_variable(location, compiler);
 }
 
 static void expression_statement(Compiler* compiler) {
@@ -429,6 +550,12 @@ static void declaration(Compiler* compiler) {
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
+
+  } else if (parser__match(TOKEN_LEFT_BRACE, compiler->parser)) {
+    begin_scope(compiler);
+    block(compiler);
+    end_scope(compiler);
+
   } else {
     expression_statement(compiler);
   }
@@ -461,12 +588,24 @@ static void string(Compiler* compiler) {
 }
 
 static void named_variable(Token name, Compiler* compiler) {
-  uint8_t location = store_identifier_constant(&name, compiler);
+  int location = resolve_local(&name, compiler->current_subcompiler);
+
+  uint8_t get_op, set_op;
+  if (location != -1) {
+    get_op = OP_GET_LOCAL;
+    set_op = OP_SET_LOCAL;
+  } else {
+    location = store_identifier_constant(&name, compiler);
+    get_op = OP_GET_GLOBAL;
+    set_op = OP_SET_GLOBAL;
+  }
+
   if (compiler->can_assign && parser__match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
-    emit_bytes(OP_SET_GLOBAL, location, compiler);
+    emit_bytes(set_op, location, compiler);
+
   } else {
-    emit_bytes(OP_GET_GLOBAL, location, compiler);
+    emit_bytes(get_op, location, compiler);
   }
 }
 
@@ -555,8 +694,11 @@ bool compiler__compile(const char* source, Bytecode* output_bytecode, VM* vm) {
   Parser parser;
   parser__init(&parser, &scanner);
 
+  FunctionCompiler subcompiler;
+  function_compiler__init(&subcompiler);
+
   Compiler compiler;
-  init(&compiler, &parser, output_bytecode, vm);
+  init(&compiler, &parser, &subcompiler, output_bytecode, vm);
 
   // kickstart parsing & compilation
   parser__advance(&parser);

@@ -128,6 +128,16 @@ static InterpretResult run(VM* vm) {
     case OP_POP:
       pop(vm);
       break;
+    case OP_GET_LOCAL: {
+      uint8_t slot = READ_BYTE();
+      push(vm->stack[slot], vm);
+      break;
+    }
+    case OP_SET_LOCAL: {
+      uint8_t slot = READ_BYTE();
+      vm->stack[slot] = peek(0, vm);
+      break;
+    }
     case OP_GET_GLOBAL: {
       ObjectString* name = READ_STRING();
       Value value;
@@ -224,22 +234,22 @@ static InterpretResult run(VM* vm) {
 }
 
 InterpretResult vm__interpret(const char* source, VM* vm) {
-  Bytecode bytecode;
-  bytecode__init(&bytecode);
+  Bytecode output_bytecode;
+  bytecode__init(&output_bytecode);
 
   // we pass `vm` so we can track all heap-allocated
   // objects and dispose them when the VM shuts down
-  if (!compiler__compile(source, &bytecode, vm)) {
-    bytecode__dispose(&bytecode);
+  if (!compiler__compile(source, &output_bytecode, vm)) {
+    bytecode__dispose(&output_bytecode);
     return INTERPRET_COMPILE_ERROR;
   }
 
   // bytecode execution
-  vm->bytecode = &bytecode;
+  vm->bytecode = &output_bytecode;
   vm->instruction_pointer = vm->bytecode->instructions;
   InterpretResult result = run(vm);
 
-  bytecode__dispose(&bytecode);
+  bytecode__dispose(&output_bytecode);
 
   return result;
 }
