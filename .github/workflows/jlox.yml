@@ -12,12 +12,14 @@ on:
     branches: [ "main" ]
     paths:
       - 'jlox/**'
+      - '.github/workflows/jlox.yml'
       - '!jlox/**.md'
 
   pull_request:
     branches: [ "main" ]
     paths:
       - 'jlox/**'
+      - '.github/workflows/jlox.yml'
       - '!jlox/**.md'
 
 
