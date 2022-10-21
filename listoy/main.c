@@ -98,6 +98,8 @@ void test_can_iterate_list() {
 
     ListIterator *it = list__iterate(list);
     assert(!strcmp("first", list__next(it)));
+    assert(!strcmp("second", list__next(it)));
+    assert(!strcmp("third", list__next(it)));
 
     list__dispose_iterator(it);
   })
