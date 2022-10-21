@@ -10,15 +10,17 @@ name: jlox
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'jlox/**'
     paths-ignore:
       - '**.md'
-      - 'clox/**'
 
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'jlox/**'
     paths-ignore:
       - '**.md'
-      - 'clox/**'
 
 
 permissions:
