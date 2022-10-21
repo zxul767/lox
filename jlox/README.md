@@ -1,7 +1,7 @@
 # Quick Start
 `./gradlew build` -- Builds the project and runs unit tests.
 
-`./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"` -- Builds the project and runs a script.
+`./gradlew run --args="$HOME/src/projects/lox/samples/fib.lox"` -- Builds the project and runs a script.
 
 # Dependencies
 + A recent version of the [JDK](https://www.oracle.com/java/technologies/downloads/) (I have only tested it with `OpenJDK 14.0` on Mac OS).
@@ -28,7 +28,7 @@ When you're done with it, you can press `Ctrl-D` to exit the REPL.
 # Running Individual Scripts
 Note that the REPL only supports single-line strings, so if you want to test something larger, your best bet is to put it in a script and run it as follows:
 
-`./gradlew run --args="$HOME/src/projects/lox/app/test/resources/infinite-loop.lox"`
+`./gradlew run --args="$HOME/src/projects/lox/samples/fib.lox"`
 
 Notice that we need to pass an absolute path for this to work.
 
