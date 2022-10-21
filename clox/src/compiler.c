@@ -256,10 +256,19 @@ static bool identifiers_equal(const Token* a, const Token* b) {
   return !memcmp(a->start, b->start, a->length);
 }
 
-static int resolve_local(Token* name, FunctionCompiler* subcompiler) {
-  for (int i = subcompiler->locals_count - 1; i >= 0; i--) {
-    Local* local = &subcompiler->locals[i];
+static int resolve_local(Token* name, Compiler* compiler) {
+  FunctionCompiler* current = compiler->current_subcompiler;
+
+  for (int i = current->locals_count - 1; i >= 0; i--) {
+    Local* local = &current->locals[i];
     if (identifiers_equal(name, &local->name)) {
+      // local->scope_depth == -1 means "declared but not initialized yet"
+      if (local->scope_depth == -1) {
+        error(
+            "Can't read local variable in its own initializer.",
+            compiler->parser
+        );
+      }
       return i;
     }
   }
@@ -275,19 +284,18 @@ static void add_local_variable(Token name, Compiler* compiler) {
   }
   Local* local = &current->locals[current->locals_count++];
   local->name = name;
-  local->scope_depth = current->scope_depth;
+  local->scope_depth = -1; // mark declared but uninitialized
 }
 
 static void
 check_duplicate_declaration(const Token* name, const Compiler* compiler) {
-  FunctionCompiler* subcompiler = compiler->current_subcompiler;
+  FunctionCompiler* current = compiler->current_subcompiler;
 
-  for (int i = subcompiler->locals_count - 1; i >= 0; i--) {
-    Local* local = &subcompiler->locals[i];
+  for (int i = current->locals_count - 1; i >= 0; i--) {
+    Local* local = &current->locals[i];
     // local->scope_depth == -1 means the local has been declared but not
     // yet initialized
-    if (local->scope_depth != -1 &&
-        local->scope_depth < subcompiler->scope_depth) {
+    if (local->scope_depth != -1 && local->scope_depth < current->scope_depth) {
       // we only care about duplicate declarations in the same scope
       break;
     }
@@ -308,23 +316,31 @@ static void declare_local_variable(Compiler* compiler) {
   add_local_variable(*name, compiler);
 }
 
-static uint8_t
-consume_var_identifier(const char* error_message, Compiler* compiler) {
+static uint8_t declare_variable(const char* error_message, Compiler* compiler) {
   parser__consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
 
   // local variables
   if (compiler->current_subcompiler->scope_depth > 0) {
     declare_local_variable(compiler);
-    return 0; // locals don't need to explicitly store their name
+    // locals don't need to store their names in constants as globals do
+    return 0;
   }
   // global variables
   return store_identifier_constant(&compiler->parser->previous_token, compiler);
 }
 
+static void mark_initialized(Compiler* compiler) {
+  FunctionCompiler* current = compiler->current_subcompiler;
+  // ensure that it was originally marked as declared but not defined
+  assert(current->locals[current->locals_count - 1].scope_depth == -1);
+
+  current->locals[current->locals_count - 1].scope_depth = current->scope_depth;
+}
+
 static void define_variable(uint8_t location, Compiler* compiler) {
   if (compiler->current_subcompiler->scope_depth > 0) {
-    return; // it's a local variable, it will get resolved via the "locals
-            // stack"
+    mark_initialized(compiler);
+    return;
   }
   emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
 }
@@ -483,11 +499,10 @@ static void block(Compiler* compiler) {
 }
 
 static void var_declaration(Compiler* compiler) {
-  uint8_t location =
-      consume_var_identifier("Expected variable name.", compiler);
+  uint8_t location = declare_variable("Expected variable name.", compiler);
 
-  // optional initialization
   if (parser__match(TOKEN_EQUAL, compiler->parser)) {
+    // optional initialization
     expression(compiler);
   } else {
     // implicit nil initialization
@@ -590,7 +605,7 @@ static void string(Compiler* compiler) {
 }
 
 static void named_variable(Token name, Compiler* compiler) {
-  int location = resolve_local(&name, compiler->current_subcompiler);
+  int location = resolve_local(&name, compiler);
 
   uint8_t get_op, set_op;
   if (location != -1) {
