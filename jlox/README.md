@@ -32,9 +32,6 @@ Note that the REPL only supports single-line strings, so if you want to test som
 
 Notice that we need to pass an absolute path for this to work.
 
-# Book Challenges
-At the end of every chapter in the book, there are a few challenges to deepen the reader's understanding of the material, or to add additional feature to the interpreter or compiler. You can find my answers in the [`challenges.md`](./challenges.md) file.
-
 # Setting up I/O
 By default, the `system.in` of the `gradle` build is not wired up with the `system.in` of the `run` (`JavaExec`) task. To fix this, `app/build.gradle` contains this:
 
