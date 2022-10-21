@@ -48,7 +48,7 @@ typedef enum {
 
 typedef struct Local {
   Token name;
-  int depth;
+  int scope_depth;
 } Local;
 
 typedef struct FunctionCompiler {
@@ -217,10 +217,10 @@ static void begin_scope(Compiler* compiler) {
   compiler->current_subcompiler->scope_depth++;
 }
 
-static void pop_all_locals_in_scope(Compiler* compiler) {
+static void pop_locals_in_scope(Compiler* compiler, int scope_depth) {
   FunctionCompiler* current = compiler->current_subcompiler;
   while (current->locals_count > 0 &&
-         current->locals[current->locals_count - 1].depth > current->scope_depth
+         current->locals[current->locals_count - 1].scope_depth >= scope_depth
   ) {
     emit_byte(OP_POP, compiler);
     current->locals_count--;
@@ -228,8 +228,8 @@ static void pop_all_locals_in_scope(Compiler* compiler) {
 }
 
 static void end_scope(Compiler* compiler) {
+  pop_locals_in_scope(compiler, compiler->current_subcompiler->scope_depth);
   compiler->current_subcompiler->scope_depth--;
-  pop_all_locals_in_scope(compiler);
 }
 
 // Forward declarations to break cyclic references between the set
@@ -275,7 +275,7 @@ static void add_local_variable(Token name, Compiler* compiler) {
   }
   Local* local = &current->locals[current->locals_count++];
   local->name = name;
-  local->depth = current->scope_depth;
+  local->scope_depth = current->scope_depth;
 }
 
 static void
@@ -284,8 +284,10 @@ check_duplicate_declaration(const Token* name, const Compiler* compiler) {
 
   for (int i = subcompiler->locals_count - 1; i >= 0; i--) {
     Local* local = &subcompiler->locals[i];
-    // TODO: what does local->depth == -1 mean?
-    if (local->depth != -1 && local->depth < subcompiler->scope_depth) {
+    // local->scope_depth == -1 means the local has been declared but not
+    // yet initialized
+    if (local->scope_depth != -1 &&
+        local->scope_depth < subcompiler->scope_depth) {
       // we only care about duplicate declarations in the same scope
       break;
     }
