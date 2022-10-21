@@ -3,9 +3,15 @@ name: clox
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'jlox/**'
 
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'jlox/**'
 
 jobs:
   build:
