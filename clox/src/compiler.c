@@ -62,9 +62,9 @@ typedef struct {
   Bytecode* output_bytecode;
   FunctionCompiler* current_subcompiler;
 
-  // `vm->objects` tracks references to all heap-allocated
-  // objects to be disposed when the VM shuts-down. In the
-  // compiler, such objects are string literals.
+  // `vm->objects` tracks references to all heap-allocated objects to be
+  // disposed when the VM shuts-down. In the compiler, such objects are string
+  // literals.
   VM* vm;
 
   // We need this to make sure that the `variable` parse function only consumes
