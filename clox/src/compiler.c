@@ -363,6 +363,43 @@ static void define_variable(uint8_t location, Compiler* compiler) {
   emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
 }
 
+// parses (and compiles) the right operand of a boolean AND expression, making
+// sure to implement the correct short-circuiting semantics (i.e., if the left
+// operand is false, then the right operand won't be evaluated.)
+//
+// pre-condition: the left operand has already been compiled and its result is
+// on the top of the stack
+//
+static void and_(Compiler* compiler) {
+  // expected bytecode generation:
+  //
+  //      [ left operand expression ]   <- this was compiled prior to this call
+  //      ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // +--- OP_JUMP_IF_FALSE (short-circuiting behavior)
+  // |    OP_POP (pop left operand)
+  // |
+  // |    [ right operand expression ]
+  // |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // |
+  // +--> continues...                   <- patch OP_JUMP to point here
+  //
+  //  notice that when emitting jumps, we don't know the destination addresses
+  //  in advance, so they need to be patched afterwards
+
+  int end_jump_ofsset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  emit_byte(OP_POP, compiler); // discard left operand from the stack
+  // (the result will what the value of the right operand)
+
+  // passing `min_precedence=PREC_AND` causes right-associativity (i.e., `false
+  // and true and true` is parsed as `(false and (true and true))`)
+  parse_only(/* min_precedence: */ PREC_AND, compiler);
+
+  // notice we don't discard the left operand when it's falsey, since there's
+  // nothing more to evaluate (due to short-circuiting), and that's the right
+  // result.
+  patch_jump(end_jump_ofsset, compiler);
+}
+
 static void
 check_duplicate_declaration(const Token* name, const Compiler* compiler) {
   FunctionCompiler* current = compiler->current_subcompiler;
@@ -785,7 +822,7 @@ ParseRule rules[] = {
   [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
   [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
   [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
   [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
   [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
