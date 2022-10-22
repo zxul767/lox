@@ -98,7 +98,9 @@ typedef struct {
 // ----------------------------------------------------------------------------
 // Forward Declarations (Break Circular References)
 // ----------------------------------------------------------------------------
-// parse_only -> get_parse_rule -> binary -> parse_only
+// (parse_only -> get_parse_rule -> binary -> parse_only)
+// (parse_only -> get_parse_rule -> unary -> parse_only)
+// ...
 static ParseRule* get_parse_rule(TokenType);
 // (statement -> block -> declaration -> statement)
 static void statement();
