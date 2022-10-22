@@ -152,6 +152,23 @@ store_identifier_constant(Token* identifier, Compiler* compiler) {
   );
 }
 
+static void emit_byte(uint8_t byte, Compiler* compiler) {
+  bytecode__append(
+      compiler->output_bytecode, byte, compiler->parser->previous_token.line
+  );
+}
+
+static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
+  emit_byte(byte1, compiler);
+  emit_byte(byte2, compiler);
+}
+
+static void emit_constant(Value value, Compiler* compiler) {
+  emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
+}
+
+static void emit_return(Compiler* compiler) { emit_byte(OP_RETURN, compiler); }
+
 static bool identifiers_equal(const Token* a, const Token* b) {
   if (a->length != b->length)
     return false;
@@ -246,23 +263,6 @@ static void expression(Compiler* compiler) {
   // so this parses any expression
   parse_only(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
-
-static void emit_byte(uint8_t byte, Compiler* compiler) {
-  bytecode__append(
-      compiler->output_bytecode, byte, compiler->parser->previous_token.line
-  );
-}
-
-static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
-  emit_byte(byte1, compiler);
-  emit_byte(byte2, compiler);
-}
-
-static void emit_constant(Value value, Compiler* compiler) {
-  emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
-}
-
-static void emit_return(Compiler* compiler) { emit_byte(OP_RETURN, compiler); }
 
 static void pop_locals_in_scope(Compiler* compiler, int scope_depth) {
   FunctionCompiler* current = compiler->current_subcompiler;
