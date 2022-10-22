@@ -29,8 +29,8 @@ static Object* object__allocate(size_t size, ObjectType type, VM* vm) {
   return object;
 }
 
-static ObjectString* string__allocate(char* chars, int length, uint32_t hash,
-                                      VM* vm) {
+static ObjectString*
+string__allocate(char* chars, int length, uint32_t hash, VM* vm) {
   ObjectString* string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING, vm);
   string->length = length;
   string->chars = chars;
@@ -80,6 +80,14 @@ void object__print(Value value) {
   switch (OBJECT_TYPE(value)) {
   case OBJECT_STRING:
     printf("%s", AS_CSTRING(value));
+    break;
+  }
+}
+
+void object__print_repr(Value value) {
+  switch (OBJECT_TYPE(value)) {
+  case OBJECT_STRING:
+    printf("\"%s\"", AS_CSTRING(value));
     break;
   }
 }

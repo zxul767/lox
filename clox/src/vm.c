@@ -82,8 +82,13 @@ static void concatenate(VM* vm) {
 static InterpretResult run(VM* vm) {
 
 #define READ_BYTE() (*vm->instruction_pointer++)
+#define READ_SHORT()                                                           \
+  (vm->instruction_pointer += 2,                                               \
+   ((vm->instruction_pointer[-2] << 8) | (vm->instruction_pointer[-1])))
+
 #define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
 #define READ_STRING() AS_STRING(READ_CONSTANT())
+
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
     if (!IS_NUMBER(peek(0, vm)) || !IS_NUMBER(peek(1, vm))) {                  \
@@ -219,6 +224,18 @@ static InterpretResult run(VM* vm) {
       value__println(pop(vm));
       break;
     }
+    case OP_JUMP_IF_FALSE: {
+      uint16_t jump_length = READ_SHORT();
+      if (is_falsey(peek(0, vm))) {
+        vm->instruction_pointer += jump_length;
+      }
+      break;
+    }
+    case OP_JUMP: {
+      uint16_t jump_length = READ_SHORT();
+      vm->instruction_pointer += jump_length;
+      break;
+    }
     case OP_RETURN: {
 #ifdef DEBUG_TRACE_EXECUTION
       debug__print_section_divider();
@@ -228,6 +245,7 @@ static InterpretResult run(VM* vm) {
     }
   }
 #undef READ_BYTE
+#undef READ_SHORT
 #undef READ_CONSTANT
 #undef READ_STRING
 #undef BINARY_OP

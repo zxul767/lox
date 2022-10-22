@@ -33,6 +33,10 @@ typedef enum {
   // (pop and push, or in-place modification)
   OP_NEGATE,
   OP_PRINT,
+  // unconditional jump
+  OP_JUMP,
+  // conditional jump when the last condition was false
+  OP_JUMP_IF_FALSE,
   OP_RETURN,
 
 } OpCode;

@@ -163,6 +163,34 @@ static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
   emit_byte(byte2, compiler);
 }
 
+static int emit_jump(uint8_t instruction, Compiler* compiler) {
+  emit_byte(instruction, compiler);
+  // 0xff is the marker for a "placeholder" jump value to be patched later
+  // A 16-bit offset lets us jump over 65,535 bytes of code, more than enough!
+  emit_byte(0xff, compiler);
+  emit_byte(0xff, compiler);
+  // this points at the first placeholder instruction
+  return compiler->output_bytecode->count - 2;
+}
+
+static void patch_jump(int offset, Compiler* compiler) {
+  //          <--- jump_length -->
+  // [OP_JUMP][  0xff  ][  0xff  ][ ]...[*]...
+  //              ^                ^     ^
+  //            offset             |   count (jump lands here when executed)
+  //                               |
+  //                             start (jump starts here when executed)
+  // start + jump_length = count
+  //
+  int jump_length = compiler->output_bytecode->count - offset - 2;
+  if (jump_length > UINT16_MAX) {
+    error("Too much code to jump over.", compiler->parser);
+  }
+  // `jump_length` is encoded [high-bits][low-bits]
+  compiler->output_bytecode->instructions[offset] = (jump_length >> 8) & 0xff;
+  compiler->output_bytecode->instructions[offset + 1] = jump_length & 0xff;
+}
+
 static void emit_constant(Value value, Compiler* compiler) {
   emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
 }
@@ -449,6 +477,54 @@ static void expression_statement(Compiler* compiler) {
   emit_byte(OP_POP, compiler);
 }
 
+static void if_statement(Compiler* compiler) {
+  // expected bytecode generation:
+  //
+  //         [ condition expression ]
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~
+  //    +--- OP_JUMP_IF_FALSE
+  //    |    OP_POP (pop condition)
+  //    |
+  //    |    [ then branch statement ]
+  //    |    ~~~~~~~~~~~~~~~~~~~~~~~~~
+  //  +-|--- OP_JUMP
+  //  | |
+  //  | +--> OP_POP (pop condition)     <- patch OP_JUMP_IF_FALSE to point here
+  //  |      [ else branch statement ]
+  //  |      ~~~~~~~~~~~~~~~~~~~~~~~~~
+  //  |
+  //  +----> continues...               <- patch OP_JUMP to point here
+  //
+  //  notice that when emitting jumps, we don't know the destination addresses
+  //  in advance, so they need to be patched afterwards
+
+  parser__consume(
+      TOKEN_LEFT_PAREN, "Expected '(' after 'if'.", compiler->parser
+  );
+  // [ condition expression ]
+  expression(compiler);
+  parser__consume(
+      TOKEN_RIGHT_PAREN, "Expected ')' after condition.", compiler->parser
+  );
+  // conditionally jump to just before "else" branch
+  int then_jump_offset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  emit_byte(OP_POP, compiler);
+
+  // [ then branch statement ]
+  statement(compiler);
+  // jump over "else" branch since we just executed "then" branch
+  int else_jump_offset = emit_jump(OP_JUMP, compiler);
+
+  patch_jump(then_jump_offset, compiler);
+  emit_byte(OP_POP, compiler);
+  // [ else branch statement ]
+  if (parser__match(TOKEN_ELSE, compiler->parser)) {
+    statement(compiler);
+  }
+  // continues...
+  patch_jump(else_jump_offset, compiler);
+}
+
 static void synchronize(Parser* parser) {
   parser->panic_mode = false;
   while (parser->current_token.type != TOKEN_EOF) {
@@ -503,6 +579,9 @@ static void end_scope(Compiler* compiler) {
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
+
+  } else if (parser__match(TOKEN_IF, compiler->parser)) {
+    if_statement(compiler);
 
   } else if (parser__match(TOKEN_LEFT_BRACE, compiler->parser)) {
     begin_scope(compiler);

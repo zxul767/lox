@@ -67,6 +67,14 @@ void value__print(Value value) {
   }
 }
 
+void value__print_repr(Value value) {
+  if (value.type == VAL_OBJECT) {
+    object__print_repr(value);
+  } else {
+    value__print(value);
+  }
+}
+
 void value__println(Value value) {
   value__print(value);
   putchar('\n');

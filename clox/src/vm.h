@@ -6,17 +6,27 @@
 
 typedef struct Bytecode Bytecode;
 
-// Virtual Machine for Lox
 #define STACK_MAX 256
+
+// stack-based, virtual machine
 typedef struct VM {
   const Bytecode* bytecode;
   uint8_t* instruction_pointer;
 
+  // all instructions take their operands from this stack
   Value stack[STACK_MAX];
   Value* stack_top;
 
+  // all heap-allocated objects are linked in a list whose head is pointed at by
+  // `objects`
   Object* objects;
+
+  // all strings (including those needed to represent variables), are "interned"
+  // (i.e., a single copy is kept and reused when necessary) to minimize memory
+  // and make string comparison much faster (essentially a pointer comparison
+  // regardless of the string's length)
   Table interned_strings;
+
   Table global_vars;
 
 } VM;

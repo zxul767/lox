@@ -34,6 +34,7 @@ struct ObjectString {
 ObjectString* string__copy(const char* chars, int length, VM* vm);
 ObjectString* string__take_ownership(char* chars, int length, VM* vm);
 void object__print(Value value);
+void object__print_repr(Value value);
 
 static inline bool is_object_type(Value value, ObjectType type) {
   return IS_OBJECT(value) && AS_OBJECT(value)->type == type;

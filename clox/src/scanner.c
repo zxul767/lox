@@ -16,6 +16,7 @@ void scanner__init(Scanner* scanner, const char* source) {
 }
 
 static bool is_digit(char c) { return c >= '0' && c <= '9'; }
+
 static bool is_alpha(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
@@ -48,6 +49,7 @@ static char advance(Scanner* scanner) {
 }
 
 static char peek(Scanner* scanner) { return *(scanner->current); }
+
 static char peek_next(Scanner* scanner) {
   if (is_at_end(scanner))
     return '\0';

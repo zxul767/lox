@@ -21,19 +21,49 @@ void debug__disassemble(const Bytecode* code, const char* name) {
 }
 
 static int simple_instruction(const char* name, int offset) {
+  // simple instructions are encoded as:
+  // [OP_CODE]...
+  //     ^
+  //   offset
   printf("%s\n", name);
+
   return offset + 1;
 }
 
 static int
 byte_instruction(const char* name, const Bytecode* code, int offset) {
-  uint8_t slot = code->instructions[offset + 1];
-  printf("%-16s %4d\n", name, slot);
+  // byte instructions are encoded as:
+  // [OP_CODE][value]...
+  //     ^
+  //   offset
+  uint8_t value = code->instructions[offset + 1];
+  printf("%-16s %4d\n", name, value);
+
   return offset + 2;
+}
+
+static int jump_instruction(
+    const char* name, int direction, const Bytecode* code, int offset
+) {
+  // jump instructions are encoded as:
+  // [JUMP_OP_CODE][jump_length_high_bits][jump_length_low_bits]...
+  //       ^
+  //     offset
+  uint16_t jump_length = (uint16_t)(code->instructions[offset + 1] << 8);
+  jump_length |= code->instructions[offset + 2];
+  printf(
+      "%-16s %4d -> %d\n", name, offset, offset + 3 + direction * jump_length
+  );
+
+  return offset + 3;
 }
 
 static int
 constant_instruction(const char* name, const Bytecode* code, int offset) {
+  // constant instructions are encoded as:
+  // [OP_CODE][constant_location]...
+  //     ^
+  //  offset
   uint8_t constant_location = code->instructions[offset + 1];
   printf("%-16s %4d '", name, constant_location);
   value__print(code->constants.values[constant_location]);
@@ -47,6 +77,9 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
 
   if (offset > 0 &&
       code->source_lines[offset] == code->source_lines[offset - 1]) {
+    // reduce visual clutter by not printing repeated source line numbers
+    // but still add an indicator to let the user know source line number is the
+    // same as the previous instruction
     printf("   | ");
   } else {
     printf("%4d ", code->source_lines[offset]);
@@ -94,6 +127,10 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
     return simple_instruction("OP_NEGATE", offset);
   case OP_PRINT:
     return simple_instruction("OP_PRINT", offset);
+  case OP_JUMP:
+    return jump_instruction("OP_JUMP", 1, code, offset);
+  case OP_JUMP_IF_FALSE:
+    return jump_instruction("OP_JUMP_IF_FALSE", 1, code, offset);
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
   default:
@@ -104,9 +141,12 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
 
 void debug__dump_stack(const VM* vm) {
   printf("          ");
-  for (const Value* slot = vm->stack; slot < vm->stack_top; slot++) {
+  for (const Value* value = vm->stack; value < vm->stack_top; value++) {
     printf("[ ");
-    value__print(*slot);
+    // `value__print` would print the string `"true"` in the same way as the
+    // literal `true` but during debugging we want to distinguish between the
+    // two, hence the need for `value__print_repr`
+    value__print_repr(*value);
     printf(" ]");
   }
   printf("\n");
