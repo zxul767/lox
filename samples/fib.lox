@@ -3,6 +3,11 @@ fun fib(n) {
     return fib(n-1) + fib(n-2);
 }
 
+var fibs = list();
 for (var i = 0; i < 10; i = i + 1) {
-    print fib(i);
+    fibs.append(fib(i));
+}
+
+while (fibs.length() > 0) {
+    print fibs.pop();
 }

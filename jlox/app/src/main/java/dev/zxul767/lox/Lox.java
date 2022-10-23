@@ -44,9 +44,12 @@ public class Lox {
 
     for (;;) {
       System.out.print("> ");
+      System.out.flush();
+
       String line = reader.readLine();
-      if (line == null)
+      if (line == null || line.equals("quit"))
         break;
+
       run(line);
       // if the user makes a mistake, we shouldn't kill the entire
       // session

@@ -45,6 +45,6 @@ class LoxClass implements LoxCallable {
 
   @Override
   public String toString() {
-    return name;
+    return "<class:" + name + ">";
   }
 }

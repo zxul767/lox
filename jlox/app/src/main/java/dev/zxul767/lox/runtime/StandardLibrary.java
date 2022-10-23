@@ -28,6 +28,9 @@ abstract class OneArgCallable implements LoxCallable {
 final class StandardLibrary {
   private StandardLibrary() {}
 
+  // the constructor for the native list type in Lox
+  static final LoxCallable list = new LoxList();
+
   static final LoxCallable clock = new NoArgsCallable() {
     @Override
     public Object call(Interpreter interpreter, List<Object> args) {

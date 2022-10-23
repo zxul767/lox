@@ -52,6 +52,7 @@ def generateAst = tasks.register('astgen') {
 
 tasks.withType(JavaCompile) {
     compileTask -> compileTask.dependsOn generateAst
+    options.compilerArgs += ["-Xlint:unchecked"]
 }
 
 sourceSets {

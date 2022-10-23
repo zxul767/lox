@@ -23,14 +23,19 @@ public class Errors {
   }
 
   public static void runtimeError(RuntimeError error) {
-    System.err.println(String.format("Runtime Error: %s\n[line %d]",
-                                     error.getMessage(), error.token.line));
+    System.err.println(String.format(
+        "Runtime Error: %s\n[line %d]", error.getMessage(), error.token.line
+    ));
+    System.err.flush();
     hadRuntimeError = true;
+    hadError = true;
   }
 
   private static void report(int line, String where, String message) {
-    System.err.println("Parsing Error: [line " + line + "] Error" + where +
-                       ": " + message);
+    System.err.println(
+        "Parsing Error: [line " + line + "] Error" + where + ": " + message
+    );
+    System.err.flush();
     hadError = true;
   }
 }

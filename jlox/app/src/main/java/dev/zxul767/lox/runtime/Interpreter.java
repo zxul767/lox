@@ -17,6 +17,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   public Interpreter() {
     globals.define("clock", StandardLibrary.clock);
     globals.define("sin", StandardLibrary.sin);
+    globals.define("list", StandardLibrary.list);
   }
 
   public void interpret(List<Stmt> statements) {
@@ -62,8 +63,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     if (stmt.superclass != null) {
       superclass = evaluate(stmt.superclass);
       if (!(superclass instanceof LoxClass)) {
-        throw new RuntimeError(stmt.superclass.name,
-                               "Superclass must be a class.");
+        throw new RuntimeError(
+            stmt.superclass.name, "Superclass must be a class."
+        );
       }
     }
     environment.define(stmt.name.lexeme, null);
@@ -77,7 +79,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     for (Stmt.Function method : stmt.methods) {
       LoxFunction function = new LoxFunction(
           method, environment,
-          /* isInitializer: */ method.name.lexeme.equals("__init__"));
+          /* isInitializer: */ method.name.lexeme.equals("__init__")
+      );
       methods.put(method.name.lexeme, function);
     }
     LoxClass _class =
@@ -205,7 +208,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     if (method == null) {
       throw new RuntimeError(
           expr.method,
-          String.format("Undefined property '%s'.", expr.method.lexeme));
+          String.format("Undefined property '%s'.", expr.method.lexeme)
+      );
     }
     return method.bind(object);
   }
@@ -276,8 +280,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       if (left instanceof String && right instanceof String) {
         return (String)left + (String)right;
       }
-      throw new RuntimeError(expr.operator,
-                             "Operands must be two numbers or two strings");
+      throw new RuntimeError(
+          expr.operator, "Operands must be two numbers or two strings"
+      );
     case SLASH:
       checkNumberOperands(expr.operator, left, right);
       return (double)left / (double)right;
@@ -301,14 +306,18 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       args.add(evaluate(arg));
     }
     if (!(callee instanceof LoxCallable)) {
-      throw new RuntimeError(expr.paren,
-                             "Can only call functions and classes.");
+      throw new RuntimeError(
+          expr.paren, "Can only call functions and classes."
+      );
     }
     LoxCallable function = (LoxCallable)callee;
     if (args.size() != function.arity()) {
-      throw new RuntimeError(expr.paren,
-                             String.format("Expected %d arguments but got %d.",
-                                           function.arity(), args.size()));
+      throw new RuntimeError(
+          expr.paren,
+          String.format(
+              "Expected %d arguments but got %d.", function.arity(), args.size()
+          )
+      );
     }
     return function.call(this, args);
   }
@@ -350,7 +359,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     return a.equals(b);
   }
 
-  private String stringify(Object object) {
+  static String stringify(Object object) {
     if (object == null)
       return "nil";
 
@@ -360,6 +369,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         text = text.substring(0, text.length() - 2);
       }
       return text;
+    }
+    if (object instanceof String) {
+      return String.format("\"%s\"", object);
     }
     return object.toString();
   }
