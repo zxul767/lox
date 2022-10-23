@@ -373,30 +373,61 @@ static void define_variable(uint8_t location, Compiler* compiler) {
 static void and_(Compiler* compiler) {
   // expected bytecode generation:
   //
-  //      [ left operand expression ]   <- this was compiled prior to this call
-  //      ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-  // +--- OP_JUMP_IF_FALSE (short-circuiting behavior)
-  // |    OP_POP (pop left operand)
+  //      [ Left Operand Expression  ]   <- previously compiled
+  //      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  // +--- OP_JUMP_IF_FALSE (short-circuit when LOE is false)
+  // |    OP_POP (pop left operand; result is value(ROE))
   // |
-  // |    [ right operand expression ]
+  // |    [ Right Operand Expression ]
   // |    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   // |
-  // +--> continues...                   <- patch OP_JUMP to point here
+  // +--> continues...
   //
-  //  notice that when emitting jumps, we don't know the destination addresses
-  //  in advance, so they need to be patched afterwards
-
   int end_jump_ofsset = emit_jump(OP_JUMP_IF_FALSE, compiler);
-  emit_byte(OP_POP, compiler); // discard left operand from the stack
-  // (the result will what the value of the right operand)
+  emit_byte(
+      OP_POP, compiler
+  ); // discard left operand, let the result be the value of the right operand
 
   // passing `min_precedence=PREC_AND` causes right-associativity (i.e., `false
   // and true and true` is parsed as `(false and (true and true))`)
   parse_only(/* min_precedence: */ PREC_AND, compiler);
 
-  // notice we don't discard the left operand when it's falsey, since there's
-  // nothing more to evaluate (due to short-circuiting), and that's the right
-  // result.
+  patch_jump(end_jump_ofsset, compiler);
+}
+
+// parses (and compiles) the right operand of a boolean OR expression, making
+// sure to implement the correct short-circuiting semantics (i.e., if the left
+// operand is true, then the right operand won't be evaluated.)
+//
+// pre-condition: the left operand has already been compiled and its result is
+// on the top of the stack
+//
+static void or_(Compiler* compiler) {
+  // expected bytecode generation:
+  //
+  //         [ Left Operand Expression  ]   <- previously compiled
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //    +--- OP_JUMP_IF_FALSE
+  //  +-|--- OP_JUMP (short-circuit when LOE is true)
+  //  | |
+  //  | +--> OP_POP (pop left operand; result is value(ROE))
+  //  |      [ Right Operand Expression ]
+  //  |      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  //  |
+  //  +----> continues...
+
+  int roe_jump_ofsset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  int end_jump_ofsset = emit_jump(OP_JUMP, compiler);
+
+  patch_jump(roe_jump_ofsset, compiler);
+  emit_byte(
+      OP_POP, compiler
+  ); // discard left operand, let the result be the value of the right operand
+
+  // passing `min_precedence=PREC_OR` causes right-associativity (i.e., `false
+  // or true or true` is parsed as `(false or (true or true))`)
+  parse_only(/* min_precedence: */ PREC_OR, compiler);
+
   patch_jump(end_jump_ofsset, compiler);
 }
 
@@ -526,15 +557,12 @@ static void if_statement(Compiler* compiler) {
   //    |    ~~~~~~~~~~~~~~~~~~~~~~~~~
   //  +-|--- OP_JUMP
   //  | |
-  //  | +--> OP_POP (pop condition)     <- patch OP_JUMP_IF_FALSE to point here
+  //  | +--> OP_POP (pop condition)
   //  |      [ else branch statement ]
   //  |      ~~~~~~~~~~~~~~~~~~~~~~~~~
   //  |
-  //  +----> continues...               <- patch OP_JUMP to point here
+  //  +----> continues...
   //
-  //  notice that when emitting jumps, we don't know the destination addresses
-  //  in advance, so they need to be patched afterwards
-
   parser__consume(
       TOKEN_LEFT_PAREN, "Expected '(' after 'if'.", compiler->parser
   );
@@ -830,7 +858,7 @@ ParseRule rules[] = {
   [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
   [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
   [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
