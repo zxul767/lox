@@ -236,6 +236,11 @@ static InterpretResult run(VM* vm) {
       vm->instruction_pointer += jump_length;
       break;
     }
+    case OP_LOOP: {
+      uint16_t jump_length = READ_SHORT();
+      vm->instruction_pointer -= jump_length;
+      break;
+    }
     case OP_RETURN: {
 #ifdef DEBUG_TRACE_EXECUTION
       debug__print_section_divider();

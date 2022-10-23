@@ -37,6 +37,7 @@ typedef enum {
   OP_JUMP,
   // conditional jump when the last condition was false
   OP_JUMP_IF_FALSE,
+  OP_LOOP,
   OP_RETURN,
 
 } OpCode;

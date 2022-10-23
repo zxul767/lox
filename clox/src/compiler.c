@@ -163,6 +163,28 @@ static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
   emit_byte(byte2, compiler);
 }
 
+static void emit_loop(int loop_start_offset, Compiler* compiler) {
+  // OP_LOOP and OP_JUMP are fundamentally the same, except for the direction
+  // of the jump (negative for OP_LOOP and positive for OP_JUMP).
+  emit_byte(OP_LOOP, compiler);
+
+  //                  <--- jump_length --->
+  // [ ] ... [OP_LOOP][high-bits][low-bits][*] ...
+  //  ^          ^                          ^
+  //  |         count                     start (jump starts here)
+  //  |
+  // loop_start_offset (jump lands here)
+  //
+  // start - jump_length = loop_start_offset
+  int jump_length = compiler->output_bytecode->count - loop_start_offset + 2;
+  if (jump_length > UINT16_MAX) {
+    error("Loop body too large.", compiler->parser);
+  }
+
+  emit_byte((jump_length >> 8) & 0xff, compiler);
+  emit_byte(jump_length & 0xff, compiler);
+}
+
 static int emit_jump(uint8_t instruction, Compiler* compiler) {
   emit_byte(instruction, compiler);
   // 0xff is the marker for a "placeholder" jump value to be patched later
@@ -174,19 +196,21 @@ static int emit_jump(uint8_t instruction, Compiler* compiler) {
 }
 
 static void patch_jump(int offset, Compiler* compiler) {
-  //          <--- jump_length -->
-  // [OP_JUMP][  0xff  ][  0xff  ][ ]...[*]...
-  //              ^                ^     ^
-  //            offset             |   count (jump lands here when executed)
-  //                               |
-  //                             start (jump starts here when executed)
-  // start + jump_length = count
+  //          <- jump_length ->
+  // [OP_JUMP][ 0xff  ][ 0xff ][ ] ... [*] ...
+  //              ^             ^       ^
+  //            offset          |     count (jump lands here)
+  //                            |
+  //                          start (jump starts here)
   //
+  // start + jump_length = count
   int jump_length = compiler->output_bytecode->count - offset - 2;
   if (jump_length > UINT16_MAX) {
     error("Too much code to jump over.", compiler->parser);
   }
   // `jump_length` is encoded [high-bits][low-bits]
+  //                               ^         ^
+  //                             offset  offset + 1
   compiler->output_bytecode->instructions[offset] = (jump_length >> 8) & 0xff;
   compiler->output_bytecode->instructions[offset + 1] = jump_length & 0xff;
 }
@@ -537,6 +561,41 @@ static void print_statement(Compiler* compiler) {
   emit_byte(OP_PRINT, compiler);
 }
 
+static void while_statement(Compiler* compiler) {
+  // expected bytecode generation:
+  //
+  //         [ condition expression ] <---+
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~     |
+  //    +--- OP_JUMP_IF_FALSE             |
+  //    |    OP_POP (pop condition)       |
+  //    |                                 |
+  //    |    [ body statement       ]     |
+  //    |    ~~~~~~~~~~~~~~~~~~~~~~~~     |
+  //    |    OP_LOOP ---------------------+
+  //    |
+  //    +--> OP_POP (pop condition)
+  //         continues...
+  //
+  int loop_start_offset = compiler->output_bytecode->count;
+  parser__consume(
+      TOKEN_LEFT_PAREN, "Expected '(' after 'while'", compiler->parser
+  );
+  expression(compiler);
+  parser__consume(
+      TOKEN_RIGHT_PAREN, "Expected ')' after condition", compiler->parser
+  );
+
+  int exit_jump_offset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  emit_byte(OP_POP, compiler); // discard condition
+
+  // compile body statement
+  statement(compiler);
+  emit_loop(loop_start_offset, compiler);
+
+  patch_jump(exit_jump_offset, compiler);
+  emit_byte(OP_POP, compiler); // discard condition
+}
+
 static void expression_statement(Compiler* compiler) {
   expression(compiler);
   parser__consume(
@@ -647,6 +706,9 @@ static void statement(Compiler* compiler) {
 
   } else if (parser__match(TOKEN_IF, compiler->parser)) {
     if_statement(compiler);
+
+  } else if (parser__match(TOKEN_WHILE, compiler->parser)) {
+    while_statement(compiler);
 
   } else if (parser__match(TOKEN_LEFT_BRACE, compiler->parser)) {
     begin_scope(compiler);
