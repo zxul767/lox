@@ -19,6 +19,8 @@ Also, if you're curious about all the tasks that are being run, you can use the 
 `./gradlew --console=verbose build`
 
 # Running the REPL
+![jlox-repl](https://user-images.githubusercontent.com/442314/197428785-ea1d982e-7ef4-4be2-a258-df9db3d4b59e.png)
+
 If you want to test single-line commands in Lox, you can run its [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) as follows:
 
 `./gradlew run -q --console=plain`
