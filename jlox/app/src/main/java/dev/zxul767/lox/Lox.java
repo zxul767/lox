@@ -118,9 +118,6 @@ public class Lox {
 
     statements = ensureLastExpressionIsPrinted(statements);
     interpreter.interpret(statements);
-
-    if (Errors.hadError)
-      return;
   }
 
   static List<Stmt> ensureLastExpressionIsPrinted(List<Stmt> statements) {
