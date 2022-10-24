@@ -24,7 +24,19 @@ public class Lox {
     } else if (args.length == 1) {
       runFile(args[0]);
     } else {
-      System.out.println("Running lox repl...");
+      /* clang-format off */
+      System.out.println(""
+          + "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗" + "\n"
+          + "██║     ██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔══██╗██║" + "\n"
+          + "██║     ██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██████╔╝██║" + "\n"
+          + "██║     ██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██╔═══╝ ██║" + "\n"
+          + "███████╗╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗██║     ███████╗" + "\n"
+          + "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝" + "\n"
+      );
+      // source: https://manytools.org/hacker-tools/ascii-banner/
+      /* clang-format on */
+
+      System.out.println("Welcome to the Lox REPL. Ready to hack?");
       runPrompt();
     }
   }
@@ -42,8 +54,30 @@ public class Lox {
     InputStreamReader input = new InputStreamReader(System.in);
     BufferedReader reader = new BufferedReader(input);
 
+    // when running in REPL mode, sometimes there's a race condition
+    // between the output and error streams, leading to misleading
+    // output that confuses the user as it seems like the input prompt
+    // has vanished:
+    //
+    // > var l = list();
+    // > l.at(0);
+    // Runtime Error: cannot access elements in empty list
+    // > [line 1]
+    //
+    // The correct output should be:
+    //
+    // > var l = list();
+    // > l.at(0);
+    // Runtime Error: cannot access elements in empty list
+    // [line 1]
+    // >
+    //
+    // There's a reason why errors are logged to System.err, but
+    // for the REPL, which is interactive, we can forego this:
+    System.setErr(System.out);
+
     for (;;) {
-      System.out.print("> ");
+      System.out.print(">>> ");
       System.out.flush();
 
       String line = reader.readLine();
@@ -51,9 +85,9 @@ public class Lox {
         break;
 
       run(line);
-      // if the user makes a mistake, we shouldn't kill the entire
-      // session
-      Errors.hadError = false;
+
+      // if the user makes a mistake, we don't kill the session
+      Errors.reset();
     }
   }
 
