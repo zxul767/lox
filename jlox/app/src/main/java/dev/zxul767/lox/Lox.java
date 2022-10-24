@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.List;
 
 public class Lox {
@@ -84,6 +85,10 @@ public class Lox {
       if (line == null || line.equals("quit"))
         break;
 
+      // TODO: implement the "optional semicolon" feature properly
+      if (!line.endsWith(";")) {
+        line += ";";
+      }
       run(line);
 
       // if the user makes a mistake, we don't kill the session
@@ -108,6 +113,21 @@ public class Lox {
     if (Errors.hadError)
       return;
 
+    statements = ensureLastExpressionIsPrinted(statements);
     interpreter.interpret(statements);
+
+    if (Errors.hadError)
+      return;
+  }
+
+  static List<Stmt> ensureLastExpressionIsPrinted(List<Stmt> statements) {
+    int n = statements.size() - 1;
+    Stmt last = statements.get(n);
+    if (last instanceof Stmt.Expression) {
+      ArrayList<Stmt> patched = new ArrayList<>(statements);
+      patched.set(n, new Stmt.Print(((Stmt.Expression)last).expression));
+      return patched;
+    }
+    return statements;
   }
 }

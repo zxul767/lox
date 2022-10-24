@@ -45,10 +45,15 @@ class LoxList extends LoxClass {
 
   static Object at(LoxListInstance instance, Object... args) {
     int index = (int)(double)args[0];
-    if (index < 0 || index >= instance.list.size()) {
+    int normedIndex = index;
+    if (index < 0) {
+      normedIndex = instance.list.size() + index;
+    }
+    if (normedIndex < 0 || normedIndex >= instance.list.size()) {
+      // we report on the original index to avoid confusing users
       throwIndexError(instance, "at", index);
     }
-    return instance.list.get(index);
+    return instance.list.get(normedIndex);
   }
 
   static Object pop(LoxListInstance instance, Object... args) {
@@ -66,8 +71,8 @@ class LoxList extends LoxClass {
   static void
   throwIndexError(LoxListInstance instance, String lexeme, int index) {
     String message = String.format(
-        "tried to access index %d, but valid range is [0, %d]", index,
-        instance.list.size() - 1
+        "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
+        index, instance.list.size() - 1, instance.list.size()
     );
     if (instance.list.size() == 0)
       message = "cannot access elements in empty list";

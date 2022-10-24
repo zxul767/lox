@@ -29,8 +29,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       Errors.runtimeError(error);
     }
   }
-
-  Object evaluate(Expr expression) { return expression.accept(this); }
+  public Object evaluate(Expr expression) { return expression.accept(this); }
 
   void execute(Stmt stmt) { stmt.accept(this); }
 
@@ -92,7 +91,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     if (superclass != null) {
       environment = environment.enclosing;
     }
-
     environment.assign(stmt.name, _class);
 
     return null;
@@ -126,6 +124,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   public Void visitPrintStmt(Stmt.Print stmt) {
     Object value = evaluate(stmt.expression);
     System.out.println(stringify(value));
+
     return null;
   }
 
@@ -359,7 +358,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     return a.equals(b);
   }
 
-  static String stringify(Object object) {
+  public static String stringify(Object object) {
     if (object == null)
       return "nil";
 
