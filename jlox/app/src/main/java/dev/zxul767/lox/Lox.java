@@ -15,6 +15,14 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+// this is read line support
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.reader.UserInterruptException;
+import org.jline.reader.impl.DefaultParser;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
 
 public class Lox {
   private static final Interpreter interpreter = new Interpreter();
@@ -59,43 +67,56 @@ public class Lox {
     // output that confuses the user as it seems like the input prompt
     // has vanished:
     //
-    // > var l = list();
-    // > l.at(0);
+    // >>> var l = list();
+    // >>> l.at(0);
     // Runtime Error: cannot access elements in empty list
-    // > [line 1]
+    // >>> [line 1]
     //
     // The correct output should be:
     //
-    // > var l = list();
-    // > l.at(0);
+    // >>> var l = list();
+    // >>> l.at(0);
     // Runtime Error: cannot access elements in empty list
     // [line 1]
-    // >
+    // >>>
     //
-    // There's a reason why errors are logged to System.err, but
-    // for the REPL, which is interactive, we can forego this:
+    // to avoid that, we make sure both errors and output are going through the
+    // same channel:
     System.setErr(System.out);
 
-    InputStreamReader input = new InputStreamReader(System.in);
-    BufferedReader reader = new BufferedReader(input);
-    for (;;) {
-      System.out.print(">>> ");
-      System.out.flush();
+    Terminal terminal = TerminalBuilder.builder().build();
+    DefaultParser parser = new DefaultParser();
+    LineReader reader =
+        LineReaderBuilder.builder().terminal(terminal).parser(parser).build();
 
-      String line = reader.readLine();
-      if (line == null || line.equals("quit"))
+    while (true) {
+      try {
+        String line = reader.readLine(">>> ");
+        if (line == null || line.equals("quit"))
+          break;
+
+        if (line.trim().isEmpty())
+          continue;
+
+        // FIXME: implement the "optional semicolon" feature properly;
+        // this is a brittle kludge to make working with the REPL a little
+        // less annoying in the meantime...
+        if (!line.endsWith(";") && !line.endsWith("}")) {
+          line += ";";
+        }
+        run(line);
+        System.out.println();
+
+        // if the user makes a mistake, we don't kill the session
+        Errors.reset();
+
+      } catch (UserInterruptException e) {
         break;
-
-      // FIXME: implement the "optional semicolon" feature properly;
-      // this is a brittle kludge to make working with the REPL a little
-      // less annoying in the meantime...
-      if (!line.endsWith(";") && !line.endsWith("}")) {
-        line += ";";
+      } catch (EndOfFileException e) {
+        break;
+      } catch (Exception e) {
+        e.printStackTrace();
       }
-      run(line);
-
-      // if the user makes a mistake, we don't kill the session
-      Errors.reset();
     }
   }
 
@@ -127,7 +148,7 @@ public class Lox {
     if (last instanceof Stmt.Expression) {
       ArrayList<Stmt> patched = new ArrayList<>(statements);
       Expr expression = ((Stmt.Expression)last).expression;
-      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ true));
+      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ false));
 
       return patched;
     }

@@ -26,9 +26,10 @@ public class Errors {
     hadRuntimeError = false;
     hadError = false;
   }
+
   public static void runtimeError(RuntimeError error) {
     System.err.println(String.format(
-        "Runtime Error: %s\n[line %d]\n", error.getMessage(), error.token.line
+        "Runtime Error: %s\n[line %d]", error.getMessage(), error.token.line
     ));
     System.err.flush();
     hadRuntimeError = true;
