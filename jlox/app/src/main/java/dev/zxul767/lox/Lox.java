@@ -26,19 +26,6 @@ public class Lox {
     } else if (args.length == 1) {
       runFile(args[0]);
     } else {
-      /* clang-format off */
-      System.out.println(""
-          + "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗" + "\n"
-          + "██║     ██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔══██╗██║" + "\n"
-          + "██║     ██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██████╔╝██║" + "\n"
-          + "██║     ██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██╔═══╝ ██║" + "\n"
-          + "███████╗╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗██║     ███████╗" + "\n"
-          + "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝" + "\n"
-      );
-      // source: https://manytools.org/hacker-tools/ascii-banner/
-      /* clang-format on */
-
-      System.out.println("Welcome to the Lox REPL. Ready to hack?");
       runPrompt();
     }
   }
@@ -53,8 +40,19 @@ public class Lox {
   }
 
   private static void runPrompt() throws IOException {
-    InputStreamReader input = new InputStreamReader(System.in);
-    BufferedReader reader = new BufferedReader(input);
+    System.out.println(
+        /* clang-format off */
+          ""
+          + "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗" + "\n"
+          + "██║     ██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔══██╗██║" + "\n"
+          + "██║     ██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██████╔╝██║" + "\n"
+          + "██║     ██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██╔═══╝ ██║" + "\n"
+          + "███████╗╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗██║     ███████╗" + "\n"
+          + "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝" + "\n"
+        /* clang-format on */
+    );
+    // source: https://manytools.org/hacker-tools/ascii-banner/
+    System.out.println("Welcome to the Lox REPL. Ready to hack?");
 
     // when running in REPL mode, sometimes there's a race condition
     // between the output and error streams, leading to misleading
@@ -78,6 +76,8 @@ public class Lox {
     // for the REPL, which is interactive, we can forego this:
     System.setErr(System.out);
 
+    InputStreamReader input = new InputStreamReader(System.in);
+    BufferedReader reader = new BufferedReader(input);
     for (;;) {
       System.out.print(">>> ");
       System.out.flush();
