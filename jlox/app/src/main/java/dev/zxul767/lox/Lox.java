@@ -1,5 +1,6 @@
 package dev.zxul767.lox;
 
+import dev.zxul767.lox.parsing.Expr;
 import dev.zxul767.lox.parsing.Parser;
 import dev.zxul767.lox.parsing.Scanner;
 import dev.zxul767.lox.parsing.Stmt;
@@ -123,9 +124,12 @@ public class Lox {
   static List<Stmt> ensureLastExpressionIsPrinted(List<Stmt> statements) {
     int n = statements.size() - 1;
     Stmt last = statements.get(n);
+
     if (last instanceof Stmt.Expression) {
       ArrayList<Stmt> patched = new ArrayList<>(statements);
-      patched.set(n, new Stmt.Print(((Stmt.Expression)last).expression));
+      Expr expression = ((Stmt.Expression)last).expression;
+      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ false));
+
       return patched;
     }
     return statements;

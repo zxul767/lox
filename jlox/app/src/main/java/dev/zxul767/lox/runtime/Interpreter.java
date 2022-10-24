@@ -123,7 +123,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Void visitPrintStmt(Stmt.Print stmt) {
     Object value = evaluate(stmt.expression);
-    System.out.println(stringify(value));
+    System.out.print(stringify(value));
+    if (stmt.includeNewline)
+      System.out.println();
 
     return null;
   }
@@ -370,8 +372,15 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       return text;
     }
     if (object instanceof String) {
-      return String.format("\"%s\"", object);
+      return String.format("%s", object);
     }
     return object.toString();
+  }
+
+  public static String repr(Object object) {
+    if (object instanceof String) {
+      return String.format("\"%s\"", object);
+    }
+    return stringify(object);
   }
 }

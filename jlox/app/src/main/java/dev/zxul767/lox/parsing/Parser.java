@@ -82,7 +82,7 @@ public class Parser {
     if (match(IF))
       return ifStatement();
 
-    if (match(PRINT))
+    if (match(PRINT, PRINTLN))
       return printStatement();
 
     if (match(RETURN))
@@ -160,9 +160,11 @@ public class Parser {
 
   // printStatement -> "print" expression ";"
   private Stmt printStatement() {
+    boolean includeNewline = (previous().type == PRINTLN);
     Expr value = expression();
     consume(SEMICOLON, "Expected ';' after value.");
-    return new Stmt.Print(value);
+
+    return new Stmt.Print(value, includeNewline);
   }
 
   // returnStatement -> "return" expression? ";"
@@ -394,8 +396,12 @@ public class Parser {
       Expr expr = expression();
       // TODO: we should present the original source code for easier
       // debugging; that will require keep source maps in the tokens, though.
-      consume(RIGHT_PAREN, String.format("Expected ')' after expression: %s",
-                                         new AstPrinter().print(expr)));
+      consume(
+          RIGHT_PAREN,
+          String.format(
+              "Expected ')' after expression: %s", new AstPrinter().print(expr)
+          )
+      );
       return new Expr.Grouping(expr);
     }
     throw error(peek(), "Unexpected token in primary expression!");

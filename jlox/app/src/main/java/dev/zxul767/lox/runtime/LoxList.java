@@ -108,7 +108,7 @@ class LoxListInstance extends LoxInstance {
   public String toString() {
     ArrayList<String> strings = new ArrayList<>();
     for (Object object : this.list) {
-      strings.add(Interpreter.stringify(object));
+      strings.add(Interpreter.repr(object));
     }
     return "[" + String.join(", ", strings) + "]";
   }

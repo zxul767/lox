@@ -3,11 +3,29 @@ fun fib(n) {
     return fib(n-1) + fib(n-2);
 }
 
+fun newline(times) {
+    for (var i = 0; i < times; i = i + 1) {
+       println "";
+    }
+}
+
+var N = 10;
 var fibs = list();
-for (var i = 0; i < 10; i = i + 1) {
+for (var i = 0; i < N; i = i + 1) {
     fibs.append(fib(i));
 }
 
+println "fibs forward: ";
+for (var i = 0; i < N; i = i + 1) {
+    if (i > 0)
+       print ", ";
+    print fibs.at(i);
+}
+
+newline(/* times: */2);
+println "fibs backward: ";
 while (fibs.length() > 0) {
     print fibs.pop();
+    if (fibs.length() > 0)
+       print ", ";
 }

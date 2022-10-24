@@ -40,6 +40,7 @@ public enum TokenType {
   NIL,
   OR,
   PRINT,
+  PRINTLN,
   RETURN,
   SUPER,
   THIS,
