@@ -13,6 +13,8 @@
 We don't have tests for `clox` yet :-(
 
 # Running the REPL
+![clox-repl](https://user-images.githubusercontent.com/442314/197453260-86f8d97d-0556-4f02-af69-d6103790916c.png)
+
 If you want to test single-line commands in `clox`, you can run its [REPL](https://en.wikipedia.org/wiki/Read%E2%80%93eval%E2%80%93print_loop) as follows:
 
 `make repl`
