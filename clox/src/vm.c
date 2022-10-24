@@ -220,7 +220,6 @@ static InterpretResult run(VM* vm) {
       break;
     }
     case OP_PRINT: {
-      printf(">> ");
       value__println(pop(vm));
       break;
     }
