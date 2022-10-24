@@ -86,8 +86,10 @@ public class Lox {
       if (line == null || line.equals("quit"))
         break;
 
-      // TODO: implement the "optional semicolon" feature properly
-      if (!line.endsWith(";")) {
+      // FIXME: implement the "optional semicolon" feature properly;
+      // this is a brittle kludge to make working with the REPL a little
+      // less annoying in the meantime...
+      if (!line.endsWith(";") && !line.endsWith("}")) {
         line += ";";
       }
       run(line);
@@ -128,7 +130,7 @@ public class Lox {
     if (last instanceof Stmt.Expression) {
       ArrayList<Stmt> patched = new ArrayList<>(statements);
       Expr expression = ((Stmt.Expression)last).expression;
-      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ false));
+      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ true));
 
       return patched;
     }
