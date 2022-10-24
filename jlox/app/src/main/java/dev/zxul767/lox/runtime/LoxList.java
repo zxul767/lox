@@ -11,7 +11,7 @@ import java.util.function.Function;
 
 @FunctionalInterface
 interface Invoker<T, R> {
-  R invoke(T[] args);
+  R invoke(LoxListInstance self, T[] args);
 }
 
 class LoxList extends LoxClass {
@@ -24,35 +24,72 @@ class LoxList extends LoxClass {
   LoxList() {
     super(
         "list", /*superclass:*/ null,
-        /*methods:*/ Collections.<String, LoxFunction>emptyMap()
+        /*methods:*/ new HashMap<String, LoxCallable>()
     );
+
+    registerMethod("length", 0, (self, args) -> (double)self.list.size());
+    registerMethod("append", 1, (self, args) -> self.list.add(args[0]));
+    registerMethod("at", 1, (self, args) -> at(self, args));
+    registerMethod("clear", 0, (self, args) -> clear(self, args));
+    registerMethod("pop", 0, (self, args) -> pop(self, args));
+  }
+
+  void registerMethod(String name, int arity, Invoker<Object, Object> invoker) {
+    this.methods.put(name, new LoxListMethod(name, arity, invoker));
+  }
+
+  static Object clear(LoxListInstance instance, Object... args) {
+    instance.list.clear();
+    return null;
+  }
+
+  static Object at(LoxListInstance instance, Object... args) {
+    int index = (int)(double)args[0];
+    if (index < 0 || index >= instance.list.size()) {
+      throwIndexError(instance, "at", index);
+    }
+    return instance.list.get(index);
+  }
+
+  static Object pop(LoxListInstance instance, Object... args) {
+    if (instance.list.isEmpty()) {
+      throwEmptyListError("pop");
+    }
+    return instance.list.remove(instance.list.size() - 1);
+  }
+
+  static void throwEmptyListError(String lexeme) {
+    String message = "cannot perform operation on empty list";
+    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
+  }
+
+  static void
+  throwIndexError(LoxListInstance instance, String lexeme, int index) {
+    String message = String.format(
+        "tried to access index %d, but valid range is [0, %d]", index,
+        instance.list.size() - 1
+    );
+    if (instance.list.size() == 0)
+      message = "cannot access elements in empty list";
+
+    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
   }
 }
 
 class LoxListInstance extends LoxInstance {
-  ArrayList<Object> list = new ArrayList<>();
-  final Map<String, LoxListMethod> methods = new HashMap<>();
+  // TODO: check if we can just make it a nested class in LoxClass
+  public ArrayList<Object> list = new ArrayList<>();
 
-  LoxListInstance(LoxClass _class) {
-    super(_class);
-
-    // TODO: does the extra level of indirection is too bad for performance?
-    addMethod("length", 0, (args) -> (double)this.list.size());
-    addMethod("append", 1, (args) -> this.list.add(args[0]));
-    addMethod("at", 1, (args) -> _at(args));
-    addMethod("clear", 0, (args) -> _clear(args));
-    addMethod("pop", 0, (args) -> _pop(args));
-  }
+  LoxListInstance(LoxClass _class) { super(_class); }
 
   Object get(Token name) {
     // Unlike regular user-defined clases where fields shadow methods
     // Lox lists can have user-defined attributes, but if names collide
     // predefined methods take precedence.
-    LoxListMethod method = this.methods.getOrDefault(name.lexeme, null);
+    LoxCallable method = this._class.findMethod(name.lexeme);
     if (method != null) {
-      return method;
+      return method.bind(this);
     }
-
     if (this.fields.containsKey(name.lexeme)) {
       return fields.get(name.lexeme);
     }
@@ -60,46 +97,6 @@ class LoxListInstance extends LoxInstance {
     throw new RuntimeError(
         name, String.format("Undefined property '%s'.", name.lexeme)
     );
-  }
-
-  void addMethod(String name, int arity, Invoker<Object, Object> invoker) {
-    this.methods.put(name, new LoxListMethod(name, arity, invoker));
-  }
-
-  Object _clear(Object... args) {
-    this.list.clear();
-    return null;
-  }
-
-  Object _at(Object... args) {
-    int index = (int)(double)args[0];
-    if (index < 0 || index >= this.list.size()) {
-      throwIndexError("at", index);
-    }
-    return this.list.get(index);
-  }
-
-  Object _pop(Object... args) {
-    if (this.list.isEmpty()) {
-      throwEmptyListError("pop");
-    }
-    return this.list.remove(this.list.size() - 1);
-  }
-
-  void throwEmptyListError(String lexeme) {
-    String message = "cannot perform operation on empty list";
-    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
-  }
-
-  void throwIndexError(String lexeme, int index) {
-    String message = String.format(
-        "tried to access index %d, but valid range is [0, %d]", index,
-        this.list.size() - 1
-    );
-    if (this.list.size() == 0)
-      message = "cannot access elements in empty list";
-
-    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
   }
 
   @Override
@@ -115,8 +112,8 @@ class LoxListInstance extends LoxInstance {
 class LoxListMethod implements LoxCallable {
   private String name;
   private int arity;
-  // this closure captures a LoxListInstance
-  private Invoker<Object, Object> closure;
+  private Invoker<Object, Object> nativeCall;
+  private LoxListInstance instance = null;
 
   LoxListMethod(String name) { this(name, /*arity:*/ 0); }
 
@@ -124,15 +121,30 @@ class LoxListMethod implements LoxCallable {
     this(name, arity, /*instance:*/ null);
   }
 
-  LoxListMethod(String name, int arity, Invoker<Object, Object> closure) {
+  LoxListMethod(String name, int arity, Invoker<Object, Object> nativeCall) {
     this.name = name;
     this.arity = arity;
-    this.closure = closure;
+    this.nativeCall = nativeCall;
+  }
+
+  @Override
+  public LoxCallable bind(LoxInstance instance) {
+    LoxListMethod method =
+        new LoxListMethod(this.name, this.arity, this.nativeCall);
+    method.instance = (LoxListInstance)instance;
+
+    return method;
   }
 
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
-    return this.closure.invoke(args.toArray(new Object[0]));
+    if (this.instance == null) {
+      throw new RuntimeError(
+          new Token(TokenType.IDENTIFIER, this.name),
+          "Cannot invoke unbound method."
+      );
+    }
+    return this.nativeCall.invoke(this.instance, args.toArray(new Object[0]));
   }
 
   @Override

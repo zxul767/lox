@@ -3,25 +3,28 @@ package dev.zxul767.lox.runtime;
 import java.lang.Math;
 import java.util.List;
 
-abstract class NoArgsCallable implements LoxCallable {
+abstract class NativeCallable implements LoxCallable {
+  @Override
+  public String toString() {
+    return String.format("<native fn> [arity:%d]", arity());
+  }
+  @Override
+  public LoxCallable bind(LoxInstance instance) {
+    return null;
+  }
+}
+
+abstract class NoArgsCallable extends NativeCallable {
   @Override
   public int arity() {
     return 0;
   }
-  @Override
-  public String toString() {
-    return String.format("<native fn> [arity:%d]", arity());
-  }
 }
 
-abstract class OneArgCallable implements LoxCallable {
+abstract class OneArgCallable extends NativeCallable {
   @Override
   public int arity() {
     return 1;
-  }
-  @Override
-  public String toString() {
-    return String.format("<native fn> [arity:%d]", arity());
   }
 }
 

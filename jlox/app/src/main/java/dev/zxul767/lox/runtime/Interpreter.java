@@ -75,7 +75,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       environment.define("super", superclass);
     }
 
-    Map<String, LoxFunction> methods = new HashMap<>();
+    Map<String, LoxCallable> methods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
       LoxFunction function = new LoxFunction(
           method, environment,
@@ -203,7 +203,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     int distance = locals.get(expr);
     LoxClass superclass = (LoxClass)environment.getAt(distance, "super");
     LoxInstance object = (LoxInstance)environment.getAt(distance - 1, "this");
-    LoxFunction method = superclass.findMethod(expr.method.lexeme);
+    LoxCallable method = superclass.findMethod(expr.method.lexeme);
 
     if (method == null) {
       throw new RuntimeError(
