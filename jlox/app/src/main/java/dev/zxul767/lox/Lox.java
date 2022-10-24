@@ -7,6 +7,7 @@ import dev.zxul767.lox.parsing.Stmt;
 import dev.zxul767.lox.parsing.Token;
 import dev.zxul767.lox.runtime.Interpreter;
 import dev.zxul767.lox.runtime.Resolver;
+import dev.zxul767.lox.runtime.StandardLibrary;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -15,12 +16,15 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import org.jline.reader.Completer;
 // this is read line support
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
+import org.jline.reader.impl.completer.AggregateCompleter;
+import org.jline.reader.impl.completer.StringsCompleter;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
@@ -84,14 +88,10 @@ public class Lox {
     // same channel:
     System.setErr(System.out);
 
-    Terminal terminal = TerminalBuilder.builder().build();
-    DefaultParser parser = new DefaultParser();
-    LineReader reader =
-        LineReaderBuilder.builder().terminal(terminal).parser(parser).build();
-
+    LineReader reader = createReplReader();
     while (true) {
       try {
-        String line = reader.readLine(">>> ");
+        String line = reader.readLine(">>> ").trim();
         if (line == null || line.equals("quit"))
           break;
 
@@ -139,6 +139,26 @@ public class Lox {
 
     statements = ensureLastExpressionIsPrinted(statements);
     interpreter.interpret(statements);
+  }
+
+  private static LineReader createReplReader() throws IOException {
+    // provide completions (triggered via TAB) for all keywords
+    Completer completer = new AggregateCompleter(
+        new StringsCompleter("quit"),
+        new StringsCompleter(StandardLibrary.members.keySet()),
+        new StringsCompleter(Scanner.keywords.keySet())
+    );
+
+    Terminal terminal = TerminalBuilder.builder().build();
+
+    DefaultParser parser = new DefaultParser();
+
+    LineReader reader = LineReaderBuilder.builder()
+                            .terminal(terminal)
+                            .parser(parser)
+                            .completer(completer)
+                            .build();
+    return reader;
   }
 
   static List<Stmt> ensureLastExpressionIsPrinted(List<Stmt> statements) {

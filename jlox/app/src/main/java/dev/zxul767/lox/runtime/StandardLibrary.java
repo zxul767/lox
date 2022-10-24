@@ -1,7 +1,9 @@
 package dev.zxul767.lox.runtime;
 
 import java.lang.Math;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 abstract class NativeCallable implements LoxCallable {
   @Override
@@ -28,7 +30,7 @@ abstract class OneArgCallable extends NativeCallable {
   }
 }
 
-final class StandardLibrary {
+public final class StandardLibrary {
   private StandardLibrary() {}
 
   // the constructor for the native list type in Lox
@@ -47,4 +49,12 @@ final class StandardLibrary {
       return Math.sin((double)args.get(0));
     }
   };
+
+  public static final Map<String, LoxCallable> members;
+  static {
+    members = new HashMap<>();
+    members.put("list", list);
+    members.put("clock", clock);
+    members.put("sin", clock);
+  }
 }

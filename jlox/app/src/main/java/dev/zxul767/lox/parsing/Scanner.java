@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Scanner {
-  private static final Map<String, TokenType> keywords;
+  public static final Map<String, TokenType> keywords;
   static {
     keywords = new HashMap<>();
     keywords.put("and", AND);
