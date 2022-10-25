@@ -2,5 +2,4 @@
 *.o
 *.d
 .deps/
-clox
-isocline/
+build/bin/clox
