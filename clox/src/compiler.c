@@ -613,8 +613,6 @@ static void expression_statement(Compiler* compiler) {
   }
 }
 
-}
-
 static void if_statement(Compiler* compiler) {
   // expected bytecode generation:
   //
