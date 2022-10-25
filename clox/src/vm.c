@@ -31,6 +31,7 @@ static void runtime_error(VM* vm, const char* format, ...) {
 void vm__init(VM* vm) {
   reset_stack(vm);
   vm->objects = NULL;
+  vm->mode = VM_SCRIPT_MODE; // default value
   table__init(&vm->interned_strings);
   table__init(&vm->global_vars);
 }

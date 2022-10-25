@@ -56,6 +56,7 @@ typedef enum { FOREACH_TOKEN(GENERATE_ENUM) } TokenType;
 // We make it `extern` so it can be used from compiler.c;
 // see initialization in scanner.c
 extern const char* TOKEN_TO_STRING[];
+extern const char* KEYWORDS[];
 
 typedef struct {
   TokenType type;

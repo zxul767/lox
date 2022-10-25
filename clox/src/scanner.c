@@ -1,10 +1,16 @@
 #include "scanner.h"
 #include "common.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
 const char* TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
+
+// TODO: is it possible to elegantly generate the strings from TOKEN_TO_STRING?
+const char* KEYWORDS[] = {"and",  "class", "else", "false", "for",    "fun",
+                          "if",   "nil",   "or",   "print", "return", "super",
+                          "this", "true",  "var",  "while", NULL};
 
 const Token BOF_TOKEN = {
     .type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
@@ -25,11 +31,19 @@ static bool is_at_end(const Scanner* scanner) {
   return *(scanner->current) == '\0';
 }
 
-static Token error_token(const char* message, const Scanner* scanner) {
+static Token error_token(const Scanner* scanner, const char* format, ...) {
+  static char error_message[1024];
+
+  va_list args;
+  va_start(args, format);
+  sprintf(error_message, "Runtime Error: ");
+  vsprintf(error_message, format, args);
+  va_end(args);
+
   Token token;
   token.type = TOKEN_ERROR;
-  token.start = message;
-  token.length = (int)strlen(message);
+  token.start = error_message;
+  token.length = (int)strlen(error_message);
   token.line = scanner->current_line;
   return token;
 }
@@ -203,7 +217,7 @@ static Token string(Scanner* scanner) {
     advance(scanner);
   }
   if (is_at_end(scanner))
-    return error_token("Unterminated string.", scanner);
+    return error_token(scanner, "Unterminated string.");
 
   // the closing quote
   advance(scanner);
@@ -266,5 +280,5 @@ Token scanner__next_token(Scanner* scanner) {
     return string(scanner);
   }
   // TODO: include the unexpected token in the error message
-  return error_token("Unexpected character.", scanner);
+  return error_token(scanner, "Unexpected character: %c", c);
 }

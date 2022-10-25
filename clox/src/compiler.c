@@ -84,6 +84,7 @@ typedef struct {
   // easily detect (by just looking at the `=` node) that `(+ a b)` is an
   // invalid target.
   bool can_assign;
+  bool repl_mode;
 
 } Compiler;
 
@@ -601,7 +602,17 @@ static void expression_statement(Compiler* compiler) {
   parser__consume(
       TOKEN_SEMICOLON, "Expected ';' after expression", compiler->parser
   );
-  emit_byte(OP_POP, compiler);
+
+  // for the benefit of the REPL, we will automatically print the value of the
+  // last expression (which would be otherwise lost)
+  if (parser__check(TOKEN_EOF, compiler->parser) &&
+      compiler->vm->mode == VM_REPL_MODE) {
+    emit_byte(OP_PRINT, compiler);
+  } else {
+    emit_byte(OP_POP, compiler);
+  }
+}
+
 }
 
 static void if_statement(Compiler* compiler) {

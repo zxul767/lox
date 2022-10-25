@@ -18,6 +18,10 @@ TARGET_NAME := clox
 
 BUILD_DIR := build
 SRC_DIR := src
+# a portable gnu readline alternative
+# https://github.com/daanx/isocline
+ISOCLINE_DIR := isocline
+ISOCLINE_SRC_DIR := $(ISOCLINE_DIR)/src
 OBJ_DIR := $(BUILD_DIR)/obj
 DEPS_DIR := $(OBJ_DIR)/.deps
 BIN_DIR := $(BUILD_DIR)/bin
@@ -28,7 +32,7 @@ MAIN_TARGET := $(BIN_DIR)/$(TARGET_NAME)
 ###############################################################################
 
 # include debugging symbols and all warnings
-CFLAGS = -g -Wall -Werror -I$(SRC_DIR)
+CFLAGS = -g -Wall -Werror -I$(SRC_DIR) -I$(ISOCLINE_DIR)/include
 
 # keep symbols in the final executable so we can debug
 LDFLAGS = -rdynamic
@@ -40,9 +44,15 @@ DEPS_FLAGS = -MT $@ -MMD -MF $(DEPS_DIR)/$*.Td
 # FILES
 ###############################################################################
 
+# as described in https://github.com/daanx/isocline#build-as-a-single-source
 SOURCE_FILES := $(wildcard $(SRC_DIR)/*.c)
-OBJ_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
+
+# compute dependency files just for our own sources...
 DEPS_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(DEPS_DIR)/%.d)
+
+# ...and now make sure to generate object files for all files (ours and vendor)
+SOURCE_FILES += $(wildcard $(ISOCLINE_SRC_DIR)/isocline.c)
+OBJ_FILES := $(SOURCE_FILES:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 ###############################################################################
 # BUILD RULES
@@ -63,6 +73,11 @@ $(MAIN_TARGET) : $(OBJ_FILES) | $(BIN_DIR)
 
 # build object files
 $(OBJ_DIR)/%.o :: $(SRC_DIR)/%.c $(DEPS_DIR)/%.d | $(DEPS_DIR)
+	$(COMPILE) $< -o $@
+	$(POST_COMPILE)
+
+# build vendor object files
+$(OBJ_DIR)/%.o :: $(ISOCLINE_SRC_DIR)/%.c $(DEPS_DIR)/%.d | $(DEPS_DIR)
 	$(COMPILE) $< -o $@
 	$(POST_COMPILE)
 

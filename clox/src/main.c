@@ -1,3 +1,5 @@
+#include <isocline.h>
+#include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,10 +7,85 @@
 #include "bytecode.h"
 #include "common.h"
 #include "debug.h"
+#include "memory.h"
+#include "scanner.h"
 #include "vm.h"
 
-static void repl(VM* vm) {
+static void
+word_completer(ic_completion_env_t* input_until_cursor, const char* word) {
+  static const char* commands[] = {"quit", NULL};
 
+  ic_add_completions(input_until_cursor, word, commands);
+  ic_add_completions(input_until_cursor, word, KEYWORDS);
+}
+
+// We use `ic_complete_word` to only consider the final token on the input.
+// (almost all user defined completers should use this)
+static void
+completer(ic_completion_env_t* input_until_cursor, const char* input) {
+  ic_complete_word(
+      input_until_cursor, input, &word_completer,
+      NULL /* from default word boundary; whitespace or separator */
+  );
+}
+
+static const char* string__end(const char* string) {
+  if (*string == '\0')
+    return string;
+
+  while (*string)
+    string++;
+  string--;
+
+  return string;
+}
+
+static bool string__endswith(const char* string, char c) {
+  const char* end = string__end(string);
+  return *end == c;
+}
+
+static char* add_semicolon_if_needed(char* line) {
+  if (!string__endswith(line, ';') && !string__endswith(line, '}')) {
+    size_t length = strlen(line);
+    char* new_line = ALLOCATE(char, length + 2);
+
+    memcpy(new_line, line, length);
+    new_line[length] = ';';
+    new_line[length + 1] = '\0';
+
+    return new_line;
+  }
+  return line;
+}
+
+static void setup_isocline() {
+  setlocale(LC_ALL, "C.UTF-8"); // we use utf-8 in this example
+
+  ic_style_def("kbd", "gray underline");    // you can define your own styles
+  ic_style_def("ic-prompt", "ansi-maroon"); // or re-define system styles
+
+  ic_enable_hint(false);
+
+  ic_printf(
+      "- Type 'quit' to exit. (or use [kbd]ctrl-d[/]).\n"
+      "- Use [kbd]shift-tab[/] for multiline input. (or [kbd]ctrl-enter[/], or "
+      "[kbd]ctrl-j[/])\n"
+      "- Use [kbd]tab[/]  for word completion.\n"
+      "- Use [kbd]ctrl-r[/] to search the history.\n\n"
+  );
+
+  // enable completion with a default completion function
+  ic_set_default_completer(&completer, NULL);
+
+  // try to auto complete after a completion as long as the completion is unique
+  ic_enable_auto_tab(true);
+
+  // enable history; use a NULL filename to not persist history to disk
+  ic_set_history(".lox_repl", -1 /* default entries (= 200) */);
+}
+
+static void repl(VM* vm) {
   /* clang-format off */
   const char* banner =
       "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗\n"
@@ -19,19 +96,28 @@ static void repl(VM* vm) {
       "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝\n";
   /* clang-format on */
 
-  printf("%s", banner);
-  printf("Welcome to the Lox REPL. Ready to hack?\n");
+  ic_printf("[LightSalmon]%s[/]", banner);
+  ic_printf("[LightSalmon]Welcome to the Lox REPL. Ready to hack?\n[/]");
 
-  char line[1024];
-  for (;;) {
-    printf(">>> ");
-    if (!fgets(line, sizeof(line), stdin)) {
-      printf("\n");
+  setup_isocline();
+
+  char* line;
+  while ((line = ic_readline(">>")) != NULL) {
+    if (!strcmp("quit", line))
       break;
+
+    // FIXME: implement the "optional semicolon" feature properly;
+    // this is a brittle kludge to make working with the REPL a little
+    // less annoying in the meantime...
+    char* fixed_line = add_semicolon_if_needed(line);
+
+    vm->mode = VM_REPL_MODE;
+    vm__interpret(fixed_line, vm);
+
+    if (fixed_line != line) {
+      free(fixed_line);
     }
-    if (!strcmp("quit\n", line))
-      break;
-    vm__interpret(line, vm);
+    free(line);
   }
 }
 
@@ -64,6 +150,7 @@ static char* read_file(const char* path) {
 
 static void run_file(const char* path, VM* vm) {
   char* source = read_file(path);
+  vm->mode = VM_SCRIPT_MODE;
   InterpretResult result = vm__interpret(source, vm);
   free(source);
 

@@ -6,6 +6,20 @@
 
 typedef struct Bytecode Bytecode;
 
+// we need this information to compile a few things differently when running
+// inside a REPL (e.g., statement expressions are expected to print their value
+// automatically).
+//
+// this is our only option given that we don't have access to an intermediate
+// representation that we could modify after parsing in the REPL call frame (the
+// way we do in jlox)
+//
+typedef enum {
+  VM_REPL_MODE,
+  VM_SCRIPT_MODE,
+
+} ExecutionMode;
+
 #define STACK_MAX 256
 
 // stack-based, virtual machine
@@ -28,6 +42,8 @@ typedef struct VM {
   Table interned_strings;
 
   Table global_vars;
+
+  ExecutionMode mode;
 
 } VM;
 
