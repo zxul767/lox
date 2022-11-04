@@ -23,6 +23,12 @@
 typedef struct {
   Token current_token;
   Token previous_token;
+  // we need to keep this as a separate token because we don't want parsing to
+  // be driven by ignorable tokens but we do need to keep the last one around to
+  // properly implement the "optional semicolon" feature
+  //
+  // see "optional semicolon" in `features_design.md` for more details
+  Token immediately_prior_newline;
 
   bool had_error;
   bool panic_mode;
@@ -118,9 +124,15 @@ static void error_at(const Token* token, const char* message, Parser* parser) {
   if (token->type == TOKEN_EOF) {
     fprintf(stderr, " at end");
   } else if (token->type == TOKEN_ERROR) {
-    // Nothing
+    fprintf(
+        stderr, " after '%.*s'", parser->previous_token.length,
+        parser->previous_token.start
+    );
   } else {
-    fprintf(stderr, " at '%.*s'", token->length, token->start);
+    fprintf(
+        stderr, " at '%.*s' [%s]", token->length, token->start,
+        TOKEN_TO_STRING[token->type]
+    );
   }
   fprintf(stderr, ": %s\n", message);
   parser->had_error = true;
@@ -228,18 +240,35 @@ static bool identifiers_equal(const Token* a, const Token* b) {
   return !memcmp(a->start, b->start, a->length);
 }
 
-static bool parser__check(TokenType type, Parser* parser) {
-  return parser->current_token.type == type;
-}
-
 static void parser__advance(Parser* parser) {
   parser->previous_token = parser->current_token;
+  parser->immediately_prior_newline = IGNORABLE_TOKEN;
+
   for (;;) {
-    parser->current_token = scanner__next_token(parser->scanner);
-    if (parser->current_token.type != TOKEN_ERROR)
-      break;
-    error_at_current(parser->current_token.start, parser);
+    Token token = parser->current_token = scanner__next_token(parser->scanner);
+
+    /* fprintf(stderr, "token: %s\n", TOKEN_TO_STRING[token.type]); */
+
+    if (token.type == TOKEN_IGNORABLE || token.type == TOKEN_BOF)
+      continue;
+
+    if (token.type == TOKEN_ERROR) {
+      error_at_current(token.start, parser);
+      continue;
+    }
+
+    // see "optional semicolon" in `features_design.md` for more details
+    if (token.type == TOKEN_NEWLINE || token.type == TOKEN_MULTILINE_COMMENT) {
+      parser->immediately_prior_newline = token;
+      continue;
+    }
+
+    break;
   }
+}
+
+static bool parser__check(TokenType type, Parser* parser) {
+  return parser->current_token.type == type;
 }
 
 static bool parser__match(TokenType type, Parser* parser) {
@@ -269,6 +298,7 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
 
   // consume the next token to decide which parse function we need next
   parser__advance(parser);
+
   ParseFn parse_prefix = get_parse_rule(parser->previous_token.type)->prefix;
   if (parse_prefix == NULL) {
     error("Unexpected token in primary expression", parser);
@@ -510,6 +540,32 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler) {
   return store_identifier_constant(&compiler->parser->previous_token, compiler);
 }
 
+static bool has_implicit_statement_terminator(Parser* parser) {
+  return parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
+         parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT;
+}
+
+// see "optional semicolon" in `features_design.md`
+static bool optional_semicolon(Parser* parser) {
+  if (parser__match(TOKEN_SEMICOLON, parser)) {
+    return true;
+
+    // at first glance it may seem like we could use
+    // `parser__match(TOKEN_NEWLINE)` but that's not the case because we don't
+    // track newlines and comments as regular tokens (since otherwise the
+    // regular parsing process would break!)
+  } else if (has_implicit_statement_terminator(parser)) {
+    // we need to advance because `parse_only` assumes that the next lookahead
+    // token has been consumed already
+    parser__advance(parser);
+    return true;
+
+  } else if (parser->current_token.type == TOKEN_EOF) {
+    return true;
+  }
+  return false;
+}
+
 static void var_declaration(Compiler* compiler) {
   uint8_t location = declare_variable("Expected variable name.", compiler);
 
@@ -520,11 +576,11 @@ static void var_declaration(Compiler* compiler) {
     // implicit nil initialization
     emit_byte(OP_NIL, compiler);
   }
-  parser__consume(
-      TOKEN_SEMICOLON, "Expected '; after variable declaration'",
-      compiler->parser
-  );
-
+  if (!optional_semicolon(compiler->parser)) {
+    error_at_current(
+        "Expected ';' after variable declaration", compiler->parser
+    );
+  }
   define_variable(location, compiler);
 }
 
@@ -556,10 +612,11 @@ static void unary(Compiler* compiler) {
 
 static void print_statement(Compiler* compiler) {
   expression(compiler);
-  parser__consume(
-      TOKEN_SEMICOLON, "Expected ';' after expression", compiler->parser
-  );
-  emit_byte(OP_PRINT, compiler);
+  if (optional_semicolon(compiler->parser)) {
+    emit_byte(OP_PRINT, compiler);
+  } else {
+    error_at_current("Expected ';' instead", compiler->parser);
+  }
 }
 
 static void while_statement(Compiler* compiler) {
@@ -599,14 +656,14 @@ static void while_statement(Compiler* compiler) {
 
 static void expression_statement(Compiler* compiler) {
   expression(compiler);
-  parser__consume(
-      TOKEN_SEMICOLON, "Expected ';' after expression", compiler->parser
-  );
+  Parser* parser = compiler->parser;
 
+  if (!optional_semicolon(parser)) {
+    error_at_current("Expected ';' instead", compiler->parser);
+  }
   // for the benefit of the REPL, we will automatically print the value of the
   // last expression (which would be otherwise lost)
-  if (parser__check(TOKEN_EOF, compiler->parser) &&
-      compiler->vm->mode == VM_REPL_MODE) {
+  if (parser__check(TOKEN_EOF, parser) && compiler->vm->mode == VM_REPL_MODE) {
     emit_byte(OP_PRINT, compiler);
   } else {
     emit_byte(OP_POP, compiler);
@@ -898,47 +955,50 @@ bool compiler__compile(const char* source, Bytecode* output_bytecode, VM* vm) {
 
 /* clang-format off */
 ParseRule rules[] = {
-  // TOKEN                PREFIX     INFIX   PRECEDENCE
-  [TOKEN_LEFT_PAREN]    = {grouping, NULL,   PREC_NONE},
-  [TOKEN_RIGHT_PAREN]   = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_LEFT_BRACE]    = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_RIGHT_BRACE]   = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_COMMA]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_MINUS]         = {unary,    binary, PREC_TERM},
-  [TOKEN_PLUS]          = {NULL,     binary, PREC_TERM},
-  [TOKEN_SEMICOLON]     = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SLASH]         = {NULL,     binary, PREC_FACTOR},
-  [TOKEN_STAR]          = {NULL,     binary, PREC_FACTOR},
-  [TOKEN_BANG]          = {unary,    NULL,   PREC_NONE},
-  [TOKEN_BANG_EQUAL]    = {NULL,     binary, PREC_EQUALITY},
-  [TOKEN_EQUAL]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_EQUAL_EQUAL]   = {NULL,     binary, PREC_EQUALITY},
-  [TOKEN_GREATER]       = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_GREATER_EQUAL] = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_LESS]          = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_LESS_EQUAL]    = {NULL,     binary, PREC_COMPARISON},
-  [TOKEN_IDENTIFIER]    = {variable, NULL,   PREC_NONE},
-  [TOKEN_STRING]        = {string,   NULL,   PREC_NONE},
-  [TOKEN_NUMBER]        = {number,   NULL,   PREC_NONE},
-  [TOKEN_AND]           = {NULL,     and_,   PREC_AND},
-  [TOKEN_CLASS]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_ELSE]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FALSE]         = {literal,  NULL,   PREC_NONE},
-  [TOKEN_FOR]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_FUN]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_IF]            = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_NIL]           = {literal,  NULL,   PREC_NONE},
-  [TOKEN_OR]            = {NULL,     or_,    PREC_OR},
-  [TOKEN_PRINT]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_RETURN]        = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_SUPER]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]          = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_TRUE]          = {literal,  NULL,   PREC_NONE},
-  [TOKEN_VAR]           = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_WHILE]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_ERROR]         = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_EOF]           = {NULL,     NULL,   PREC_NONE},
+  // TOKEN                    PREFIX     INFIX   PRECEDENCE
+  [TOKEN_LEFT_PAREN]        = {grouping, NULL,   PREC_NONE},
+  [TOKEN_RIGHT_PAREN]       = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LEFT_BRACE]        = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_RIGHT_BRACE]       = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_COMMA]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_MINUS]             = {unary,    binary, PREC_TERM},
+  [TOKEN_PLUS]              = {NULL,     binary, PREC_TERM},
+  [TOKEN_SEMICOLON]         = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SLASH]             = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_STAR]              = {NULL,     binary, PREC_FACTOR},
+  [TOKEN_BANG]              = {unary,    NULL,   PREC_NONE},
+  [TOKEN_BANG_EQUAL]        = {NULL,     binary, PREC_EQUALITY},
+  [TOKEN_EQUAL]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EQUAL_EQUAL]       = {NULL,     binary, PREC_EQUALITY},
+  [TOKEN_GREATER]           = {NULL,     binary, PREC_COMPARISON},
+  [TOKEN_GREATER_EQUAL]     = {NULL,     binary, PREC_COMPARISON},
+  [TOKEN_LESS]              = {NULL,     binary, PREC_COMPARISON},
+  [TOKEN_LESS_EQUAL]        = {NULL,     binary, PREC_COMPARISON},
+  [TOKEN_IDENTIFIER]        = {variable, NULL,   PREC_NONE},
+  [TOKEN_STRING]            = {string,   NULL,   PREC_NONE},
+  [TOKEN_NUMBER]            = {number,   NULL,   PREC_NONE},
+  [TOKEN_AND]               = {NULL,     and_,   PREC_AND},
+  [TOKEN_CLASS]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_ELSE]              = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FALSE]             = {literal,  NULL,   PREC_NONE},
+  [TOKEN_FOR]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_FUN]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IF]                = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NIL]               = {literal,  NULL,   PREC_NONE},
+  [TOKEN_OR]                = {NULL,     or_,    PREC_OR},
+  [TOKEN_PRINT]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_RETURN]            = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_SUPER]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]              = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_TRUE]              = {literal,  NULL,   PREC_NONE},
+  [TOKEN_VAR]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_WHILE]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_ERROR]             = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_EOF]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_MULTILINE_COMMENT] = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_NEWLINE]           = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_IGNORABLE]         = {NULL,     NULL,   PREC_NONE},
 };
 /* clang-format on */
 

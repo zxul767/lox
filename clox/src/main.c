@@ -29,36 +29,6 @@ completer(ic_completion_env_t* input_until_cursor, const char* input) {
   );
 }
 
-static const char* string__end(const char* string) {
-  if (*string == '\0')
-    return string;
-
-  while (*string)
-    string++;
-  string--;
-
-  return string;
-}
-
-static bool string__endswith(const char* string, char c) {
-  const char* end = string__end(string);
-  return *end == c;
-}
-
-static char* add_semicolon_if_needed(char* line) {
-  if (!string__endswith(line, ';') && !string__endswith(line, '}')) {
-    size_t length = strlen(line);
-    char* new_line = ALLOCATE(char, length + 2);
-
-    memcpy(new_line, line, length);
-    new_line[length] = ';';
-    new_line[length + 1] = '\0';
-
-    return new_line;
-  }
-  return line;
-}
-
 static void setup_isocline() {
   setlocale(LC_ALL, "C.UTF-8"); // we use utf-8 in this example
 
@@ -106,17 +76,9 @@ static void repl(VM* vm) {
     if (!strcmp("quit", line))
       break;
 
-    // FIXME: implement the "optional semicolon" feature properly;
-    // this is a brittle kludge to make working with the REPL a little
-    // less annoying in the meantime...
-    char* fixed_line = add_semicolon_if_needed(line);
-
     vm->mode = VM_REPL_MODE;
-    vm__interpret(fixed_line, vm);
+    vm__interpret(line, vm);
 
-    if (fixed_line != line) {
-      free(fixed_line);
-    }
     free(line);
   }
 }
@@ -149,10 +111,11 @@ static char* read_file(const char* path) {
 }
 
 static void run_file(const char* path, VM* vm) {
-  char* source = read_file(path);
+  char* source_code = read_file(path);
+
   vm->mode = VM_SCRIPT_MODE;
-  InterpretResult result = vm__interpret(source, vm);
-  free(source);
+  InterpretResult result = vm__interpret(source_code, vm);
+  free(source_code);
 
   // TODO: replace magic numbers with symbolic constants
   if (result == INTERPRET_COMPILE_ERROR)

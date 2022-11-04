@@ -46,7 +46,10 @@
   TOKEN(TOKEN_VAR)                                                             \
   TOKEN(TOKEN_WHILE)                                                           \
   TOKEN(TOKEN_ERROR)                                                           \
-  TOKEN(TOKEN_EOF)
+  TOKEN(TOKEN_EOF)                                                             \
+  TOKEN(TOKEN_MULTILINE_COMMENT)                                               \
+  TOKEN(TOKEN_NEWLINE)                                                         \
+  TOKEN(TOKEN_IGNORABLE)
 
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(STRING) #STRING,
@@ -66,6 +69,8 @@ typedef struct {
 } Token;
 
 extern const Token BOF_TOKEN;
+extern const Token NEWLINE_TOKEN;
+extern const Token IGNORABLE_TOKEN;
 
 typedef struct {
   const char* start;

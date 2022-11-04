@@ -1,6 +1,7 @@
 #include "scanner.h"
 #include "common.h"
 
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -12,12 +13,21 @@ const char* KEYWORDS[] = {"and",  "class", "else", "false", "for",    "fun",
                           "if",   "nil",   "or",   "print", "return", "super",
                           "this", "true",  "var",  "while", NULL};
 
+// sentinel tokens
 const Token BOF_TOKEN = {
     .type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
 
-void scanner__init(Scanner* scanner, const char* source) {
-  scanner->start = source;
-  scanner->current = source;
+// we don't need positional information for newlines (for the time being)
+const Token NEWLINE_TOKEN = {
+    .type = TOKEN_NEWLINE, .start = "", .length = 0, .line = 0};
+
+// we don't need positional information for ignorables (for the time being)
+const Token IGNORABLE_TOKEN = {
+    .type = TOKEN_IGNORABLE, .start = "", .length = 0, .line = 0};
+
+void scanner__init(Scanner* scanner, const char* source_code) {
+  scanner->start = source_code;
+  scanner->current = source_code;
   scanner->current_line = 1;
 }
 
@@ -79,8 +89,55 @@ static bool match(char expected, Scanner* scanner) {
   return true;
 }
 
-static void skip_whitespace(Scanner* scanner) {
-  for (;;) {
+// pre-condition: the characters // have just been consumed
+static void skip_single_line_comment(Scanner* scanner) {
+  // a single line comment goes until the end of the line
+  while (peek(scanner) != '\n' && !is_at_end(scanner))
+    advance(scanner);
+}
+
+// pre-condition: the characters /* have just been consumed
+static Token skip_multiline_comment(Scanner* scanner) {
+  int open_comments = 1;
+  int newlines = 0;
+
+  while (!is_at_end(scanner)) {
+    if (peek(scanner) == '/' && peek_next(scanner) == '*') {
+      open_comments++;
+      advance(scanner);
+      advance(scanner);
+
+    } else if (peek(scanner) == '*' && peek_next(scanner) == '/') {
+      open_comments--;
+      advance(scanner);
+      advance(scanner);
+
+    } else {
+      if (peek(scanner) == '\n')
+        newlines++;
+      advance(scanner);
+    }
+    if (open_comments == 0)
+      break;
+  }
+  // `open_comments` should be zero if the first opening delimiter was closed
+  if (is_at_end(scanner) && open_comments != 0) {
+    return error_token(scanner, "Unterminated multi-line comment.");
+  }
+  if (newlines > 0) {
+    // to implement the "optional semicolon" feature we need to detect both
+    // explicit and implicit newlines (i.e., multiline comments have newlines)
+    return make_token(TOKEN_MULTILINE_COMMENT, scanner);
+  }
+  // actually a single-line comment
+  return IGNORABLE_TOKEN;
+}
+
+static Token collapse_whitespace(Scanner* scanner) {
+  int newlines = 0;
+
+  bool done = false;
+  while (!done) {
     char c = peek(scanner);
     switch (c) {
     case ' ':
@@ -90,21 +147,17 @@ static void skip_whitespace(Scanner* scanner) {
       break;
     case '\n':
       scanner->current_line++;
+      newlines++;
       advance(scanner);
       break;
-    case '/':
-      if (peek_next(scanner) == '/') {
-        // a comment goes until the end of the line
-        while (peek(scanner) != '\n' && !is_at_end(scanner))
-          advance(scanner);
-      } else {
-        return;
-      }
-      break;
     default:
-      return;
+      done = true;
     }
   }
+  if (newlines > 0) {
+    return NEWLINE_TOKEN;
+  }
+  return IGNORABLE_TOKEN;
 }
 
 // returns true if [this_start, this_end) === that; false otherwise
@@ -225,7 +278,12 @@ static Token string(Scanner* scanner) {
 }
 
 Token scanner__next_token(Scanner* scanner) {
-  skip_whitespace(scanner);
+  Token token = collapse_whitespace(scanner);
+  // needed for the "optional semicolon" feature
+  if (token.type == TOKEN_NEWLINE) {
+    return token;
+  }
+  assert(token.type == TOKEN_IGNORABLE);
 
   scanner->start = scanner->current;
   if (is_at_end(scanner))
@@ -256,8 +314,16 @@ Token scanner__next_token(Scanner* scanner) {
     return make_token(TOKEN_MINUS, scanner);
   case '+':
     return make_token(TOKEN_PLUS, scanner);
-  case '/':
+  case '/': {
+    if (match('/', scanner)) {
+      skip_single_line_comment(scanner);
+      return IGNORABLE_TOKEN;
+
+    } else if (match('*', scanner)) {
+      return skip_multiline_comment(scanner);
+    }
     return make_token(TOKEN_SLASH, scanner);
+  }
   case '*':
     return make_token(TOKEN_STAR, scanner);
   case '!':
