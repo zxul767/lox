@@ -151,26 +151,25 @@ public class Scanner {
   //    have been consumed (i.e., nested multiline comments are properly
   //    handled)
   private void multiLineComment() {
-    int nestedComments = 1; // we've just consumed the opening delimiter
+    int openComments = 1; // we've just consumed the opening delimiter
 
     while (!isAtEnd()) {
       if (peek() == '/' && peekNext() == '*') {
-        nestedComments++;
+        openComments++;
         advance(2);
       } else if (peek() == '*' && peekNext() == '/') {
-        nestedComments--;
+        openComments--;
         advance(2);
       } else {
         advance();
       }
-      if (nestedComments == 0)
+      if (openComments == 0)
         break;
     }
 
-    // `nestedComments` should be zero if the first opening delimiter was closed
-    if (isAtEnd() && nestedComments != 0) {
+    // `openComments` should be zero if the first opening delimiter was closed
+    if (isAtEnd() && openComments != 0) {
       Errors.error(line, "Unterminated multi-line comment.");
-      return;
     }
   }
 
