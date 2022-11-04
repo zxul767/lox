@@ -37,7 +37,7 @@ byte_instruction(const char* name, const Bytecode* code, int offset) {
   //     ^
   //   offset
   uint8_t value = code->instructions[offset + 1];
-  printf("%-16s %4d\n", name, value);
+  printf("%-20s %-4d\n", name, value);
 
   return offset + 2;
 }
@@ -52,7 +52,7 @@ static int jump_instruction(
   uint16_t jump_length = (uint16_t)(code->instructions[offset + 1] << 8);
   jump_length |= code->instructions[offset + 2];
   printf(
-      "%-16s %4d -> %d\n", name, offset, offset + 3 + direction * jump_length
+      "%-20s %04d -> %04d\n", name, offset, offset + 3 + direction * jump_length
   );
 
   return offset + 3;
@@ -65,7 +65,7 @@ constant_instruction(const char* name, const Bytecode* code, int offset) {
   //     ^
   //  offset
   uint8_t constant_location = code->instructions[offset + 1];
-  printf("%-16s %4d '", name, constant_location);
+  printf("%-20s %-4d '", name, constant_location);
   value__print(code->constants.values[constant_location]);
   printf("'\n");
 

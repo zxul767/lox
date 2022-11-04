@@ -55,12 +55,14 @@ typedef enum {
 typedef struct Local {
   Token name;
   int scope_depth;
+
 } Local;
 
 typedef struct FunctionCompiler {
   Local locals[UINT8_COUNT];
   int locals_count;
   int scope_depth;
+
 } FunctionCompiler;
 
 typedef struct {
@@ -198,7 +200,7 @@ static void emit_loop(int loop_start_offset, Compiler* compiler) {
   emit_byte(jump_length & 0xff, compiler);
 }
 
-static int emit_jump(uint8_t instruction, Compiler* compiler) {
+static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler) {
   emit_byte(instruction, compiler);
   // 0xff is the marker for a "placeholder" jump value to be patched later
   // A 16-bit offset lets us jump over 65,535 bytes of code, more than enough!
@@ -438,7 +440,7 @@ static void and_(Compiler* compiler) {
   // |
   // +--> continues...
   //
-  int end_jump_ofsset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  int end_jump_ofsset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
   emit_byte(
       OP_POP, compiler
   ); // discard left operand, let the result be the value of the right operand
@@ -471,8 +473,8 @@ static void or_(Compiler* compiler) {
   //  |
   //  +----> continues...
 
-  int roe_jump_ofsset = emit_jump(OP_JUMP_IF_FALSE, compiler);
-  int end_jump_ofsset = emit_jump(OP_JUMP, compiler);
+  int roe_jump_ofsset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
+  int end_jump_ofsset = emit_placeholder_jump(OP_JUMP, compiler);
 
   patch_jump(roe_jump_ofsset, compiler);
   emit_byte(
@@ -643,7 +645,7 @@ static void while_statement(Compiler* compiler) {
       TOKEN_RIGHT_PAREN, "Expected ')' after condition", compiler->parser
   );
 
-  int exit_jump_offset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  int exit_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
   emit_byte(OP_POP, compiler); // discard condition
 
   // compile body statement
@@ -668,6 +670,101 @@ static void expression_statement(Compiler* compiler) {
   } else {
     emit_byte(OP_POP, compiler);
   }
+}
+
+static void begin_scope(Compiler* compiler) {
+  compiler->current_subcompiler->scope_depth++;
+}
+
+static void end_scope(Compiler* compiler) {
+  pop_locals_in_scope(compiler, compiler->current_subcompiler->scope_depth);
+  compiler->current_subcompiler->scope_depth--;
+}
+
+static void for_statement(Compiler* compiler) {
+  // expected bytecode generation:
+  //
+  //         [   initializer clause  ]
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~
+  //         [  condition expression ] <--+
+  //         ~~~~~~~~~~~~~~~~~~~~~~~~~    |
+  //    +--- OP_JUMP_IF_FALSE             |
+  //    |    OP_POP (pop condition)       |
+  //  +-|--- OP_JUMP                      |
+  //  | |                                 |
+  //  | |    [  increment expression ] <--|---+
+  //  | |    ~~~~~~~~~~~~~~~~~~~~~~~~~    |   |
+  //  | |    OP_POP (pop expression)      |   |
+  //  | |    OP_LOOP ---------------------+   |
+  //  | |                                     |
+  //  +-|--> [     body statement    ]        |
+  //    |    ~~~~~~~~~~~~~~~~~~~~~~~~~        |
+  //    |    OP_LOOP -------------------------+
+  //    +--> OP_POP (pop condition)
+  //         continues...
+  //
+  parser__consume(
+      TOKEN_LEFT_PAREN, "Expected '(' after 'for'", compiler->parser
+  );
+  // variables in the initializer should be local
+  begin_scope(compiler);
+  // initialization clause
+  if (parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+    // no initializer
+  } else if (parser__match(TOKEN_VAR, compiler->parser)) {
+    var_declaration(compiler);
+  } else {
+    expression_statement(compiler);
+  }
+
+  // condition clause
+  int loop_start_offset = compiler->output_bytecode->count;
+  int exit_jump_offset = -1;
+  if (!parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+    expression(compiler);
+    parser__consume(
+        TOKEN_SEMICOLON, "Expected ';' after loop condition.", compiler->parser
+    );
+    // jump out of the loop if the condition is false
+    exit_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
+    emit_byte(OP_POP, compiler); // pop condition before executing body
+  }
+
+  // increment clause
+  //
+  // the convoluted jumping done here is due to the fact that syntactically the
+  // increment appears before the body, but semantically the body should be
+  // executed before the increment (remember we're doing single-pass
+  // compilation)
+  //
+  if (!parser__match(TOKEN_RIGHT_PAREN, compiler->parser)) {
+    // skip over the increment directly into the body
+    int body_jump_offset = emit_placeholder_jump(OP_JUMP, compiler);
+    int increment_start_offset = compiler->output_bytecode->count;
+    // compile increment expression
+    expression(compiler);
+    emit_byte(OP_POP, compiler); // discard increment expression
+    parser__consume(
+        TOKEN_RIGHT_PAREN, "Expected ')' after 'for' clauses", compiler->parser
+    );
+
+    // go back to the start of the loop (the condition clause)
+    emit_loop(loop_start_offset, compiler);
+
+    // ensure we loop back to the increment block after the body block
+    loop_start_offset = increment_start_offset;
+
+    patch_jump(body_jump_offset, compiler);
+  }
+  // body block
+  statement(compiler);
+  emit_loop(loop_start_offset, compiler);
+
+  if (exit_jump_offset != -1) {
+    patch_jump(exit_jump_offset, compiler);
+    emit_byte(OP_POP, compiler); // pop condition after final exit jump
+  }
+  end_scope(compiler);
 }
 
 static void if_statement(Compiler* compiler) {
@@ -697,13 +794,13 @@ static void if_statement(Compiler* compiler) {
       TOKEN_RIGHT_PAREN, "Expected ')' after condition.", compiler->parser
   );
   // conditionally jump to just before "else" branch
-  int then_jump_offset = emit_jump(OP_JUMP_IF_FALSE, compiler);
+  int then_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
   emit_byte(OP_POP, compiler);
 
   // [ then branch statement ]
   statement(compiler);
   // jump over "else" branch since we just executed "then" branch
-  int else_jump_offset = emit_jump(OP_JUMP, compiler);
+  int else_jump_offset = emit_placeholder_jump(OP_JUMP, compiler);
 
   patch_jump(then_jump_offset, compiler);
   emit_byte(OP_POP, compiler);
@@ -757,15 +854,6 @@ static void block(Compiler* compiler) {
   );
 }
 
-static void begin_scope(Compiler* compiler) {
-  compiler->current_subcompiler->scope_depth++;
-}
-
-static void end_scope(Compiler* compiler) {
-  pop_locals_in_scope(compiler, compiler->current_subcompiler->scope_depth);
-  compiler->current_subcompiler->scope_depth--;
-}
-
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
@@ -775,6 +863,9 @@ static void statement(Compiler* compiler) {
 
   } else if (parser__match(TOKEN_WHILE, compiler->parser)) {
     while_statement(compiler);
+
+  } else if (parser__match(TOKEN_FOR, compiler->parser)) {
+    for_statement(compiler);
 
   } else if (parser__match(TOKEN_LEFT_BRACE, compiler->parser)) {
     begin_scope(compiler);
