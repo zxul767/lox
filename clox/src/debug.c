@@ -145,7 +145,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
 
 void debug__dump_stack(const VM* vm) {
   printf("          ");
-  for (const Value* value = vm->stack; value < vm->stack_top; value++) {
+  // `vm->stack + 1` to skip the sentinel top-level function call frame
+  for (const Value* value = vm->stack + 1; value < vm->stack_top; value++) {
     printf("[ ");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the

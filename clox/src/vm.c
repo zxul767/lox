@@ -9,7 +9,28 @@
 #include "object.h"
 #include "vm.h"
 
-static void reset_stack(VM* vm) { vm->stack_top = vm->stack; }
+static CallFrame* current_frame(VM* vm) {
+  return &vm->frames[vm->frames_count - 1];
+}
+
+static CallFrame* next_available_frame(VM* vm) {
+  return &vm->frames[vm->frames_count++];
+}
+
+static void reset_stack(VM* vm) {
+  vm->stack_top = vm->stack;
+  vm->frames_count = 0;
+}
+
+static int get_current_source_line(VM* vm) {
+  const CallFrame* frame = current_frame(vm);
+  const Bytecode* bytecode = &(frame->function->bytecode);
+
+  // -1 takes into account that the instruction pointer is one instruction past
+  // where the actual error happened
+  size_t offset = frame->instruction_pointer - bytecode->instructions - 1;
+  return bytecode->source_lines[offset];
+}
 
 static void runtime_error(VM* vm, const char* format, ...) {
   va_list args;
@@ -19,13 +40,17 @@ static void runtime_error(VM* vm, const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  const Bytecode* bc = vm->bytecode;
-
-  size_t instruction_index = vm->instruction_pointer - bc->instructions - 1;
-  int line = vm->bytecode->source_lines[instruction_index];
+  int line = get_current_source_line(vm);
   fprintf(stderr, "[line %d] in script\n", line);
 
   reset_stack(vm);
+}
+
+static void
+callframe__init(CallFrame* frame, ObjectFunction* function, VM* vm) {
+  frame->function = function;
+  frame->instruction_pointer = function->bytecode.instructions;
+  frame->slots = vm->stack;
 }
 
 void vm__init(VM* vm) {
@@ -81,13 +106,17 @@ static void concatenate(VM* vm) {
 }
 
 static InterpretResult run(VM* vm) {
+  CallFrame* frame = current_frame(vm);
 
-#define READ_BYTE() (*vm->instruction_pointer++)
+#define READ_BYTE() (*frame->instruction_pointer++)
+
 #define READ_SHORT()                                                           \
-  (vm->instruction_pointer += 2,                                               \
-   ((vm->instruction_pointer[-2] << 8) | (vm->instruction_pointer[-1])))
+  (frame->instruction_pointer += 2,                                            \
+   ((frame->instruction_pointer[-2] << 8) | (frame->instruction_pointer[-1])))
 
-#define READ_CONSTANT() (vm->bytecode->constants.values[READ_BYTE()])
+#define READ_CONSTANT()                                                        \
+  (frame->function->bytecode.constants.values[READ_BYTE()])
+
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
 #define BINARY_OP(value_type, op)                                              \
@@ -109,10 +138,9 @@ static InterpretResult run(VM* vm) {
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     debug__dump_stack(vm);
-    debug__disassemble_instruction(
-        vm->bytecode,
-        (int)(vm->instruction_pointer - vm->bytecode->instructions)
-    );
+    Bytecode* code = &frame->function->bytecode;
+    int offset = (int)(frame->instruction_pointer - code->instructions);
+    debug__disassemble_instruction(code, offset);
 #endif
 
     uint8_t instruction;
@@ -136,12 +164,12 @@ static InterpretResult run(VM* vm) {
       break;
     case OP_GET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      push(vm->stack[slot], vm);
+      push(frame->slots[slot], vm);
       break;
     }
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      vm->stack[slot] = peek(0, vm);
+      frame->slots[slot] = peek(0, vm);
       break;
     }
     case OP_GET_GLOBAL: {
@@ -227,25 +255,31 @@ static InterpretResult run(VM* vm) {
     case OP_JUMP_IF_FALSE: {
       uint16_t jump_length = READ_SHORT();
       if (is_falsey(peek(0, vm))) {
-        vm->instruction_pointer += jump_length;
+        frame->instruction_pointer += jump_length;
       }
       break;
     }
     case OP_JUMP: {
       uint16_t jump_length = READ_SHORT();
-      vm->instruction_pointer += jump_length;
+      frame->instruction_pointer += jump_length;
       break;
     }
     case OP_LOOP: {
       uint16_t jump_length = READ_SHORT();
-      vm->instruction_pointer -= jump_length;
+      frame->instruction_pointer -= jump_length;
       break;
     }
     case OP_RETURN: {
 #ifdef DEBUG_TRACE_EXECUTION
       debug__print_section_divider();
 #endif
-      return INTERPRET_OK;
+      vm->frames_count--;
+      if (vm->frames_count == 0) {
+        // pop the sentinel top-level function
+        pop(vm);
+        return INTERPRET_OK;
+      }
+      break;
     }
     }
   }
@@ -257,22 +291,19 @@ static InterpretResult run(VM* vm) {
 }
 
 InterpretResult vm__interpret(const char* source, VM* vm) {
-  Bytecode output_bytecode;
-  bytecode__init(&output_bytecode);
-
   // we pass `vm` so we can track all heap-allocated
   // objects and dispose them when the VM shuts down
-  if (!compiler__compile(source, &output_bytecode, vm)) {
-    bytecode__dispose(&output_bytecode);
+  ObjectFunction* function = compiler__compile(source, vm);
+  if (function == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  // bytecode execution
-  vm->bytecode = &output_bytecode;
-  vm->instruction_pointer = vm->bytecode->instructions;
-  InterpretResult result = run(vm);
+  push(OBJECT_VAL(function), vm);
 
-  bytecode__dispose(&output_bytecode);
+  CallFrame* frame = next_available_frame(vm);
+  callframe__init(frame, function, vm);
+
+  InterpretResult result = run(vm);
 
   return result;
 }

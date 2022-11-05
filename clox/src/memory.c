@@ -19,10 +19,17 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size) {
 
 static void free_object(Object* object) {
   switch (object->type) {
+  case OBJECT_FUNCTION: {
+    ObjectFunction* function = (ObjectFunction*)object;
+    bytecode__dispose(&function->bytecode);
+    FREE(ObjectFunction, object);
+    break;
+  }
   case OBJECT_STRING: {
     ObjectString* string = (ObjectString*)object;
     FREE_ARRAY(char, string->chars, string->length + 1);
     FREE(ObjectString, object);
+    break;
   }
   }
 }

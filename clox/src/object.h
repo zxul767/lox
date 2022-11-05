@@ -1,6 +1,7 @@
 #ifndef OBJECT_H_
 #define OBJECT_H_
 
+#include "bytecode.h"
 #include "common.h"
 #include "value.h"
 
@@ -9,11 +10,15 @@ typedef struct VM VM;
 
 #define OBJECT_TYPE(value) (AS_OBJECT(value)->type)
 
+#define IS_FUNCTION(value) is_object_type(value, OBJECT_FUNCTION)
 #define IS_STRING(value) is_object_type(value, OBJECT_STRING)
+
+#define AS_FUNCTION(value) ((ObjectFunction*)AS_OBJECT(value))
 #define AS_STRING(value) ((ObjectString*)AS_OBJECT(value))
 #define AS_CSTRING(value) (((ObjectString*)AS_OBJECT(value))->chars)
 
 typedef enum {
+  OBJECT_FUNCTION,
   OBJECT_STRING,
 } ObjectType;
 
@@ -24,6 +29,14 @@ struct Object {
   struct Object* next;
 };
 
+typedef struct ObjectFunction {
+  Object object;
+  int arity;
+  ObjectString* name;
+  Bytecode bytecode;
+
+} ObjectFunction;
+
 struct ObjectString {
   Object object;
   int length;
@@ -31,8 +44,12 @@ struct ObjectString {
   uint32_t hash;
 };
 
+// all of these functions need to access `vm->objects` so they can track any
+// allocated objects for proper garbage collection
+ObjectFunction* function__new(VM* vm);
 ObjectString* string__copy(const char* chars, int length, VM* vm);
 ObjectString* string__take_ownership(char* chars, int length, VM* vm);
+
 void object__print(Value value);
 void object__print_repr(Value value);
 

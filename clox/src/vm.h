@@ -5,6 +5,7 @@
 #include "value.h"
 
 typedef struct Bytecode Bytecode;
+typedef struct ObjectFunction ObjectFunction;
 
 // we need this information to compile a few things differently when running
 // inside a REPL (e.g., statement expressions are expected to print their value
@@ -20,13 +21,29 @@ typedef enum {
 
 } ExecutionMode;
 
-#define STACK_MAX 256
+#define FRAMES_MAX 64
+#define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
+
+typedef struct CallFrame {
+  ObjectFunction* function;
+  uint8_t* instruction_pointer;
+  // slots is a "window" onto the values stack of the VM which contains
+  // all local information for the function call (i.e., arguments and local
+  // variables)
+  //
+  // this makes the implementation of function calls quite simple and efficient
+  // see https://craftinginterpreters.com/calls-and-functions.html for details
+  Value* slots;
+
+} CallFrame;
 
 // stack-based, virtual machine
 typedef struct VM {
-  const Bytecode* bytecode;
-  uint8_t* instruction_pointer;
+  CallFrame frames[FRAMES_MAX];
+  int frames_count;
 
+  // this stack holds all local variables and temporaries in the whole stack of
+  // call frames.
   // all instructions take their operands from this stack
   Value stack[STACK_MAX];
   Value* stack_top;

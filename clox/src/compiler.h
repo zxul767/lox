@@ -5,12 +5,15 @@
 
 typedef struct VM VM;
 typedef struct Bytecode Bytecode;
+typedef struct ObjectFunction ObjectFunction;
 
-// compiles `source` and writes the result in `bytecode`
+// compiles `source` and returns a function object (a program is always wrapped
+// in a sentinel function so we don't have to special case compilation of
+// top-level statements.)
 //
 // post-condition: `vm->objects` points to the linked list of objects
 // allocated during compilation (e.g., literal strings)
 //
-bool compiler__compile(const char* source, Bytecode* bytecode, VM* vm);
+ObjectFunction* compiler__compile(const char* source, VM* vm);
 
 #endif // COMPILER_H_

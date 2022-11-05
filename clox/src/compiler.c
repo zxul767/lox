@@ -58,7 +58,12 @@ typedef struct Local {
 
 } Local;
 
+typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+
 typedef struct FunctionCompiler {
+  ObjectFunction* function;
+  FunctionType function_type;
+
   Local locals[UINT8_COUNT];
   int locals_count;
   int scope_depth;
@@ -67,8 +72,7 @@ typedef struct FunctionCompiler {
 
 typedef struct {
   Parser* parser;
-  Bytecode* output_bytecode;
-  FunctionCompiler* current_subcompiler;
+  FunctionCompiler* function_compiler;
 
   // `vm->objects` tracks references to all heap-allocated objects to be
   // disposed when the VM shuts-down. In the compiler, such objects are string
@@ -92,7 +96,11 @@ typedef struct {
   // easily detect (by just looking at the `=` node) that `(+ a b)` is an
   // invalid target.
   bool can_assign;
-  bool repl_mode;
+
+  // there are some minor features which are only available when running from
+  // the REPL (e.g., automatically printing an expression when typed directly on
+  // the prompt)
+  bool in_repl_mode;
 
 } Compiler;
 
@@ -148,8 +156,12 @@ static void error_at_current(const char* message, Parser* parser) {
   error_at(&parser->current_token, message, parser);
 }
 
+static inline Bytecode* current_bytecode(Compiler* compiler) {
+  return &(compiler->function_compiler->function->bytecode);
+}
+
 static uint8_t store_constant(Value value, Compiler* compiler) {
-  int location = bytecode__store_constant(compiler->output_bytecode, value);
+  int location = bytecode__store_constant(current_bytecode(compiler), value);
   if (location > UINT8_MAX) {
     error("Too many constants in one chunk", compiler->parser);
     return 0;
@@ -169,7 +181,7 @@ store_identifier_constant(Token* identifier, Compiler* compiler) {
 
 static void emit_byte(uint8_t byte, Compiler* compiler) {
   bytecode__append(
-      compiler->output_bytecode, byte, compiler->parser->previous_token.line
+      current_bytecode(compiler), byte, compiler->parser->previous_token.line
   );
 }
 
@@ -191,7 +203,7 @@ static void emit_loop(int loop_start_offset, Compiler* compiler) {
   // loop_start_offset (jump lands here)
   //
   // start - jump_length = loop_start_offset
-  int jump_length = compiler->output_bytecode->count - loop_start_offset + 2;
+  int jump_length = current_bytecode(compiler)->count - loop_start_offset + 2;
   if (jump_length > UINT16_MAX) {
     error("Loop body too large.", compiler->parser);
   }
@@ -202,12 +214,12 @@ static void emit_loop(int loop_start_offset, Compiler* compiler) {
 
 static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler) {
   emit_byte(instruction, compiler);
-  // 0xff is the marker for a "placeholder" jump value to be patched later
+  // 0xff is the marker for a "placeholder" jump distance to be patched later
   // A 16-bit offset lets us jump over 65,535 bytes of code, more than enough!
   emit_byte(0xff, compiler);
   emit_byte(0xff, compiler);
   // this points at the first placeholder instruction
-  return compiler->output_bytecode->count - 2;
+  return current_bytecode(compiler)->count - 2;
 }
 
 static void patch_jump(int offset, Compiler* compiler) {
@@ -219,15 +231,16 @@ static void patch_jump(int offset, Compiler* compiler) {
   //                          start (jump starts here)
   //
   // start + jump_length = count
-  int jump_length = compiler->output_bytecode->count - offset - 2;
+  Bytecode* code = current_bytecode(compiler);
+  int jump_length = code->count - offset - 2;
   if (jump_length > UINT16_MAX) {
     error("Too much code to jump over.", compiler->parser);
   }
   // `jump_length` is encoded [high-bits][low-bits]
   //                               ^         ^
   //                             offset  offset + 1
-  compiler->output_bytecode->instructions[offset] = (jump_length >> 8) & 0xff;
-  compiler->output_bytecode->instructions[offset + 1] = jump_length & 0xff;
+  code->instructions[offset] = (jump_length >> 8) & 0xff;
+  code->instructions[offset + 1] = jump_length & 0xff;
 }
 
 static void emit_constant(Value value, Compiler* compiler) {
@@ -248,8 +261,6 @@ static void parser__advance(Parser* parser) {
 
   for (;;) {
     Token token = parser->current_token = scanner__next_token(parser->scanner);
-
-    /* fprintf(stderr, "token: %s\n", TOKEN_TO_STRING[token.type]); */
 
     if (token.type == TOKEN_IGNORABLE || token.type == TOKEN_BOF)
       continue;
@@ -307,11 +318,11 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
     return;
   }
 
-  // We could pass the `upstream_can_assign` value to all downstream functions,
+  // We could pass the `can_assign_upstream` value to all downstream functions,
   // but it adds cognitive clutter since most functions don't need it. The idea
   // is to prevent expression such as `a+b=1` from being parsed as `a+(b=1)`
   // (see the comment in the definition of `Compiler` for more details.)
-  bool upstream_can_assign = compiler->can_assign;
+  bool can_assign_upstream = compiler->can_assign;
   compiler->can_assign = min_precedence <= PREC_ASSIGNMENT;
 
   // We compile what could be a single unary expression, or the first operand of
@@ -339,8 +350,8 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
     error("Invalid assignment target.", parser);
   }
   // Keep in mind this function is recursive, so we don't want to clobber values
-  // "upstream".
-  compiler->can_assign = upstream_can_assign;
+  // "upstream" (i.e., in function calls higher up in the call stack)
+  compiler->can_assign = can_assign_upstream;
 }
 
 static void expression(Compiler* compiler) {
@@ -349,8 +360,9 @@ static void expression(Compiler* compiler) {
   parse_only(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
-static void pop_locals_in_scope(Compiler* compiler, int scope_depth) {
-  FunctionCompiler* current = compiler->current_subcompiler;
+static void
+pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth) {
+  FunctionCompiler* current = compiler->function_compiler;
   while (current->locals_count > 0 &&
          current->locals[current->locals_count - 1].scope_depth >= scope_depth
   ) {
@@ -359,13 +371,15 @@ static void pop_locals_in_scope(Compiler* compiler, int scope_depth) {
   }
 }
 
+// returns the index of the local variable identified by `name` or -1 if it
+// doesn't exist
 static int resolve_local(Token* name, Compiler* compiler) {
-  FunctionCompiler* current = compiler->current_subcompiler;
+  FunctionCompiler* current = compiler->function_compiler;
 
   for (int i = current->locals_count - 1; i >= 0; i--) {
     Local* local = &current->locals[i];
     if (identifiers_equal(name, &local->name)) {
-      // local->scope_depth == -1 means "declared but not initialized yet"
+      // -1 means "declared but not initialized yet"
       if (local->scope_depth == -1) {
         error(
             "Can't read local variable in its own initializer.",
@@ -405,7 +419,7 @@ static void variable(Compiler* compiler) {
 }
 
 static void mark_latest_local_initialized(Compiler* compiler) {
-  FunctionCompiler* current = compiler->current_subcompiler;
+  FunctionCompiler* current = compiler->function_compiler;
   // ensure that it was originally marked as declared but not defined
   assert(current->locals[current->locals_count - 1].scope_depth == -1);
 
@@ -413,7 +427,7 @@ static void mark_latest_local_initialized(Compiler* compiler) {
 }
 
 static void define_variable(uint8_t location, Compiler* compiler) {
-  if (compiler->current_subcompiler->scope_depth > 0) {
+  if (compiler->function_compiler->scope_depth > 0) {
     mark_latest_local_initialized(compiler);
     return;
   }
@@ -490,7 +504,7 @@ static void or_(Compiler* compiler) {
 
 static void
 check_duplicate_declaration(const Token* name, const Compiler* compiler) {
-  FunctionCompiler* current = compiler->current_subcompiler;
+  FunctionCompiler* current = compiler->function_compiler;
 
   for (int i = current->locals_count - 1; i >= 0; i--) {
     Local* local = &current->locals[i];
@@ -509,7 +523,7 @@ check_duplicate_declaration(const Token* name, const Compiler* compiler) {
 }
 
 static void add_local_variable(Token name, Compiler* compiler) {
-  FunctionCompiler* current = compiler->current_subcompiler;
+  FunctionCompiler* current = compiler->function_compiler;
 
   if (current->locals_count == UINT8_COUNT) {
     error("Too many local variables in function.", compiler->parser);
@@ -521,7 +535,7 @@ static void add_local_variable(Token name, Compiler* compiler) {
 }
 
 static void declare_local_variable(Compiler* compiler) {
-  assert(compiler->current_subcompiler->scope_depth > 0);
+  assert(compiler->function_compiler->scope_depth > 0);
 
   Token* name = &compiler->parser->previous_token;
   check_duplicate_declaration(name, compiler);
@@ -533,7 +547,7 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler) {
   parser__consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
 
   // local variables
-  if (compiler->current_subcompiler->scope_depth > 0) {
+  if (compiler->function_compiler->scope_depth > 0) {
     declare_local_variable(compiler);
     // locals don't need to store their names in constants as globals do
     return 0;
@@ -591,7 +605,7 @@ static void var_declaration(Compiler* compiler) {
 //
 // post-conditions: the expression to which the operator applies (with the right
 // precedence taken into account) has been consumed, and the corresponding
-// output_bytecode has been emitted.
+// bytecode has been emitted.
 //
 static void unary(Compiler* compiler) {
   TokenType operator_type = compiler->parser->previous_token.type;
@@ -636,7 +650,7 @@ static void while_statement(Compiler* compiler) {
   //    +--> OP_POP (pop condition)
   //         continues...
   //
-  int loop_start_offset = compiler->output_bytecode->count;
+  int loop_start_offset = current_bytecode(compiler)->count;
   parser__consume(
       TOKEN_LEFT_PAREN, "Expected '(' after 'while'", compiler->parser
   );
@@ -673,12 +687,14 @@ static void expression_statement(Compiler* compiler) {
 }
 
 static void begin_scope(Compiler* compiler) {
-  compiler->current_subcompiler->scope_depth++;
+  compiler->function_compiler->scope_depth++;
 }
 
 static void end_scope(Compiler* compiler) {
-  pop_locals_in_scope(compiler, compiler->current_subcompiler->scope_depth);
-  compiler->current_subcompiler->scope_depth--;
+  pop_all_accessible_locals_in_scope(
+      compiler, compiler->function_compiler->scope_depth
+  );
+  compiler->function_compiler->scope_depth--;
 }
 
 static void for_statement(Compiler* compiler) {
@@ -718,7 +734,7 @@ static void for_statement(Compiler* compiler) {
   }
 
   // condition clause
-  int loop_start_offset = compiler->output_bytecode->count;
+  int loop_start_offset = current_bytecode(compiler)->count;
   int exit_jump_offset = -1;
   if (!parser__match(TOKEN_SEMICOLON, compiler->parser)) {
     expression(compiler);
@@ -740,7 +756,7 @@ static void for_statement(Compiler* compiler) {
   if (!parser__match(TOKEN_RIGHT_PAREN, compiler->parser)) {
     // skip over the increment directly into the body
     int body_jump_offset = emit_placeholder_jump(OP_JUMP, compiler);
-    int increment_start_offset = compiler->output_bytecode->count;
+    int increment_start_offset = current_bytecode(compiler)->count;
     // compile increment expression
     expression(compiler);
     emit_byte(OP_POP, compiler); // discard increment expression
@@ -987,9 +1003,19 @@ static void literal(Compiler* compiler) {
   }
 }
 
-static void function_compiler__init(FunctionCompiler* subcompiler) {
-  subcompiler->locals_count = 0;
-  subcompiler->scope_depth = 0;
+static void
+function_compiler__init(FunctionCompiler* current, FunctionType function_type) {
+  current->function_type = function_type;
+  current->function = NULL;
+  current->locals_count = 0;
+  current->scope_depth = 0;
+
+  // the sentinel top-level function (to avoid special casing compilation of
+  // top-level code)
+  Local* local = &current->locals[current->locals_count++];
+  local->scope_depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
 }
 
 static void parser__init(Parser* parser, Scanner* scanner) {
@@ -1001,38 +1027,45 @@ static void parser__init(Parser* parser, Scanner* scanner) {
 }
 
 static void init(
-    Compiler* compiler, Parser* parser, FunctionCompiler* subcompiler,
-    Bytecode* output_bytecode, VM* vm
+    Compiler* compiler, Parser* parser, FunctionCompiler* function_compiler,
+    VM* vm
 ) {
   compiler->vm = vm;
   compiler->parser = parser;
-  compiler->current_subcompiler = subcompiler;
-  compiler->output_bytecode = output_bytecode;
+  compiler->function_compiler = function_compiler;
+  compiler->function_compiler->function = function__new(vm);
   compiler->can_assign = false;
 }
 
-static void finish(Compiler* compiler) {
+static ObjectFunction* finish(Compiler* compiler) {
   emit_return(compiler);
+  ObjectFunction* function = compiler->function_compiler->function;
+
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error) {
-    debug__disassemble(compiler->output_bytecode, "COMPILED CODE");
+    debug__disassemble(
+        current_bytecode(compiler),
+        function->name != NULL ? function->name->chars : "<script>"
+    );
     putchar('\n');
   }
 #endif
+
+  return function;
 }
 
-bool compiler__compile(const char* source, Bytecode* output_bytecode, VM* vm) {
+ObjectFunction* compiler__compile(const char* source, VM* vm) {
   Scanner scanner;
   scanner__init(&scanner, source);
 
   Parser parser;
   parser__init(&parser, &scanner);
 
-  FunctionCompiler subcompiler;
-  function_compiler__init(&subcompiler);
+  FunctionCompiler function_compiler;
+  function_compiler__init(&function_compiler, TYPE_SCRIPT);
 
   Compiler compiler;
-  init(&compiler, &parser, &subcompiler, output_bytecode, vm);
+  init(&compiler, &parser, &function_compiler, vm);
 
   // kickstart parsing & compilation
   parser__advance(&parser);
@@ -1040,8 +1073,8 @@ bool compiler__compile(const char* source, Bytecode* output_bytecode, VM* vm) {
     declaration(&compiler);
   }
 
-  finish(&compiler);
-  return !parser.had_error;
+  ObjectFunction* function = finish(&compiler);
+  return parser.had_error ? NULL : function;
 }
 
 /* clang-format off */

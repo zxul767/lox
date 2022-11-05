@@ -25,7 +25,6 @@ static Object* object__allocate(size_t size, ObjectType type, VM* vm) {
   object->type = type;
 
   track_object(object, vm);
-  // TODO: add to list of heap-allocated objects
   return object;
 }
 
@@ -76,8 +75,28 @@ ObjectString* string__take_ownership(char* chars, int length, VM* vm) {
   return string__allocate(chars, length, hash, vm);
 }
 
+ObjectFunction* function__new(VM* vm) {
+  ObjectFunction* function =
+      ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
+  function->arity = 0;
+  function->name = NULL;
+  bytecode__init(&function->bytecode);
+
+  return function;
+}
+
+static void print_function(const ObjectFunction* function) {
+  if (function->name == NULL) {
+    printf("<script>");
+    return;
+  }
+  printf("<fn %s>", function->name->chars);
+}
+
 void object__print(Value value) {
   switch (OBJECT_TYPE(value)) {
+  case OBJECT_FUNCTION:
+    print_function(AS_FUNCTION(value));
   case OBJECT_STRING:
     printf("%s", AS_CSTRING(value));
     break;
@@ -88,6 +107,9 @@ void object__print_repr(Value value) {
   switch (OBJECT_TYPE(value)) {
   case OBJECT_STRING:
     printf("\"%s\"", AS_CSTRING(value));
+    break;
+  default:
+    object__print(value);
     break;
   }
 }
