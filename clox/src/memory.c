@@ -25,6 +25,10 @@ static void free_object(Object* object) {
     FREE(ObjectFunction, object);
     break;
   }
+  case OBJECT_NATIVE_FUNCTION: {
+    FREE(ObjectNativeFunction, object);
+    break;
+  }
   case OBJECT_STRING: {
     ObjectString* string = (ObjectString*)object;
     FREE_ARRAY(char, string->chars, string->length + 1);

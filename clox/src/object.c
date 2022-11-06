@@ -85,6 +85,13 @@ ObjectFunction* function__new(VM* vm) {
   return function;
 }
 
+ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm) {
+  ObjectNativeFunction* native =
+      ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
+  native->function = function;
+  return native;
+}
+
 static void print_function(const ObjectFunction* function) {
   if (function->name == NULL) {
     printf("<script>");
@@ -97,6 +104,9 @@ void object__print(Value value) {
   switch (OBJECT_TYPE(value)) {
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
+    break;
+  case OBJECT_NATIVE_FUNCTION:
+    printf("<native fn>");
     break;
   case OBJECT_STRING:
     printf("%s", AS_CSTRING(value));

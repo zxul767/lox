@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "common.h"
 #include "compiler.h"
@@ -9,6 +10,12 @@
 #include "memory.h"
 #include "object.h"
 #include "vm.h"
+
+// returns the elapsed time since the program started running, in fractional
+// seconds
+static Value clock_native(int args_count, Value* args) {
+  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+}
 
 static inline int current_offset(const CallFrame* frame) {
   return frame->instruction_pointer - frame->function->bytecode.instructions;
@@ -64,29 +71,6 @@ static void runtime_error(VM* vm, const char* format, ...) {
   reset_stack(vm);
 }
 
-void vm__init(VM* vm) {
-  reset_stack(vm);
-  vm->objects = NULL;
-  vm->execution_mode = VM_SCRIPT_MODE;
-  vm->trace_execution = false;
-  vm->show_bytecode = false;
-  table__init(&vm->interned_strings);
-  table__init(&vm->global_vars);
-}
-
-void vm__dispose(VM* vm) {
-  table__dispose(&vm->interned_strings);
-  table__dispose(&vm->global_vars);
-
-  size_t count = memory__free_objects(vm->objects);
-
-#ifdef DEBUG_TRACE_EXECUTION
-  if (vm->trace_execution) {
-    fprintf(stderr, "GC: freed %zu heap-allocated objects\n", count);
-  }
-#endif
-}
-
 void push(Value value, VM* vm) {
   *(vm->stack_top) = value;
   vm->stack_top++;
@@ -101,6 +85,43 @@ static Value peek(int distance, const VM* vm) {
   // we add -1 because `stack_top` actually points to the next free slot,
   // not to the last occupied slot
   return vm->stack_top[-1 - distance];
+}
+
+static void define_native(const char* name, NativeFunction function, VM* vm) {
+  // this particular push/push, pop/pop pattern is used to avoid dangling
+  // references during a possible garbage collection triggered by `table__set`
+  // (i.e., via a table resizing)
+  // see https://craftinginterpreters.com/garbage-collection.html for details
+  push(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
+  push(OBJECT_VAL(native_function__new(function, vm)), vm);
+  table__set(&vm->global_vars, AS_STRING(vm->stack[0]), vm->stack[1]);
+  pop(vm);
+  pop(vm);
+}
+
+void vm__init(VM* vm) {
+  reset_stack(vm);
+  vm->objects = NULL;
+  vm->execution_mode = VM_SCRIPT_MODE;
+  vm->trace_execution = false;
+  vm->show_bytecode = false;
+  table__init(&vm->interned_strings);
+  table__init(&vm->global_vars);
+
+  define_native("clock", clock_native, vm);
+}
+
+void vm__dispose(VM* vm) {
+  table__dispose(&vm->interned_strings);
+  table__dispose(&vm->global_vars);
+
+  size_t count = memory__free_objects(vm->objects);
+
+#ifdef DEBUG_TRACE_EXECUTION
+  if (vm->trace_execution) {
+    fprintf(stderr, "GC: freed %zu heap-allocated objects\n", count);
+  }
+#endif
 }
 
 static bool
@@ -135,8 +156,21 @@ static bool call(ObjectFunction* function, int args_count, VM* vm) {
 static bool call_value(Value callee, int args_count, VM* vm) {
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
-    case OBJECT_FUNCTION:
+    case OBJECT_FUNCTION: {
+#ifdef DEBUG_TRACE_EXECUTION
+      if (vm->trace_execution) {
+        debug__print_callframe_divider();
+      }
+#endif
       return call(AS_FUNCTION(callee), args_count, vm);
+    }
+    case OBJECT_NATIVE_FUNCTION: {
+      NativeFunction native = AS_NATIVE_FUNCTION(callee);
+      Value result = native(args_count, vm->stack_top - args_count);
+      vm->stack_top -= args_count + 1;
+      push(result, vm);
+      return true;
+    }
     default:
       break; // non-callable object type
     }
@@ -338,17 +372,12 @@ static InterpretResult run(VM* vm) {
     }
     case OP_CALL: {
       int args_count = READ_BYTE();
+      // `call_value` just prepares everything to enter the context of the
+      // invoked callable
       if (!call_value(peek(args_count, vm), args_count, vm)) {
         return INTERPRET_RUNTIME_ERROR;
       }
-      // `call_value` just prepares everything to enter the context of the
-      // invoked callable
       frame = top_callframe(vm);
-#ifdef DEBUG_TRACE_EXECUTION
-      if (vm->trace_execution) {
-        debug__print_callframe_divider();
-      }
-#endif
       break;
     }
     case OP_RETURN: {
