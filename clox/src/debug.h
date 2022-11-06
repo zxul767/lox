@@ -9,5 +9,6 @@ int debug__disassemble_instruction(const Bytecode* code, int offset);
 void debug__dump_stack(const VM* vm);
 
 void debug__print_section_divider();
+void debug__print_callframe_divider();
 
 #endif // DEBUG_H_

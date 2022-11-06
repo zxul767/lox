@@ -34,8 +34,8 @@ static void free_object(Object* object) {
   }
 }
 
-void memory__free_objects(Object* objects) {
-  int count = 0;
+size_t memory__free_objects(Object* objects) {
+  size_t count = 0;
   Object* object = objects;
   while (object != NULL) {
     Object* next = object->next;
@@ -43,5 +43,5 @@ void memory__free_objects(Object* objects) {
     object = next;
     count++;
   }
-  fprintf(stderr, "GC: freed %d heap-allocated objects\n", count);
+  return count;
 }

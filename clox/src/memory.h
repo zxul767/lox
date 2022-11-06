@@ -8,8 +8,9 @@ typedef struct Object Object;
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity)*2)
 
 #define GROW_ARRAY(type, pointer, old_count, new_count)                        \
-  (type*)memory__reallocate(pointer, sizeof(type) * (old_count),               \
-                            sizeof(type) * (new_count))
+  (type*)memory__reallocate(                                                   \
+      pointer, sizeof(type) * (old_count), sizeof(type) * (new_count)          \
+  )
 
 #define FREE_ARRAY(type, pointer, old_count)                                   \
   memory__reallocate(pointer, sizeof(type) * (old_count), 0)
@@ -21,6 +22,6 @@ typedef struct Object Object;
   (type*)memory__reallocate(NULL, 0, sizeof(type) * (count))
 
 void* memory__reallocate(void* pointer, size_t old_size, size_t new_size);
-void memory__free_objects(Object* objects);
+size_t memory__free_objects(Object* objects);
 
 #endif // MEMORY_H_

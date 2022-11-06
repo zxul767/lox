@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,27 +10,46 @@
 #include "object.h"
 #include "vm.h"
 
-static CallFrame* current_frame(VM* vm) {
+static inline int current_offset(const CallFrame* frame) {
+  return frame->instruction_pointer - frame->function->bytecode.instructions;
+}
+
+static inline CallFrame* top_callframe(VM* vm) {
   return &vm->frames[vm->frames_count - 1];
 }
 
-static CallFrame* next_available_frame(VM* vm) {
+static inline CallFrame* push_callframe(VM* vm) {
   return &vm->frames[vm->frames_count++];
 }
+
+static inline void pop_callframe(VM* vm) { vm->frames_count--; }
 
 static void reset_stack(VM* vm) {
   vm->stack_top = vm->stack;
   vm->frames_count = 0;
 }
 
-static int get_current_source_line(VM* vm) {
-  const CallFrame* frame = current_frame(vm);
+static int get_current_source_line_in_frame(const CallFrame* frame, VM* vm) {
   const Bytecode* bytecode = &(frame->function->bytecode);
+  int offset = current_offset(frame);
 
-  // -1 takes into account that the instruction pointer is one instruction past
-  // where the actual error happened
-  size_t offset = frame->instruction_pointer - bytecode->instructions - 1;
   return bytecode->source_lines[offset];
+}
+
+static void print_stacktrace(VM* vm) {
+  for (int i = vm->frames_count - 1; i >= 0; i--) {
+    CallFrame* frame = &vm->frames[i];
+    ObjectFunction* function = frame->function;
+
+    int line = get_current_source_line_in_frame(frame, vm);
+    fprintf(stderr, "[line %d] in ", line);
+
+    if (function->name == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", function->name->chars);
+    }
+  }
 }
 
 static void runtime_error(VM* vm, const char* format, ...) {
@@ -40,23 +60,16 @@ static void runtime_error(VM* vm, const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  int line = get_current_source_line(vm);
-  fprintf(stderr, "[line %d] in script\n", line);
-
+  print_stacktrace(vm);
   reset_stack(vm);
-}
-
-static void
-callframe__init(CallFrame* frame, ObjectFunction* function, VM* vm) {
-  frame->function = function;
-  frame->instruction_pointer = function->bytecode.instructions;
-  frame->slots = vm->stack;
 }
 
 void vm__init(VM* vm) {
   reset_stack(vm);
   vm->objects = NULL;
-  vm->mode = VM_SCRIPT_MODE; // default value
+  vm->execution_mode = VM_SCRIPT_MODE;
+  vm->trace_execution = false;
+  vm->show_bytecode = false;
   table__init(&vm->interned_strings);
   table__init(&vm->global_vars);
 }
@@ -64,7 +77,14 @@ void vm__init(VM* vm) {
 void vm__dispose(VM* vm) {
   table__dispose(&vm->interned_strings);
   table__dispose(&vm->global_vars);
-  memory__free_objects(vm->objects);
+
+  size_t count = memory__free_objects(vm->objects);
+
+#ifdef DEBUG_TRACE_EXECUTION
+  if (vm->trace_execution) {
+    fprintf(stderr, "GC: freed %zu heap-allocated objects\n", count);
+  }
+#endif
 }
 
 void push(Value value, VM* vm) {
@@ -81,6 +101,48 @@ static Value peek(int distance, const VM* vm) {
   // we add -1 because `stack_top` actually points to the next free slot,
   // not to the last occupied slot
   return vm->stack_top[-1 - distance];
+}
+
+static bool
+validate_call_errors(ObjectFunction* function, int args_count, VM* vm) {
+  if (args_count != function->arity) {
+    runtime_error(
+        vm, "Expected %d argument%s but got %d", function->arity,
+        function->arity == 1 ? "" : "s", args_count
+    );
+    return false;
+  }
+  if (vm->frames_count == FRAMES_MAX) {
+    runtime_error(vm, "Stack overflow!");
+    return false;
+  }
+  return true;
+}
+
+static bool call(ObjectFunction* function, int args_count, VM* vm) {
+  if (!validate_call_errors(function, args_count, vm))
+    return false;
+
+  CallFrame* frame = push_callframe(vm);
+  frame->function = function;
+  frame->instruction_pointer = function->bytecode.instructions;
+  // -1 because the function is right below the arguments on the stack
+  frame->slots = vm->stack_top - args_count - 1;
+
+  return true;
+}
+
+static bool call_value(Value callee, int args_count, VM* vm) {
+  if (IS_OBJECT(callee)) {
+    switch (OBJECT_TYPE(callee)) {
+    case OBJECT_FUNCTION:
+      return call(AS_FUNCTION(callee), args_count, vm);
+    default:
+      break; // non-callable object type
+    }
+  }
+  runtime_error(vm, "Can only call functions and classes.");
+  return false;
 }
 
 // Lox follows Ruby in that `nil` and `false` are falsey and every other
@@ -106,7 +168,7 @@ static void concatenate(VM* vm) {
 }
 
 static InterpretResult run(VM* vm) {
-  CallFrame* frame = current_frame(vm);
+  CallFrame* frame = top_callframe(vm);
 
 #define READ_BYTE() (*frame->instruction_pointer++)
 
@@ -131,16 +193,21 @@ static InterpretResult run(VM* vm) {
   } while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
-  printf("TRACED EXECUTION\n");
-  debug__print_section_divider();
+  if (vm->trace_execution) {
+    fprintf(stderr, "TRACED EXECUTION\n");
+    debug__print_section_divider();
+  }
 #endif
 
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
-    debug__dump_stack(vm);
-    Bytecode* code = &frame->function->bytecode;
-    int offset = (int)(frame->instruction_pointer - code->instructions);
-    debug__disassemble_instruction(code, offset);
+    if (vm->trace_execution) {
+      debug__dump_stack(vm);
+      debug__disassemble_instruction(
+          &frame->function->bytecode, current_offset(frame)
+      );
+      fprintf(stderr, "\n");
+    }
 #endif
 
     uint8_t instruction;
@@ -191,7 +258,7 @@ static InterpretResult run(VM* vm) {
     case OP_SET_GLOBAL: {
       ObjectString* name = READ_STRING();
       if (table__set(&vm->global_vars, name, peek(0, vm))) {
-        // table__set returns true when assigning for the first time, which
+        // `table__set` returns `true` when assigning for the first time, which
         // means the variable hadn't been declared
         table__delete(&vm->global_vars, name);
         runtime_error(vm, "Undefined variable '%s'", name->chars);
@@ -269,16 +336,44 @@ static InterpretResult run(VM* vm) {
       frame->instruction_pointer -= jump_length;
       break;
     }
-    case OP_RETURN: {
+    case OP_CALL: {
+      int args_count = READ_BYTE();
+      if (!call_value(peek(args_count, vm), args_count, vm)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      // `call_value` just prepares everything to enter the context of the
+      // invoked callable
+      frame = top_callframe(vm);
 #ifdef DEBUG_TRACE_EXECUTION
-      debug__print_section_divider();
+      if (vm->trace_execution) {
+        debug__print_callframe_divider();
+      }
 #endif
-      vm->frames_count--;
+      break;
+    }
+    case OP_RETURN: {
+      Value result = pop(vm);
+      pop_callframe(vm);
+
       if (vm->frames_count == 0) {
-        // pop the sentinel top-level function
+#ifdef DEBUG_TRACE_EXECUTION
+        if (vm->trace_execution) {
+          debug__print_section_divider();
+        }
+#endif
+        // pop the sentinel top-level function wrapper
         pop(vm);
+        assert(vm->stack_top == vm->stack);
+
         return INTERPRET_OK;
       }
+
+      // "pop" arguments from the stack
+      vm->stack_top = frame->slots;
+      // make the result available to the caller function
+      push(result, vm);
+      // get back to the caller callframe
+      frame = top_callframe(vm);
       break;
     }
     }
@@ -293,15 +388,13 @@ static InterpretResult run(VM* vm) {
 InterpretResult vm__interpret(const char* source, VM* vm) {
   // we pass `vm` so we can track all heap-allocated
   // objects and dispose them when the VM shuts down
-  ObjectFunction* function = compiler__compile(source, vm);
-  if (function == NULL) {
+  ObjectFunction* top_level_wrapper = compiler__compile(source, vm);
+  if (top_level_wrapper == NULL) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  push(OBJECT_VAL(function), vm);
-
-  CallFrame* frame = next_available_frame(vm);
-  callframe__init(frame, function, vm);
+  push(OBJECT_VAL(top_level_wrapper), vm);
+  call(top_level_wrapper, 0, vm);
 
   InterpretResult result = run(vm);
 

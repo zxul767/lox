@@ -97,6 +97,7 @@ void object__print(Value value) {
   switch (OBJECT_TYPE(value)) {
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
+    break;
   case OBJECT_STRING:
     printf("%s", AS_CSTRING(value));
     break;

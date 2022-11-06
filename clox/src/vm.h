@@ -60,7 +60,9 @@ typedef struct VM {
 
   Table global_vars;
 
-  ExecutionMode mode;
+  ExecutionMode execution_mode;
+  bool trace_execution;
+  bool show_bytecode;
 
 } VM;
 

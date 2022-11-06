@@ -109,8 +109,7 @@ repl: $(MAIN_TARGET)
 
 # run a program
 run: $(MAIN_TARGET)
-	@echo "running a program"
-	./$< $(NAME)
+	@./$< $(NAME)
 
 clean:
 	rm -f $(MAIN_TARGET) $(OBJ_DIR)/*.o $(DEPS_DIR)/*.d

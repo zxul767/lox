@@ -46,6 +46,8 @@ struct ObjectString {
 
 // all of these functions need to access `vm->objects` so they can track any
 // allocated objects for proper garbage collection
+// TODO: replace `vm` with garbage collector object when we implement it so it
+// is more clear why we're passing such an object
 ObjectFunction* function__new(VM* vm);
 ObjectString* string__copy(const char* chars, int length, VM* vm);
 ObjectString* string__take_ownership(char* chars, int length, VM* vm);

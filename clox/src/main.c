@@ -29,7 +29,7 @@ completer(ic_completion_env_t* input_until_cursor, const char* input) {
   );
 }
 
-static void setup_isocline() {
+static void setup_line_reader() {
   setlocale(LC_ALL, "C.UTF-8"); // we use utf-8 in this example
 
   ic_style_def("kbd", "gray underline");    // you can define your own styles
@@ -69,14 +69,26 @@ static void repl(VM* vm) {
   ic_printf("[LightSalmon]%s[/]", banner);
   ic_printf("[LightSalmon]Welcome to the Lox REPL. Ready to hack?\n[/]");
 
-  setup_isocline();
+  setup_line_reader();
+  vm->execution_mode = VM_REPL_MODE;
 
   char* line;
   while ((line = ic_readline(">>")) != NULL) {
     if (!strcmp("quit", line))
       break;
 
-    vm->mode = VM_REPL_MODE;
+    if (!strcmp(":toggle-bytecode", line)) {
+      vm->show_bytecode = !vm->show_bytecode;
+      ic_printf("bytecode display: %s\n", vm->show_bytecode ? "on" : "off");
+      continue;
+    }
+
+    if (!strcmp(":toggle-tracing", line)) {
+      vm->trace_execution = !vm->trace_execution;
+      ic_printf("execution tracing: %s\n", vm->trace_execution ? "on" : "off");
+      continue;
+    }
+
     vm__interpret(line, vm);
 
     free(line);
@@ -113,7 +125,7 @@ static char* read_file(const char* path) {
 static void run_file(const char* path, VM* vm) {
   char* source_code = read_file(path);
 
-  vm->mode = VM_SCRIPT_MODE;
+  vm->execution_mode = VM_SCRIPT_MODE;
   InterpretResult result = vm__interpret(source_code, vm);
   free(source_code);
 

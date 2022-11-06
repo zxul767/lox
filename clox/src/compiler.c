@@ -61,6 +61,7 @@ typedef struct Local {
 typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
 
 typedef struct FunctionCompiler {
+  struct FunctionCompiler* enclosing;
   ObjectFunction* function;
   FunctionType function_type;
 
@@ -97,11 +98,6 @@ typedef struct {
   // invalid target.
   bool can_assign;
 
-  // there are some minor features which are only available when running from
-  // the REPL (e.g., automatically printing an expression when typed directly on
-  // the prompt)
-  bool in_repl_mode;
-
 } Compiler;
 
 typedef void (*ParseFn)(Compiler*);
@@ -121,6 +117,8 @@ typedef struct {
 static ParseRule* get_parse_rule(TokenType);
 // (statement -> block -> declaration -> statement)
 static void statement();
+// (block -> declaration -> fun_declaration -> function -> block)
+static void declaration(Compiler* compiler);
 
 static void error_at(const Token* token, const char* message, Parser* parser) {
   // Don't report errors which are likely to be cascade errors (panic mode
@@ -247,7 +245,11 @@ static void emit_constant(Value value, Compiler* compiler) {
   emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
 }
 
-static void emit_return(Compiler* compiler) { emit_byte(OP_RETURN, compiler); }
+static void emit_default_return(Compiler* compiler) {
+  // all functions return `nil` by default
+  emit_byte(OP_NIL, compiler);
+  emit_byte(OP_RETURN, compiler);
+}
 
 static bool identifiers_equal(const Token* a, const Token* b) {
   if (a->length != b->length)
@@ -419,19 +421,39 @@ static void variable(Compiler* compiler) {
 }
 
 static void mark_latest_local_initialized(Compiler* compiler) {
-  FunctionCompiler* current = compiler->function_compiler;
-  // ensure that it was originally marked as declared but not defined
-  assert(current->locals[current->locals_count - 1].scope_depth == -1);
+  if (compiler->function_compiler->scope_depth == 0)
+    return;
 
+  FunctionCompiler* current = compiler->function_compiler;
   current->locals[current->locals_count - 1].scope_depth = current->scope_depth;
 }
 
 static void define_variable(uint8_t location, Compiler* compiler) {
+  // local variable
   if (compiler->function_compiler->scope_depth > 0) {
     mark_latest_local_initialized(compiler);
     return;
   }
+  // global variable
   emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
+}
+
+static uint8_t argument_list(Compiler* compiler) {
+  uint8_t args_count = 0;
+  Parser* parser = compiler->parser;
+
+  if (!parser__check(TOKEN_RIGHT_PAREN, parser)) {
+    do {
+      expression(compiler);
+      if (args_count == 255) {
+        error("Can't have more than 255 arguments", parser);
+      }
+      args_count++;
+    } while (parser__match(TOKEN_COMMA, parser));
+  }
+  parser__consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments", parser);
+
+  return args_count;
 }
 
 // parses (and compiles) the right operand of a boolean AND expression, making
@@ -600,6 +622,139 @@ static void var_declaration(Compiler* compiler) {
   define_variable(location, compiler);
 }
 
+static void reserve_first_local_for_callee(FunctionCompiler* function_compiler
+) {
+  Local* local = &function_compiler->locals[function_compiler->locals_count++];
+  local->scope_depth = 0;
+  local->name.start = "";
+  local->name.length = 0;
+}
+
+static void function_compiler__init(
+    FunctionCompiler* function_compiler, FunctionType function_type,
+    FunctionCompiler* enclosing_compiler, VM* vm
+) {
+  function_compiler->enclosing = enclosing_compiler;
+  function_compiler->function_type = function_type;
+  function_compiler->function = function__new(vm);
+  function_compiler->locals_count = 0;
+  function_compiler->scope_depth = 0;
+
+  reserve_first_local_for_callee(function_compiler);
+}
+
+static void begin_scope(Compiler* compiler) {
+  compiler->function_compiler->scope_depth++;
+}
+
+static void end_scope(Compiler* compiler) {
+  pop_all_accessible_locals_in_scope(
+      compiler, compiler->function_compiler->scope_depth
+  );
+  compiler->function_compiler->scope_depth--;
+}
+
+static void block(Compiler* compiler) {
+  while (!parser__check(TOKEN_RIGHT_BRACE, compiler->parser) &
+         !parser__check(TOKEN_EOF, compiler->parser)) {
+    declaration(compiler);
+  }
+  parser__consume(
+      TOKEN_RIGHT_BRACE, "Expect '}' after block", compiler->parser
+  );
+}
+
+static ObjectFunction* finish_function_compilation(Compiler* compiler) {
+  emit_default_return(compiler);
+  ObjectFunction* function = compiler->function_compiler->function;
+
+#ifdef DEBUG_PRINT_CODE
+  if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
+    debug__disassemble(
+        current_bytecode(compiler),
+        function->name != NULL ? function->name->chars : NULL
+    );
+    putchar('\n');
+  }
+#endif
+
+  compiler->function_compiler = compiler->function_compiler->enclosing;
+  return function;
+}
+
+static void function_parameters(Compiler* compiler) {
+  do {
+    compiler->function_compiler->function->arity++;
+    if (compiler->function_compiler->function->arity > 255) {
+      error_at_current("Can't have more than 255 parameters", compiler->parser);
+    }
+    uint8_t location = declare_variable("Expected parameters name.", compiler);
+    define_variable(location, compiler);
+
+  } while (parser__match(TOKEN_COMMA, compiler->parser));
+}
+
+static void start_function_compilation(
+    Compiler* compiler, FunctionCompiler* function_compiler,
+    FunctionType function_type
+) {
+  function_compiler__init(
+      function_compiler, function_type,
+      /* enclosing_compiler: */ compiler->function_compiler, compiler->vm
+  );
+  compiler->function_compiler = function_compiler;
+
+  if (function_type != TYPE_SCRIPT) {
+    function_compiler->function->name = string__copy(
+        compiler->parser->previous_token.start,
+        compiler->parser->previous_token.length, compiler->vm
+    );
+  }
+}
+
+static void function(FunctionType type, Compiler* compiler) {
+  FunctionCompiler function_compiler;
+  start_function_compilation(compiler, &function_compiler, type);
+
+  // This `begin_scope` doesn’t have a corresponding `end_scope` call because we
+  // end `function_compiler` completely by the end of this function.
+  begin_scope(compiler);
+
+  // function parameters
+  parser__consume(
+      TOKEN_LEFT_PAREN, "Expected '(' after function name.", compiler->parser
+  );
+  if (!parser__check(TOKEN_RIGHT_PAREN, compiler->parser)) {
+    function_parameters(compiler);
+  }
+  parser__consume(
+      TOKEN_RIGHT_PAREN, "Expected ')' after parameters.", compiler->parser
+  );
+
+  // function body
+  parser__consume(
+      TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser
+  );
+  block(compiler);
+
+  ObjectFunction* function = finish_function_compilation(compiler);
+  emit_bytes(
+      OP_CONSTANT, store_constant(OBJECT_VAL(function), compiler), compiler
+  );
+}
+
+static void fun_declaration(Compiler* compiler) {
+  uint8_t location = declare_variable("Expected function name.", compiler);
+  // this allows recursive functions to work properly (there is no danger
+  // because the function's code is not executed immediately, as is the case
+  // with variable initializers for expressions)
+  mark_latest_local_initialized(compiler);
+
+  function(TYPE_FUNCTION, compiler);
+
+  define_variable(location, compiler);
+}
+
 // pre-conditions: the operator for this expression has just been consumed (it
 // is what triggered the invocation to this function via the rules table)
 //
@@ -632,6 +787,22 @@ static void print_statement(Compiler* compiler) {
     emit_byte(OP_PRINT, compiler);
   } else {
     error_at_current("Expected ';' instead", compiler->parser);
+  }
+}
+
+static void return_statement(Compiler* compiler) {
+  if (compiler->function_compiler->function_type == TYPE_SCRIPT) {
+    error("Can't return from top-level code", compiler->parser);
+  }
+
+  if (parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+    emit_default_return(compiler);
+  } else {
+    expression(compiler);
+    parser__consume(
+        TOKEN_SEMICOLON, "Expected ';' after return value.", compiler->parser
+    );
+    emit_byte(OP_RETURN, compiler);
   }
 }
 
@@ -679,22 +850,12 @@ static void expression_statement(Compiler* compiler) {
   }
   // for the benefit of the REPL, we will automatically print the value of the
   // last expression (which would be otherwise lost)
-  if (parser__check(TOKEN_EOF, parser) && compiler->vm->mode == VM_REPL_MODE) {
+  if (parser__check(TOKEN_EOF, parser) &&
+      compiler->vm->execution_mode == VM_REPL_MODE) {
     emit_byte(OP_PRINT, compiler);
   } else {
     emit_byte(OP_POP, compiler);
   }
-}
-
-static void begin_scope(Compiler* compiler) {
-  compiler->function_compiler->scope_depth++;
-}
-
-static void end_scope(Compiler* compiler) {
-  pop_all_accessible_locals_in_scope(
-      compiler, compiler->function_compiler->scope_depth
-  );
-  compiler->function_compiler->scope_depth--;
 }
 
 static void for_statement(Compiler* compiler) {
@@ -850,8 +1011,12 @@ static void synchronize(Parser* parser) {
 }
 
 static void declaration(Compiler* compiler) {
-  if (parser__match(TOKEN_VAR, compiler->parser)) {
+  if (parser__match(TOKEN_FUN, compiler->parser)) {
+    fun_declaration(compiler);
+
+  } else if (parser__match(TOKEN_VAR, compiler->parser)) {
     var_declaration(compiler);
+
   } else {
     statement(compiler);
   }
@@ -860,22 +1025,15 @@ static void declaration(Compiler* compiler) {
   }
 }
 
-static void block(Compiler* compiler) {
-  while (!parser__check(TOKEN_RIGHT_BRACE, compiler->parser) &
-         !parser__check(TOKEN_EOF, compiler->parser)) {
-    declaration(compiler);
-  }
-  parser__consume(
-      TOKEN_RIGHT_BRACE, "Expect '}' after block", compiler->parser
-  );
-}
-
 static void statement(Compiler* compiler) {
   if (parser__match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
 
   } else if (parser__match(TOKEN_IF, compiler->parser)) {
     if_statement(compiler);
+
+  } else if (parser__match(TOKEN_RETURN, compiler->parser)) {
+    return_statement(compiler);
 
   } else if (parser__match(TOKEN_WHILE, compiler->parser)) {
     while_statement(compiler);
@@ -961,6 +1119,11 @@ static void binary(Compiler* compiler) {
   }
 }
 
+static void call(Compiler* compiler) {
+  uint8_t args_count = argument_list(compiler);
+  emit_bytes(OP_CALL, args_count, compiler);
+}
+
 static void grouping(Compiler* compiler) {
   expression(compiler);
   parser__consume(
@@ -1003,21 +1166,6 @@ static void literal(Compiler* compiler) {
   }
 }
 
-static void
-function_compiler__init(FunctionCompiler* current, FunctionType function_type) {
-  current->function_type = function_type;
-  current->function = NULL;
-  current->locals_count = 0;
-  current->scope_depth = 0;
-
-  // the sentinel top-level function (to avoid special casing compilation of
-  // top-level code)
-  Local* local = &current->locals[current->locals_count++];
-  local->scope_depth = 0;
-  local->name.start = "";
-  local->name.length = 0;
-}
-
 static void parser__init(Parser* parser, Scanner* scanner) {
   parser->previous_token = BOF_TOKEN;
   parser->current_token = BOF_TOKEN;
@@ -1026,32 +1174,14 @@ static void parser__init(Parser* parser, Scanner* scanner) {
   parser->scanner = scanner;
 }
 
-static void init(
+static void compiler__init(
     Compiler* compiler, Parser* parser, FunctionCompiler* function_compiler,
     VM* vm
 ) {
   compiler->vm = vm;
   compiler->parser = parser;
   compiler->function_compiler = function_compiler;
-  compiler->function_compiler->function = function__new(vm);
   compiler->can_assign = false;
-}
-
-static ObjectFunction* finish(Compiler* compiler) {
-  emit_return(compiler);
-  ObjectFunction* function = compiler->function_compiler->function;
-
-#ifdef DEBUG_PRINT_CODE
-  if (!compiler->parser->had_error) {
-    debug__disassemble(
-        current_bytecode(compiler),
-        function->name != NULL ? function->name->chars : "<script>"
-    );
-    putchar('\n');
-  }
-#endif
-
-  return function;
 }
 
 ObjectFunction* compiler__compile(const char* source, VM* vm) {
@@ -1062,10 +1192,12 @@ ObjectFunction* compiler__compile(const char* source, VM* vm) {
   parser__init(&parser, &scanner);
 
   FunctionCompiler function_compiler;
-  function_compiler__init(&function_compiler, TYPE_SCRIPT);
+  function_compiler__init(
+      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, vm
+  );
 
   Compiler compiler;
-  init(&compiler, &parser, &function_compiler, vm);
+  compiler__init(&compiler, &parser, &function_compiler, vm);
 
   // kickstart parsing & compilation
   parser__advance(&parser);
@@ -1073,14 +1205,14 @@ ObjectFunction* compiler__compile(const char* source, VM* vm) {
     declaration(&compiler);
   }
 
-  ObjectFunction* function = finish(&compiler);
+  ObjectFunction* function = finish_function_compilation(&compiler);
   return parser.had_error ? NULL : function;
 }
 
 /* clang-format off */
 ParseRule rules[] = {
   // TOKEN                    PREFIX     INFIX   PRECEDENCE
-  [TOKEN_LEFT_PAREN]        = {grouping, NULL,   PREC_NONE},
+  [TOKEN_LEFT_PAREN]        = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]       = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]       = {NULL,     NULL,   PREC_NONE},

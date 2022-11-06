@@ -1,9 +1,12 @@
 #include "debug.h"
 #include <stdio.h>
 
+// TODO: parameterize justification values for all helper functions that print
+// bytecode in a table
+//
 static void print_char(char c, int times) {
   for (int i = 0; i < times; i++)
-    putchar('#');
+    putchar(c);
 }
 
 void debug__print_section_divider() {
@@ -11,8 +14,16 @@ void debug__print_section_divider() {
   putchar('\n');
 }
 
+void debug__print_callframe_divider() {
+  print_char('-', 80);
+  putchar('\n');
+}
+
 void debug__disassemble(const Bytecode* code, const char* name) {
-  printf("%s\n", name);
+  printf(
+      "BYTECODE for '%s' %s\n", name != NULL ? name : "<script>",
+      name != NULL ? "function" : ""
+  );
   debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
     offset = debug__disassemble_instruction(code, offset);
@@ -30,14 +41,15 @@ static int simple_instruction(const char* name, int offset) {
   return offset + 1;
 }
 
-static int
-byte_instruction(const char* name, const Bytecode* code, int offset) {
+static int byte_instruction(
+    const char* name, const Bytecode* code, int offset, const char* value_name
+) {
   // byte instructions are encoded as:
   // [OP_CODE][value]...
   //     ^
   //   offset
   uint8_t value = code->instructions[offset + 1];
-  printf("%-20s %-4d\n", name, value);
+  printf("%-20s %s:%-4d\n", name, value_name, value);
 
   return offset + 2;
 }
@@ -51,9 +63,7 @@ static int jump_instruction(
   //     offset
   uint16_t jump_length = (uint16_t)(code->instructions[offset + 1] << 8);
   jump_length |= code->instructions[offset + 2];
-  printf(
-      "%-20s %04d -> %04d\n", name, offset, offset + 3 + direction * jump_length
-  );
+  printf("%-20s -> offset:%04d\n", name, offset + 3 + direction * jump_length);
 
   return offset + 3;
 }
@@ -61,13 +71,13 @@ static int jump_instruction(
 static int
 constant_instruction(const char* name, const Bytecode* code, int offset) {
   // constant instructions are encoded as:
-  // [OP_CODE][constant_location]...
+  // [OP_CODE][index]...
   //     ^
   //  offset
   uint8_t constant_location = code->instructions[offset + 1];
-  printf("%-20s %-4d '", name, constant_location);
-  value__print(code->constants.values[constant_location]);
-  printf("'\n");
+  printf("%-20s index:%d (", name, constant_location);
+  value__print_repr(code->constants.values[constant_location]);
+  printf(")\n");
 
   return offset + 2;
 }
@@ -80,9 +90,9 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
     // reduce visual clutter by not printing repeated source line numbers
     // but still add an indicator to let the user know source line number is the
     // same as the previous instruction
-    printf("   | ");
+    printf("   |   ");
   } else {
-    printf("%4d ", code->source_lines[offset]);
+    printf("%4d   ", code->source_lines[offset]);
   }
 
   uint8_t instruction = code->instructions[offset];
@@ -104,9 +114,9 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
   case OP_SET_GLOBAL:
     return constant_instruction("OP_SET_GLOBAL", code, offset);
   case OP_GET_LOCAL:
-    return byte_instruction("OP_GET_LOCAL", code, offset);
+    return byte_instruction("OP_GET_LOCAL", code, offset, "index");
   case OP_SET_LOCAL:
-    return byte_instruction("OP_SET_LOCAL", code, offset);
+    return byte_instruction("OP_SET_LOCAL", code, offset, "index");
   case OP_EQUAL:
     return simple_instruction("OP_EQUAL", offset);
   case OP_GREATER:
@@ -135,6 +145,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
     return jump_instruction(
         "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset
     );
+  case OP_CALL:
+    return byte_instruction("OP_CALL", code, offset, "#args");
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
   default:
@@ -144,9 +156,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
 }
 
 void debug__dump_stack(const VM* vm) {
-  printf("          ");
-  // `vm->stack + 1` to skip the sentinel top-level function call frame
-  for (const Value* value = vm->stack + 1; value < vm->stack_top; value++) {
+  printf("            stack:");
+  for (const Value* value = vm->stack; value < vm->stack_top; value++) {
     printf("[ ");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
