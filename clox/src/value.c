@@ -5,20 +5,23 @@
 #include <stdio.h>
 #include <string.h>
 
-void value_array__init(ValueArray* array) {
+void value_array__init(ValueArray* array)
+{
   array->values = NULL;
   array->count = 0;
   array->capacity = 0;
 }
 
-static void grow_capacity(ValueArray* array) {
+static void grow_capacity(ValueArray* array)
+{
   int old_capacity = array->capacity;
   array->capacity = GROW_CAPACITY(old_capacity);
   array->values =
       GROW_ARRAY(Value, array->values, old_capacity, array->capacity);
 }
 
-void value_array__append(ValueArray* array, Value value) {
+void value_array__append(ValueArray* array, Value value)
+{
   if (array->count + 1 > array->capacity) {
     grow_capacity(array);
   }
@@ -26,12 +29,14 @@ void value_array__append(ValueArray* array, Value value) {
   array->count++;
 }
 
-void value_array__dispose(ValueArray* array) {
+void value_array__dispose(ValueArray* array)
+{
   FREE_ARRAY(Value, array->values, array->capacity);
   value_array__init(array);
 }
 
-bool value__equals(Value a, Value b) {
+bool value__equals(Value a, Value b)
+{
   if (a.type != b.type)
     return false;
   switch (a.type) {
@@ -48,7 +53,8 @@ bool value__equals(Value a, Value b) {
   }
 }
 
-void value__print(Value value) {
+void value__print(Value value)
+{
   switch (value.type) {
   case VAL_BOOL:
     printf(AS_BOOL(value) ? "true" : "false");
@@ -67,7 +73,8 @@ void value__print(Value value) {
   }
 }
 
-void value__print_repr(Value value) {
+void value__print_repr(Value value)
+{
   if (value.type == VAL_OBJECT) {
     object__print_repr(value);
   } else {
@@ -75,7 +82,8 @@ void value__print_repr(Value value) {
   }
 }
 
-void value__println(Value value) {
+void value__println(Value value)
+{
   value__print(value);
   putchar('\n');
 }

@@ -25,7 +25,8 @@ const Token NEWLINE_TOKEN = {
 const Token IGNORABLE_TOKEN = {
     .type = TOKEN_IGNORABLE, .start = "", .length = 0, .line = 0};
 
-void scanner__init(Scanner* scanner, const char* source_code) {
+void scanner__init(Scanner* scanner, const char* source_code)
+{
   scanner->start = source_code;
   scanner->current = source_code;
   scanner->current_line = 1;
@@ -33,15 +34,18 @@ void scanner__init(Scanner* scanner, const char* source_code) {
 
 static bool is_digit(char c) { return c >= '0' && c <= '9'; }
 
-static bool is_alpha(char c) {
+static bool is_alpha(char c)
+{
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-static bool is_at_end(const Scanner* scanner) {
+static bool is_at_end(const Scanner* scanner)
+{
   return *(scanner->current) == '\0';
 }
 
-static Token error_token(const Scanner* scanner, const char* format, ...) {
+static Token error_token(const Scanner* scanner, const char* format, ...)
+{
   static char error_message[1024];
 
   va_list args;
@@ -58,7 +62,8 @@ static Token error_token(const Scanner* scanner, const char* format, ...) {
   return token;
 }
 
-static Token make_token(TokenType type, const Scanner* scanner) {
+static Token make_token(TokenType type, const Scanner* scanner)
+{
   Token token;
   token.type = type;
   token.start = scanner->start;
@@ -67,20 +72,23 @@ static Token make_token(TokenType type, const Scanner* scanner) {
   return token;
 }
 
-static char advance(Scanner* scanner) {
+static char advance(Scanner* scanner)
+{
   scanner->current++;
   return scanner->current[-1];
 }
 
 static char peek(Scanner* scanner) { return *(scanner->current); }
 
-static char peek_next(Scanner* scanner) {
+static char peek_next(Scanner* scanner)
+{
   if (is_at_end(scanner))
     return '\0';
   return scanner->current[1];
 }
 
-static bool match(char expected, Scanner* scanner) {
+static bool match(char expected, Scanner* scanner)
+{
   if (is_at_end(scanner))
     return false;
   if (*scanner->current != expected)
@@ -90,14 +98,16 @@ static bool match(char expected, Scanner* scanner) {
 }
 
 // pre-condition: the characters // have just been consumed
-static void skip_single_line_comment(Scanner* scanner) {
+static void skip_single_line_comment(Scanner* scanner)
+{
   // a single line comment goes until the end of the line
   while (peek(scanner) != '\n' && !is_at_end(scanner))
     advance(scanner);
 }
 
 // pre-condition: the characters /* have just been consumed
-static Token skip_multiline_comment(Scanner* scanner) {
+static Token skip_multiline_comment(Scanner* scanner)
+{
   int open_comments = 1;
   int newlines = 0;
 
@@ -133,7 +143,8 @@ static Token skip_multiline_comment(Scanner* scanner) {
   return IGNORABLE_TOKEN;
 }
 
-static Token collapse_whitespace(Scanner* scanner) {
+static Token collapse_whitespace(Scanner* scanner)
+{
   int newlines = 0;
 
   bool done = false;
@@ -168,7 +179,8 @@ static Token collapse_whitespace(Scanner* scanner) {
 //   at `this_end-1` (i.e., `this_end` is a non-inclusive "index")
 // + `that` is a null-terminated c-string;
 static bool
-string__equals(const char* this_start, const char* this_end, const char* that) {
+cstring__equals(const char* this_start, const char* this_end, const char* that)
+{
   while (*that && this_start < this_end) {
     if (*this_start != *that)
       break;
@@ -180,16 +192,18 @@ string__equals(const char* this_start, const char* this_end, const char* that) {
 }
 
 static TokenType check_keyword(
-    const char* keyword, TokenType type, const Scanner* scanner, int skip
-) {
+    const char* keyword, TokenType type, const Scanner* scanner, int skip)
+{
   // `skip` is the size of the prefix we've already verified for equality
-  if (string__equals(scanner->start + skip, scanner->current, keyword + skip)) {
+  if (cstring__equals(
+          scanner->start + skip, scanner->current, keyword + skip)) {
     return type;
   }
   return TOKEN_IDENTIFIER;
 }
 
-static TokenType identifier_type(Scanner* scanner) {
+static TokenType identifier_type(Scanner* scanner)
+{
   // This is a hard-coded trie of keywords for very quick identification.
   // See https://en.wikipedia.org/wiki/Trie for details.
   switch (scanner->start[0]) {
@@ -241,13 +255,15 @@ static TokenType identifier_type(Scanner* scanner) {
   return TOKEN_IDENTIFIER;
 }
 
-static Token identifier(Scanner* scanner) {
+static Token identifier(Scanner* scanner)
+{
   while (is_alpha(peek(scanner)) || is_digit(peek(scanner)))
     advance(scanner);
   return make_token(identifier_type(scanner), scanner);
 }
 
-static Token number(Scanner* scanner) {
+static Token number(Scanner* scanner)
+{
   // consume the integral part...
   while (is_digit(peek(scanner)))
     advance(scanner);
@@ -263,7 +279,8 @@ static Token number(Scanner* scanner) {
   return make_token(TOKEN_NUMBER, scanner);
 }
 
-static Token string(Scanner* scanner) {
+static Token string(Scanner* scanner)
+{
   while (peek(scanner) != '"' && !is_at_end(scanner)) {
     if (peek(scanner) == '\n')
       scanner->current_line++;
@@ -277,7 +294,8 @@ static Token string(Scanner* scanner) {
   return make_token(TOKEN_STRING, scanner);
 }
 
-Token scanner__next_token(Scanner* scanner) {
+Token scanner__next_token(Scanner* scanner)
+{
   Token token = collapse_whitespace(scanner);
   // needed for the "optional semicolon" feature
   if (token.type == TOKEN_NEWLINE) {
@@ -328,20 +346,16 @@ Token scanner__next_token(Scanner* scanner) {
     return make_token(TOKEN_STAR, scanner);
   case '!':
     return make_token(
-        match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG, scanner
-    );
+        match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG, scanner);
   case '=':
     return make_token(
-        match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL, scanner
-    );
+        match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL, scanner);
   case '<':
     return make_token(
-        match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS, scanner
-    );
+        match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS, scanner);
   case '>':
     return make_token(
-        match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER, scanner
-    );
+        match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER, scanner);
   case '"':
     return string(scanner);
   }

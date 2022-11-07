@@ -4,7 +4,8 @@
 #include "memory.h"
 #include "object.h"
 
-void* memory__reallocate(void* pointer, size_t old_size, size_t new_size) {
+void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
+{
   if (new_size == 0) {
     free(pointer);
     return NULL;
@@ -17,7 +18,8 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size) {
   return result;
 }
 
-static void free_object(Object* object) {
+static void free_object(Object* object)
+{
   switch (object->type) {
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
@@ -38,7 +40,8 @@ static void free_object(Object* object) {
   }
 }
 
-size_t memory__free_objects(Object* objects) {
+size_t memory__free_objects(Object* objects)
+{
   size_t count = 0;
   Object* object = objects;
   while (object != NULL) {

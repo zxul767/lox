@@ -9,12 +9,14 @@
 #define ALLOCATE_OBJECT(type, object_type, vm)                                 \
   (type*)object__allocate(sizeof(type), object_type, vm)
 
-static void track_object(Object* object, VM* vm) {
+static void track_object_for_gc(Object* object, VM* vm)
+{
   object->next = vm->objects;
   vm->objects = object;
 }
 
-static Object* object__allocate(size_t size, ObjectType type, VM* vm) {
+static Object* object__allocate(size_t size, ObjectType type, VM* vm)
+{
   // We use `size` instead of `sizeof(Object)` because `Object` is always
   // a "base" object that is never allocated on its own, but rather as
   // part of a derived object (e.g., ObjectString). The correct size
@@ -24,12 +26,13 @@ static Object* object__allocate(size_t size, ObjectType type, VM* vm) {
   Object* object = (Object*)memory__reallocate(NULL, 0, size);
   object->type = type;
 
-  track_object(object, vm);
+  track_object_for_gc(object, vm);
   return object;
 }
 
 static ObjectString*
-string__allocate(char* chars, int length, uint32_t hash, VM* vm) {
+string__allocate(char* chars, int length, uint32_t hash, VM* vm)
+{
   ObjectString* string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING, vm);
   string->length = length;
   string->chars = chars;
@@ -41,7 +44,8 @@ string__allocate(char* chars, int length, uint32_t hash, VM* vm) {
 
 // FNV-1a hash function. For details, see:
 // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
-static uint32_t string__hash(const char* key, int length) {
+static uint32_t cstring__hash(const char* key, int length)
+{
   uint32_t hash = 2166136261u;
   for (int i = 0; i < length; i++) {
     hash ^= (uint8_t)key[i];
@@ -50,8 +54,9 @@ static uint32_t string__hash(const char* key, int length) {
   return hash;
 }
 
-ObjectString* string__copy(const char* chars, int length, VM* vm) {
-  uint32_t hash = string__hash(chars, length);
+ObjectString* string__copy(const char* chars, int length, VM* vm)
+{
+  uint32_t hash = cstring__hash(chars, length);
   ObjectString* interned =
       table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {
@@ -64,8 +69,9 @@ ObjectString* string__copy(const char* chars, int length, VM* vm) {
   return string__allocate(heap_chars, length, hash, vm);
 }
 
-ObjectString* string__take_ownership(char* chars, int length, VM* vm) {
-  uint32_t hash = string__hash(chars, length);
+ObjectString* string__take_ownership(char* chars, int length, VM* vm)
+{
+  uint32_t hash = cstring__hash(chars, length);
   ObjectString* interned =
       table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {
@@ -75,7 +81,8 @@ ObjectString* string__take_ownership(char* chars, int length, VM* vm) {
   return string__allocate(chars, length, hash, vm);
 }
 
-ObjectFunction* function__new(VM* vm) {
+ObjectFunction* function__new(VM* vm)
+{
   ObjectFunction* function =
       ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
   function->arity = 0;
@@ -85,14 +92,16 @@ ObjectFunction* function__new(VM* vm) {
   return function;
 }
 
-ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm) {
+ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm)
+{
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
   native->function = function;
   return native;
 }
 
-static void print_function(const ObjectFunction* function) {
+static void print_function(const ObjectFunction* function)
+{
   if (function->name == NULL) {
     printf("<script>");
     return;
@@ -100,7 +109,8 @@ static void print_function(const ObjectFunction* function) {
   printf("<fn %s>", function->name->chars);
 }
 
-void object__print(Value value) {
+void object__print(Value value)
+{
   switch (OBJECT_TYPE(value)) {
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
@@ -114,7 +124,8 @@ void object__print(Value value) {
   }
 }
 
-void object__print_repr(Value value) {
+void object__print_repr(Value value)
+{
   switch (OBJECT_TYPE(value)) {
   case OBJECT_STRING:
     printf("\"%s\"", AS_CSTRING(value));

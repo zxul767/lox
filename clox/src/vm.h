@@ -43,10 +43,9 @@ typedef struct VM {
   int frames_count;
 
   // this stack holds all local variables and temporaries in the whole stack of
-  // call frames.
-  // all instructions take their operands from this stack
-  Value stack[STACK_MAX];
-  Value* stack_top;
+  // call frames. all instructions take their operands from this stack
+  Value value_stack[STACK_MAX];
+  Value* value_stack_top;
 
   // all heap-allocated objects are linked in a list whose head is pointed at by
   // `objects`
@@ -71,6 +70,8 @@ typedef enum {
   INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR,
 } InterpretResult;
+
+int callframe__current_offset(const CallFrame* frame);
 
 void vm__init(VM* vm);
 void vm__dispose(VM* vm);

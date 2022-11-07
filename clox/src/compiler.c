@@ -33,7 +33,7 @@ typedef struct {
   bool had_error;
   bool panic_mode;
 
-  Scanner* scanner;
+  Scanner scanner;
 
 } Parser;
 
@@ -80,7 +80,7 @@ typedef struct {
   // literals.
   VM* vm;
 
-  // We need this to make sure that the `variable` parse function only consumes
+  // We need this to make sure that the `named_variable` function only consumes
   // the `=` operator if it's in the context of a low-precedence expression, so
   // that an expression such as `a+b=2` is not incorrectly parsed as `a+(b=2)`.
   //
@@ -120,13 +120,15 @@ static void statement();
 // (block -> declaration -> fun_declaration -> function -> block)
 static void declaration(Compiler* compiler);
 
-static void error_at(const Token* token, const char* message, Parser* parser) {
+static void error_at(const Token* token, const char* message, Parser* parser)
+{
   // Don't report errors which are likely to be cascade errors (panic mode
   // means we failed to parse a rule and we're lost until we perform a
   // synchronization, so intermediate errors are likely to be spurious)
   if (parser->panic_mode)
     return;
   parser->panic_mode = true;
+  parser->had_error = true;
 
   fprintf(stderr, "[line %d] Error", token->line);
   if (token->type == TOKEN_EOF) {
@@ -134,31 +136,32 @@ static void error_at(const Token* token, const char* message, Parser* parser) {
   } else if (token->type == TOKEN_ERROR) {
     fprintf(
         stderr, " after '%.*s'", parser->previous_token.length,
-        parser->previous_token.start
-    );
+        parser->previous_token.start);
   } else {
     fprintf(
         stderr, " at '%.*s' [%s]", token->length, token->start,
-        TOKEN_TO_STRING[token->type]
-    );
+        TOKEN_TO_STRING[token->type]);
   }
   fprintf(stderr, ": %s\n", message);
-  parser->had_error = true;
 }
 
-static void error(const char* message, Parser* parser) {
+static void error(const char* message, Parser* parser)
+{
   error_at(&parser->previous_token, message, parser);
 }
 
-static void error_at_current(const char* message, Parser* parser) {
+static void error_at_current(const char* message, Parser* parser)
+{
   error_at(&parser->current_token, message, parser);
 }
 
-static inline Bytecode* current_bytecode(Compiler* compiler) {
+static inline Bytecode* current_bytecode(Compiler* compiler)
+{
   return &(compiler->function_compiler->function->bytecode);
 }
 
-static uint8_t store_constant(Value value, Compiler* compiler) {
+static uint8_t store_constant(Value value, Compiler* compiler)
+{
   int location = bytecode__store_constant(current_bytecode(compiler), value);
   if (location > UINT8_MAX) {
     error("Too many constants in one chunk", compiler->parser);
@@ -167,28 +170,28 @@ static uint8_t store_constant(Value value, Compiler* compiler) {
   return (uint8_t)location;
 }
 
-static uint8_t
-store_identifier_constant(Token* identifier, Compiler* compiler) {
+static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
+{
   return store_constant(
       OBJECT_VAL(
-          string__copy(identifier->start, identifier->length, compiler->vm)
-      ),
-      compiler
-  );
+          string__copy(identifier->start, identifier->length, compiler->vm)),
+      compiler);
 }
 
-static void emit_byte(uint8_t byte, Compiler* compiler) {
+static void emit_byte(uint8_t byte, Compiler* compiler)
+{
   bytecode__append(
-      current_bytecode(compiler), byte, compiler->parser->previous_token.line
-  );
+      current_bytecode(compiler), byte, compiler->parser->previous_token.line);
 }
 
-static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler) {
+static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler)
+{
   emit_byte(byte1, compiler);
   emit_byte(byte2, compiler);
 }
 
-static void emit_loop(int loop_start_offset, Compiler* compiler) {
+static void emit_loop(int loop_start_offset, Compiler* compiler)
+{
   // OP_LOOP and OP_JUMP are fundamentally the same, except for the direction
   // of the jump (negative for OP_LOOP and positive for OP_JUMP).
   emit_byte(OP_LOOP, compiler);
@@ -210,7 +213,8 @@ static void emit_loop(int loop_start_offset, Compiler* compiler) {
   emit_byte(jump_length & 0xff, compiler);
 }
 
-static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler) {
+static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler)
+{
   emit_byte(instruction, compiler);
   // 0xff is the marker for a "placeholder" jump distance to be patched later
   // A 16-bit offset lets us jump over 65,535 bytes of code, more than enough!
@@ -220,7 +224,8 @@ static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler) {
   return current_bytecode(compiler)->count - 2;
 }
 
-static void patch_jump(int offset, Compiler* compiler) {
+static void patch_jump(int offset, Compiler* compiler)
+{
   //          <- jump_length ->
   // [OP_JUMP][ 0xff  ][ 0xff ][ ] ... [*] ...
   //              ^             ^       ^
@@ -241,28 +246,32 @@ static void patch_jump(int offset, Compiler* compiler) {
   code->instructions[offset + 1] = jump_length & 0xff;
 }
 
-static void emit_constant(Value value, Compiler* compiler) {
+static void emit_constant(Value value, Compiler* compiler)
+{
   emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
 }
 
-static void emit_default_return(Compiler* compiler) {
+static void emit_default_return(Compiler* compiler)
+{
   // all functions return `nil` by default
   emit_byte(OP_NIL, compiler);
   emit_byte(OP_RETURN, compiler);
 }
 
-static bool identifiers_equal(const Token* a, const Token* b) {
+static bool identifier__equals(const Token* a, const Token* b)
+{
   if (a->length != b->length)
     return false;
   return !memcmp(a->start, b->start, a->length);
 }
 
-static void parser__advance(Parser* parser) {
+static void advance(Parser* parser)
+{
   parser->previous_token = parser->current_token;
   parser->immediately_prior_newline = IGNORABLE_TOKEN;
 
   for (;;) {
-    Token token = parser->current_token = scanner__next_token(parser->scanner);
+    Token token = parser->current_token = scanner__next_token(&parser->scanner);
 
     if (token.type == TOKEN_IGNORABLE || token.type == TOKEN_BOF)
       continue;
@@ -282,21 +291,23 @@ static void parser__advance(Parser* parser) {
   }
 }
 
-static bool parser__check(TokenType type, Parser* parser) {
+static bool check(TokenType type, Parser* parser)
+{
   return parser->current_token.type == type;
 }
 
-static bool parser__match(TokenType type, Parser* parser) {
-  if (!parser__check(type, parser))
+static bool match(TokenType type, Parser* parser)
+{
+  if (!check(type, parser))
     return false;
-  parser__advance(parser);
+  advance(parser);
   return true;
 }
 
-static void
-parser__consume(TokenType type, const char* message, Parser* parser) {
+static void consume(TokenType type, const char* message, Parser* parser)
+{
   if (parser->current_token.type == type) {
-    parser__advance(parser);
+    advance(parser);
     return;
   }
   error_at_current(message, parser);
@@ -308,11 +319,12 @@ parser__consume(TokenType type, const char* message, Parser* parser) {
 // pre-condition: compiler->scanner is looking at the first token of a new
 // expression to be parsed
 //
-static void parse_only(Precedence min_precedence, Compiler* compiler) {
+static void parse_only(Precedence min_precedence, Compiler* compiler)
+{
   Parser* parser = compiler->parser;
 
   // consume the next token to decide which parse function we need next
-  parser__advance(parser);
+  advance(parser);
 
   ParseFn parse_prefix = get_parse_rule(parser->previous_token.type)->prefix;
   if (parse_prefix == NULL) {
@@ -341,14 +353,14 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
          min_precedence) {
     ParseFn parse_infix = get_parse_rule(parser->current_token.type)->infix;
     // We consume the operator and parse the rest of the expression.
-    parser__advance(parser);
+    advance(parser);
     if (parse_infix == NULL) {
       error("Expected valid operator after expression", parser);
       return;
     }
     parse_infix(compiler);
   }
-  if (compiler->can_assign && parser__match(TOKEN_EQUAL, parser)) {
+  if (compiler->can_assign && match(TOKEN_EQUAL, parser)) {
     error("Invalid assignment target.", parser);
   }
   // Keep in mind this function is recursive, so we don't want to clobber values
@@ -356,18 +368,20 @@ static void parse_only(Precedence min_precedence, Compiler* compiler) {
   compiler->can_assign = can_assign_upstream;
 }
 
-static void expression(Compiler* compiler) {
+static void expression(Compiler* compiler)
+{
   // assignments have the lowest precedence level of all expressions
   // so this parses any expression
   parse_only(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
 static void
-pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth) {
+pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
+{
   FunctionCompiler* current = compiler->function_compiler;
-  while (current->locals_count > 0 &&
-         current->locals[current->locals_count - 1].scope_depth >= scope_depth
-  ) {
+  while (current->locals_count > 0) {
+    if (current->locals[current->locals_count - 1].scope_depth < scope_depth)
+      break;
     emit_byte(OP_POP, compiler);
     current->locals_count--;
   }
@@ -375,18 +389,18 @@ pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth) {
 
 // returns the index of the local variable identified by `name` or -1 if it
 // doesn't exist
-static int resolve_local(Token* name, Compiler* compiler) {
+static int resolve_local(Token* name, Compiler* compiler)
+{
   FunctionCompiler* current = compiler->function_compiler;
 
   for (int i = current->locals_count - 1; i >= 0; i--) {
     Local* local = &current->locals[i];
-    if (identifiers_equal(name, &local->name)) {
+    if (identifier__equals(name, &local->name)) {
       // -1 means "declared but not initialized yet"
       if (local->scope_depth == -1) {
         error(
             "Can't read local variable in its own initializer.",
-            compiler->parser
-        );
+            compiler->parser);
       }
       return i;
     }
@@ -394,7 +408,8 @@ static int resolve_local(Token* name, Compiler* compiler) {
   return -1;
 }
 
-static void named_variable(Token name, Compiler* compiler) {
+static void named_variable_or_assignment(Token name, Compiler* compiler)
+{
   int location = resolve_local(&name, compiler);
 
   uint8_t get_op, set_op;
@@ -407,7 +422,7 @@ static void named_variable(Token name, Compiler* compiler) {
     set_op = OP_SET_GLOBAL;
   }
 
-  if (compiler->can_assign && parser__match(TOKEN_EQUAL, compiler->parser)) {
+  if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
     emit_bytes(set_op, location, compiler);
 
@@ -416,11 +431,13 @@ static void named_variable(Token name, Compiler* compiler) {
   }
 }
 
-static void variable(Compiler* compiler) {
-  named_variable(compiler->parser->previous_token, compiler);
+static void variable(Compiler* compiler)
+{
+  named_variable_or_assignment(compiler->parser->previous_token, compiler);
 }
 
-static void mark_latest_local_initialized(Compiler* compiler) {
+static void mark_latest_local_initialized(Compiler* compiler)
+{
   if (compiler->function_compiler->scope_depth == 0)
     return;
 
@@ -428,7 +445,8 @@ static void mark_latest_local_initialized(Compiler* compiler) {
   current->locals[current->locals_count - 1].scope_depth = current->scope_depth;
 }
 
-static void define_variable(uint8_t location, Compiler* compiler) {
+static void define_variable(uint8_t location, Compiler* compiler)
+{
   // local variable
   if (compiler->function_compiler->scope_depth > 0) {
     mark_latest_local_initialized(compiler);
@@ -438,20 +456,22 @@ static void define_variable(uint8_t location, Compiler* compiler) {
   emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
 }
 
-static uint8_t argument_list(Compiler* compiler) {
+// returns the number of arguments compiled
+static uint8_t argument_list(Compiler* compiler)
+{
   uint8_t args_count = 0;
   Parser* parser = compiler->parser;
 
-  if (!parser__check(TOKEN_RIGHT_PAREN, parser)) {
+  if (!check(TOKEN_RIGHT_PAREN, parser)) {
     do {
       expression(compiler);
       if (args_count == 255) {
         error("Can't have more than 255 arguments", parser);
       }
       args_count++;
-    } while (parser__match(TOKEN_COMMA, parser));
+    } while (match(TOKEN_COMMA, parser));
   }
-  parser__consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments", parser);
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after arguments", parser);
 
   return args_count;
 }
@@ -463,7 +483,8 @@ static uint8_t argument_list(Compiler* compiler) {
 // pre-condition: the left operand has already been compiled and its result is
 // on the top of the stack
 //
-static void and_(Compiler* compiler) {
+static void and_(Compiler* compiler)
+{
   // expected bytecode generation:
   //
   //      [ Left Operand Expression  ]   <- previously compiled
@@ -477,9 +498,8 @@ static void and_(Compiler* compiler) {
   // +--> continues...
   //
   int end_jump_ofsset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
-  emit_byte(
-      OP_POP, compiler
-  ); // discard left operand, let the result be the value of the right operand
+  // discard left operand, let the result be the value of the right operand
+  emit_byte(OP_POP, compiler);
 
   // passing `min_precedence=PREC_AND` causes right-associativity (i.e., `false
   // and true and true` is parsed as `(false and (true and true))`)
@@ -495,7 +515,8 @@ static void and_(Compiler* compiler) {
 // pre-condition: the left operand has already been compiled and its result is
 // on the top of the stack
 //
-static void or_(Compiler* compiler) {
+static void or_(Compiler* compiler)
+{
   // expected bytecode generation:
   //
   //         [ Left Operand Expression  ]   <- previously compiled
@@ -513,9 +534,8 @@ static void or_(Compiler* compiler) {
   int end_jump_ofsset = emit_placeholder_jump(OP_JUMP, compiler);
 
   patch_jump(roe_jump_ofsset, compiler);
-  emit_byte(
-      OP_POP, compiler
-  ); // discard left operand, let the result be the value of the right operand
+  // discard left operand, let the result be the value of the right operand
+  emit_byte(OP_POP, compiler);
 
   // passing `min_precedence=PREC_OR` causes right-associativity (i.e., `false
   // or true or true` is parsed as `(false or (true or true))`)
@@ -525,7 +545,8 @@ static void or_(Compiler* compiler) {
 }
 
 static void
-check_duplicate_declaration(const Token* name, const Compiler* compiler) {
+check_duplicate_declaration(const Token* name, const Compiler* compiler)
+{
   FunctionCompiler* current = compiler->function_compiler;
 
   for (int i = current->locals_count - 1; i >= 0; i--) {
@@ -536,15 +557,15 @@ check_duplicate_declaration(const Token* name, const Compiler* compiler) {
       // we only care about duplicate declarations in the same scope
       break;
     }
-    if (identifiers_equal(name, &local->name)) {
+    if (identifier__equals(name, &local->name)) {
       error(
-          "Already a variable with this name in this scope.", compiler->parser
-      );
+          "Already a variable with this name in this scope.", compiler->parser);
     }
   }
 }
 
-static void add_local_variable(Token name, Compiler* compiler) {
+static void add_local_variable(Token name, Compiler* compiler)
+{
   FunctionCompiler* current = compiler->function_compiler;
 
   if (current->locals_count == UINT8_COUNT) {
@@ -556,7 +577,8 @@ static void add_local_variable(Token name, Compiler* compiler) {
   local->scope_depth = -1; // mark declared but uninitialized
 }
 
-static void declare_local_variable(Compiler* compiler) {
+static void declare_local_variable(Compiler* compiler)
+{
   assert(compiler->function_compiler->scope_depth > 0);
 
   Token* name = &compiler->parser->previous_token;
@@ -565,8 +587,9 @@ static void declare_local_variable(Compiler* compiler) {
   add_local_variable(*name, compiler);
 }
 
-static uint8_t declare_variable(const char* error_message, Compiler* compiler) {
-  parser__consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
+static uint8_t declare_variable(const char* error_message, Compiler* compiler)
+{
+  consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
 
   // local variables
   if (compiler->function_compiler->scope_depth > 0) {
@@ -578,24 +601,26 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler) {
   return store_identifier_constant(&compiler->parser->previous_token, compiler);
 }
 
-static bool has_implicit_statement_terminator(Parser* parser) {
+static bool has_implicit_statement_terminator(Parser* parser)
+{
   return parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
          parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT;
 }
 
 // see "optional semicolon" in `features_design.md`
-static bool optional_semicolon(Parser* parser) {
-  if (parser__match(TOKEN_SEMICOLON, parser)) {
+static bool optional_semicolon(Parser* parser)
+{
+  if (match(TOKEN_SEMICOLON, parser)) {
     return true;
 
     // at first glance it may seem like we could use
-    // `parser__match(TOKEN_NEWLINE)` but that's not the case because we don't
+    // `match(TOKEN_NEWLINE)` but that's not the case because we don't
     // track newlines and comments as regular tokens (since otherwise the
     // regular parsing process would break!)
   } else if (has_implicit_statement_terminator(parser)) {
     // we need to advance because `parse_only` assumes that the next lookahead
     // token has been consumed already
-    parser__advance(parser);
+    advance(parser);
     return true;
 
   } else if (parser->current_token.type == TOKEN_EOF) {
@@ -604,10 +629,11 @@ static bool optional_semicolon(Parser* parser) {
   return false;
 }
 
-static void var_declaration(Compiler* compiler) {
-  uint8_t location = declare_variable("Expected variable name.", compiler);
+static void var_declaration(Compiler* compiler)
+{
+  uint8_t location = declare_variable("Expected variable's name.", compiler);
 
-  if (parser__match(TOKEN_EQUAL, compiler->parser)) {
+  if (match(TOKEN_EQUAL, compiler->parser)) {
     // optional initialization
     expression(compiler);
   } else {
@@ -616,14 +642,13 @@ static void var_declaration(Compiler* compiler) {
   }
   if (!optional_semicolon(compiler->parser)) {
     error_at_current(
-        "Expected ';' after variable declaration", compiler->parser
-    );
+        "Expected ';' after variable's declaration", compiler->parser);
   }
   define_variable(location, compiler);
 }
 
-static void reserve_first_local_for_callee(FunctionCompiler* function_compiler
-) {
+static void reserve_local_for_callee(FunctionCompiler* function_compiler)
+{
   Local* local = &function_compiler->locals[function_compiler->locals_count++];
   local->scope_depth = 0;
   local->name.start = "";
@@ -632,39 +657,40 @@ static void reserve_first_local_for_callee(FunctionCompiler* function_compiler
 
 static void function_compiler__init(
     FunctionCompiler* function_compiler, FunctionType function_type,
-    FunctionCompiler* enclosing_compiler, VM* vm
-) {
+    FunctionCompiler* enclosing_compiler, VM* vm)
+{
   function_compiler->enclosing = enclosing_compiler;
   function_compiler->function_type = function_type;
   function_compiler->function = function__new(vm);
   function_compiler->locals_count = 0;
   function_compiler->scope_depth = 0;
 
-  reserve_first_local_for_callee(function_compiler);
+  reserve_local_for_callee(function_compiler);
 }
 
-static void begin_scope(Compiler* compiler) {
+static void begin_scope(Compiler* compiler)
+{
   compiler->function_compiler->scope_depth++;
 }
 
-static void end_scope(Compiler* compiler) {
+static void end_scope(Compiler* compiler)
+{
   pop_all_accessible_locals_in_scope(
-      compiler, compiler->function_compiler->scope_depth
-  );
+      compiler, compiler->function_compiler->scope_depth);
   compiler->function_compiler->scope_depth--;
 }
 
-static void block(Compiler* compiler) {
-  while (!parser__check(TOKEN_RIGHT_BRACE, compiler->parser) &
-         !parser__check(TOKEN_EOF, compiler->parser)) {
+static void block(Compiler* compiler)
+{
+  while (!check(TOKEN_RIGHT_BRACE, compiler->parser) &
+         !check(TOKEN_EOF, compiler->parser)) {
     declaration(compiler);
   }
-  parser__consume(
-      TOKEN_RIGHT_BRACE, "Expect '}' after block", compiler->parser
-  );
+  consume(TOKEN_RIGHT_BRACE, "Expect '}' after block", compiler->parser);
 }
 
-static ObjectFunction* finish_function_compilation(Compiler* compiler) {
+static ObjectFunction* finish_function_compilation(Compiler* compiler)
+{
   emit_default_return(compiler);
   ObjectFunction* function = compiler->function_compiler->function;
 
@@ -672,8 +698,7 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler) {
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
     debug__disassemble(
         current_bytecode(compiler),
-        function->name != NULL ? function->name->chars : NULL
-    );
+        function->name != NULL ? function->name->chars : NULL);
     putchar('\n');
   }
 #endif
@@ -682,7 +707,8 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler) {
   return function;
 }
 
-static void function_parameters(Compiler* compiler) {
+static void function_parameters(Compiler* compiler)
+{
   do {
     compiler->function_compiler->function->arity++;
     if (compiler->function_compiler->function->arity > 255) {
@@ -691,28 +717,27 @@ static void function_parameters(Compiler* compiler) {
     uint8_t location = declare_variable("Expected parameters name.", compiler);
     define_variable(location, compiler);
 
-  } while (parser__match(TOKEN_COMMA, compiler->parser));
+  } while (match(TOKEN_COMMA, compiler->parser));
 }
 
 static void start_function_compilation(
     Compiler* compiler, FunctionCompiler* function_compiler,
-    FunctionType function_type
-) {
+    FunctionType function_type)
+{
   function_compiler__init(
       function_compiler, function_type,
-      /* enclosing_compiler: */ compiler->function_compiler, compiler->vm
-  );
+      /* enclosing_compiler: */ compiler->function_compiler, compiler->vm);
   compiler->function_compiler = function_compiler;
 
   if (function_type != TYPE_SCRIPT) {
     function_compiler->function->name = string__copy(
         compiler->parser->previous_token.start,
-        compiler->parser->previous_token.length, compiler->vm
-    );
+        compiler->parser->previous_token.length, compiler->vm);
   }
 }
 
-static void function(FunctionType type, Compiler* compiler) {
+static void function(FunctionType type, Compiler* compiler)
+{
   FunctionCompiler function_compiler;
   start_function_compilation(compiler, &function_compiler, type);
 
@@ -721,33 +746,30 @@ static void function(FunctionType type, Compiler* compiler) {
   begin_scope(compiler);
 
   // function parameters
-  parser__consume(
-      TOKEN_LEFT_PAREN, "Expected '(' after function name.", compiler->parser
-  );
-  if (!parser__check(TOKEN_RIGHT_PAREN, compiler->parser)) {
+  consume(
+      TOKEN_LEFT_PAREN, "Expected '(' after function name.", compiler->parser);
+  if (!check(TOKEN_RIGHT_PAREN, compiler->parser)) {
     function_parameters(compiler);
   }
-  parser__consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after parameters.", compiler->parser
-  );
+  consume(
+      TOKEN_RIGHT_PAREN, "Expected ')' after parameters.", compiler->parser);
 
   // function body
-  parser__consume(
-      TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser
-  );
+  consume(
+      TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser);
   block(compiler);
 
   ObjectFunction* function = finish_function_compilation(compiler);
   emit_bytes(
-      OP_CONSTANT, store_constant(OBJECT_VAL(function), compiler), compiler
-  );
+      OP_CONSTANT, store_constant(OBJECT_VAL(function), compiler), compiler);
 }
 
-static void fun_declaration(Compiler* compiler) {
+static void fun_declaration(Compiler* compiler)
+{
   uint8_t location = declare_variable("Expected function name.", compiler);
-  // this allows recursive functions to work properly (there is no danger
-  // because the function's code is not executed immediately, as is the case
-  // with variable initializers for expressions)
+  // this allows recursive functions to work properly (there is no danger since
+  // the definition of a function is not executed during the implicit
+  // assignment)
   mark_latest_local_initialized(compiler);
 
   function(TYPE_FUNCTION, compiler);
@@ -762,7 +784,8 @@ static void fun_declaration(Compiler* compiler) {
 // precedence taken into account) has been consumed, and the corresponding
 // bytecode has been emitted.
 //
-static void unary(Compiler* compiler) {
+static void unary(Compiler* compiler)
+{
   TokenType operator_type = compiler->parser->previous_token.type;
   // compile the operand "recursively" (`unary` is indirectly called from
   // `parse_only`) so that expressions such as `---1` are parsed as
@@ -781,7 +804,8 @@ static void unary(Compiler* compiler) {
   }
 }
 
-static void print_statement(Compiler* compiler) {
+static void print_statement(Compiler* compiler)
+{
   expression(compiler);
   if (optional_semicolon(compiler->parser)) {
     emit_byte(OP_PRINT, compiler);
@@ -790,23 +814,24 @@ static void print_statement(Compiler* compiler) {
   }
 }
 
-static void return_statement(Compiler* compiler) {
+static void return_statement(Compiler* compiler)
+{
   if (compiler->function_compiler->function_type == TYPE_SCRIPT) {
     error("Can't return from top-level code", compiler->parser);
   }
 
-  if (parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+  if (match(TOKEN_SEMICOLON, compiler->parser)) {
     emit_default_return(compiler);
   } else {
     expression(compiler);
-    parser__consume(
-        TOKEN_SEMICOLON, "Expected ';' after return value.", compiler->parser
-    );
+    consume(
+        TOKEN_SEMICOLON, "Expected ';' after return value.", compiler->parser);
     emit_byte(OP_RETURN, compiler);
   }
 }
 
-static void while_statement(Compiler* compiler) {
+static void while_statement(Compiler* compiler)
+{
   // expected bytecode generation:
   //
   //         [ condition expression ] <---+
@@ -822,13 +847,9 @@ static void while_statement(Compiler* compiler) {
   //         continues...
   //
   int loop_start_offset = current_bytecode(compiler)->count;
-  parser__consume(
-      TOKEN_LEFT_PAREN, "Expected '(' after 'while'", compiler->parser
-  );
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after 'while'", compiler->parser);
   expression(compiler);
-  parser__consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after condition", compiler->parser
-  );
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after condition", compiler->parser);
 
   int exit_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
   emit_byte(OP_POP, compiler); // discard condition
@@ -841,7 +862,8 @@ static void while_statement(Compiler* compiler) {
   emit_byte(OP_POP, compiler); // discard condition
 }
 
-static void expression_statement(Compiler* compiler) {
+static void expression_statement(Compiler* compiler)
+{
   expression(compiler);
   Parser* parser = compiler->parser;
 
@@ -850,7 +872,7 @@ static void expression_statement(Compiler* compiler) {
   }
   // for the benefit of the REPL, we will automatically print the value of the
   // last expression (which would be otherwise lost)
-  if (parser__check(TOKEN_EOF, parser) &&
+  if (check(TOKEN_EOF, parser) &&
       compiler->vm->execution_mode == VM_REPL_MODE) {
     emit_byte(OP_PRINT, compiler);
   } else {
@@ -858,7 +880,8 @@ static void expression_statement(Compiler* compiler) {
   }
 }
 
-static void for_statement(Compiler* compiler) {
+static void for_statement(Compiler* compiler)
+{
   // expected bytecode generation:
   //
   //         [   initializer clause  ]
@@ -880,15 +903,13 @@ static void for_statement(Compiler* compiler) {
   //    +--> OP_POP (pop condition)
   //         continues...
   //
-  parser__consume(
-      TOKEN_LEFT_PAREN, "Expected '(' after 'for'", compiler->parser
-  );
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after 'for'", compiler->parser);
   // variables in the initializer should be local
   begin_scope(compiler);
   // initialization clause
-  if (parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+  if (match(TOKEN_SEMICOLON, compiler->parser)) {
     // no initializer
-  } else if (parser__match(TOKEN_VAR, compiler->parser)) {
+  } else if (match(TOKEN_VAR, compiler->parser)) {
     var_declaration(compiler);
   } else {
     expression_statement(compiler);
@@ -897,11 +918,11 @@ static void for_statement(Compiler* compiler) {
   // condition clause
   int loop_start_offset = current_bytecode(compiler)->count;
   int exit_jump_offset = -1;
-  if (!parser__match(TOKEN_SEMICOLON, compiler->parser)) {
+  if (!match(TOKEN_SEMICOLON, compiler->parser)) {
     expression(compiler);
-    parser__consume(
-        TOKEN_SEMICOLON, "Expected ';' after loop condition.", compiler->parser
-    );
+    consume(
+        TOKEN_SEMICOLON, "Expected ';' after loop condition.",
+        compiler->parser);
     // jump out of the loop if the condition is false
     exit_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
     emit_byte(OP_POP, compiler); // pop condition before executing body
@@ -914,16 +935,16 @@ static void for_statement(Compiler* compiler) {
   // executed before the increment (remember we're doing single-pass
   // compilation)
   //
-  if (!parser__match(TOKEN_RIGHT_PAREN, compiler->parser)) {
+  if (!match(TOKEN_RIGHT_PAREN, compiler->parser)) {
     // skip over the increment directly into the body
     int body_jump_offset = emit_placeholder_jump(OP_JUMP, compiler);
     int increment_start_offset = current_bytecode(compiler)->count;
     // compile increment expression
     expression(compiler);
     emit_byte(OP_POP, compiler); // discard increment expression
-    parser__consume(
-        TOKEN_RIGHT_PAREN, "Expected ')' after 'for' clauses", compiler->parser
-    );
+    consume(
+        TOKEN_RIGHT_PAREN, "Expected ')' after 'for' clauses",
+        compiler->parser);
 
     // go back to the start of the loop (the condition clause)
     emit_loop(loop_start_offset, compiler);
@@ -944,7 +965,8 @@ static void for_statement(Compiler* compiler) {
   end_scope(compiler);
 }
 
-static void if_statement(Compiler* compiler) {
+static void if_statement(Compiler* compiler)
+{
   // expected bytecode generation:
   //
   //         [ condition expression ]
@@ -962,14 +984,10 @@ static void if_statement(Compiler* compiler) {
   //  |
   //  +----> continues...
   //
-  parser__consume(
-      TOKEN_LEFT_PAREN, "Expected '(' after 'if'.", compiler->parser
-  );
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after 'if'.", compiler->parser);
   // [ condition expression ]
   expression(compiler);
-  parser__consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after condition.", compiler->parser
-  );
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after condition.", compiler->parser);
   // conditionally jump to just before "else" branch
   int then_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
   emit_byte(OP_POP, compiler);
@@ -982,14 +1000,15 @@ static void if_statement(Compiler* compiler) {
   patch_jump(then_jump_offset, compiler);
   emit_byte(OP_POP, compiler);
   // [ else branch statement ]
-  if (parser__match(TOKEN_ELSE, compiler->parser)) {
+  if (match(TOKEN_ELSE, compiler->parser)) {
     statement(compiler);
   }
   // continues...
   patch_jump(else_jump_offset, compiler);
 }
 
-static void synchronize(Parser* parser) {
+static void synchronize(Parser* parser)
+{
   parser->panic_mode = false;
   while (parser->current_token.type != TOKEN_EOF) {
     if (parser->previous_token.type == TOKEN_SEMICOLON)
@@ -1006,15 +1025,16 @@ static void synchronize(Parser* parser) {
       return;
     default:; // do nothing
     }
-    parser__advance(parser);
+    advance(parser);
   }
 }
 
-static void declaration(Compiler* compiler) {
-  if (parser__match(TOKEN_FUN, compiler->parser)) {
+static void declaration(Compiler* compiler)
+{
+  if (match(TOKEN_FUN, compiler->parser)) {
     fun_declaration(compiler);
 
-  } else if (parser__match(TOKEN_VAR, compiler->parser)) {
+  } else if (match(TOKEN_VAR, compiler->parser)) {
     var_declaration(compiler);
 
   } else {
@@ -1025,23 +1045,24 @@ static void declaration(Compiler* compiler) {
   }
 }
 
-static void statement(Compiler* compiler) {
-  if (parser__match(TOKEN_PRINT, compiler->parser)) {
+static void statement(Compiler* compiler)
+{
+  if (match(TOKEN_PRINT, compiler->parser)) {
     print_statement(compiler);
 
-  } else if (parser__match(TOKEN_IF, compiler->parser)) {
+  } else if (match(TOKEN_IF, compiler->parser)) {
     if_statement(compiler);
 
-  } else if (parser__match(TOKEN_RETURN, compiler->parser)) {
+  } else if (match(TOKEN_RETURN, compiler->parser)) {
     return_statement(compiler);
 
-  } else if (parser__match(TOKEN_WHILE, compiler->parser)) {
+  } else if (match(TOKEN_WHILE, compiler->parser)) {
     while_statement(compiler);
 
-  } else if (parser__match(TOKEN_FOR, compiler->parser)) {
+  } else if (match(TOKEN_FOR, compiler->parser)) {
     for_statement(compiler);
 
-  } else if (parser__match(TOKEN_LEFT_BRACE, compiler->parser)) {
+  } else if (match(TOKEN_LEFT_BRACE, compiler->parser)) {
     begin_scope(compiler);
     block(compiler);
     end_scope(compiler);
@@ -1062,16 +1083,18 @@ static void statement(Compiler* compiler) {
 //
 // post-condition: the smallest expression of higher precedence than
 // that associated with this binary operation has been compiled
-static void binary(Compiler* compiler) {
+static void binary(Compiler* compiler)
+{
   TokenType operator_type = compiler->parser->previous_token.type;
   ParseRule* rule = get_parse_rule(operator_type);
   // by passing `rule->precedence + 1` we ensure that parsing done by this
   // function is left-associative.
   //
   // this happens because by passing a higher-precedence, we prevent a
-  // recursive call to `binary` via `parse_only`, so that only `(1+2)` is
-  // parsed here, followed by `(...+3)` in the caller of this function
-  // (i.e., in `parse_only` via `parse_infix` inside the parsing loop)
+  // recursive call to `binary` via `parse_only`, so that if the original
+  // expression is `1+2+3` only `(1+2)` is parsed here, followed by `(...+3)` in
+  // the caller of this function (i.e., in `parse_only` via `parse_infix` inside
+  // the parsing loop)
   //
   // notice that if we used `rule->precedence` instead, we would parse
   // the same kind of expression recursively (binary -> parse_only ->
@@ -1080,8 +1103,7 @@ static void binary(Compiler* compiler) {
   // see https://craftinginterpreters.com/compiling-expressions.html for more
   // details
   parse_only(
-      /*min_precedence:*/ (Precedence)(rule->precedence + 1), compiler
-  );
+      /*min_precedence:*/ (Precedence)(rule->precedence + 1), compiler);
 
   switch (operator_type) {
   case TOKEN_BANG_EQUAL:
@@ -1119,19 +1141,21 @@ static void binary(Compiler* compiler) {
   }
 }
 
-static void call(Compiler* compiler) {
+static void call(Compiler* compiler)
+{
   uint8_t args_count = argument_list(compiler);
   emit_bytes(OP_CALL, args_count, compiler);
 }
 
-static void grouping(Compiler* compiler) {
+static void grouping(Compiler* compiler)
+{
   expression(compiler);
-  parser__consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after expression.", compiler->parser
-  );
+  consume(
+      TOKEN_RIGHT_PAREN, "Expected ')' after expression.", compiler->parser);
 }
 
-static void number(Compiler* compiler) {
+static void number(Compiler* compiler)
+{
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
   double value =
@@ -1139,18 +1163,19 @@ static void number(Compiler* compiler) {
   emit_constant(NUMBER_VAL(value), compiler);
 }
 
-static void string(Compiler* compiler) {
+static void string(Compiler* compiler)
+{
   Parser* parser = compiler->parser;
 
   ObjectString* _string = string__copy(
       parser->previous_token.start + 1, parser->previous_token.length - 2,
-      compiler->vm
-  );
+      compiler->vm);
 
   emit_constant(OBJECT_VAL(_string), compiler);
 }
 
-static void literal(Compiler* compiler) {
+static void literal(Compiler* compiler)
+{
   switch (compiler->parser->previous_token.type) {
   case TOKEN_FALSE:
     emit_byte(OP_FALSE, compiler);
@@ -1166,42 +1191,40 @@ static void literal(Compiler* compiler) {
   }
 }
 
-static void parser__init(Parser* parser, Scanner* scanner) {
+static void parser__init(Parser* parser, const char* source_code)
+{
   parser->previous_token = BOF_TOKEN;
   parser->current_token = BOF_TOKEN;
   parser->had_error = false;
   parser->panic_mode = false;
-  parser->scanner = scanner;
+  scanner__init(&parser->scanner, source_code);
 }
 
 static void compiler__init(
     Compiler* compiler, Parser* parser, FunctionCompiler* function_compiler,
-    VM* vm
-) {
+    VM* vm)
+{
   compiler->vm = vm;
   compiler->parser = parser;
   compiler->function_compiler = function_compiler;
   compiler->can_assign = false;
 }
 
-ObjectFunction* compiler__compile(const char* source, VM* vm) {
-  Scanner scanner;
-  scanner__init(&scanner, source);
-
+ObjectFunction* compiler__compile(const char* source_code, VM* vm)
+{
   Parser parser;
-  parser__init(&parser, &scanner);
+  parser__init(&parser, source_code);
 
   FunctionCompiler function_compiler;
   function_compiler__init(
-      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, vm
-  );
+      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, vm);
 
   Compiler compiler;
   compiler__init(&compiler, &parser, &function_compiler, vm);
 
   // kickstart parsing & compilation
-  parser__advance(&parser);
-  while (!parser__match(TOKEN_EOF, &parser)) {
+  advance(&parser);
+  while (!match(TOKEN_EOF, &parser)) {
     declaration(&compiler);
   }
 

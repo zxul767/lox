@@ -28,7 +28,7 @@ typedef enum {
 
 struct Object {
   ObjectType type;
-  // an implicit linked list to track all heap-allocated objects and
+  // an "intrusive" linked list to track all heap-allocated objects and
   // so avoid memory leaks (later on to be replaced by full-blown GC)
   struct Object* next;
 };
@@ -70,7 +70,8 @@ ObjectString* string__take_ownership(char* chars, int length, VM* vm);
 void object__print(Value value);
 void object__print_repr(Value value);
 
-static inline bool is_object_type(Value value, ObjectType type) {
+static inline bool is_object_type(Value value, ObjectType type)
+{
   return IS_OBJECT(value) && AS_OBJECT(value)->type == type;
 }
 

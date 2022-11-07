@@ -13,53 +13,41 @@
 
 // returns the elapsed time since the program started running, in fractional
 // seconds
-static Value clock_native(int args_count, Value* args) {
+static Value clock_native(int args_count, Value* args)
+{
   return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
 }
 
-static inline int current_offset(const CallFrame* frame) {
+inline int callframe__current_offset(const CallFrame* frame)
+{
   return frame->instruction_pointer - frame->function->bytecode.instructions;
 }
 
-static inline CallFrame* top_callframe(VM* vm) {
+static inline CallFrame* top_frame(VM* vm)
+{
   return &vm->frames[vm->frames_count - 1];
 }
 
-static inline CallFrame* push_callframe(VM* vm) {
+static inline CallFrame* push_frame(VM* vm)
+{
   return &vm->frames[vm->frames_count++];
 }
 
-static inline void pop_callframe(VM* vm) { vm->frames_count--; }
+static inline void pop_frame(VM* vm) { vm->frames_count--; }
 
-static void reset_stack(VM* vm) {
-  vm->stack_top = vm->stack;
+static inline void pop_frame_args(VM* vm, const CallFrame* frame)
+{
+  vm->value_stack_top = frame->slots;
+}
+
+static void reset_stacks(VM* vm)
+{
+  vm->value_stack_top = vm->value_stack;
   vm->frames_count = 0;
 }
 
-static int get_current_source_line_in_frame(const CallFrame* frame, VM* vm) {
-  const Bytecode* bytecode = &(frame->function->bytecode);
-  int offset = current_offset(frame);
-
-  return bytecode->source_lines[offset];
-}
-
-static void print_stacktrace(VM* vm) {
-  for (int i = vm->frames_count - 1; i >= 0; i--) {
-    CallFrame* frame = &vm->frames[i];
-    ObjectFunction* function = frame->function;
-
-    int line = get_current_source_line_in_frame(frame, vm);
-    fprintf(stderr, "[line %d] in ", line);
-
-    if (function->name == NULL) {
-      fprintf(stderr, "script\n");
-    } else {
-      fprintf(stderr, "%s()\n", function->name->chars);
-    }
-  }
-}
-
-static void runtime_error(VM* vm, const char* format, ...) {
+static void runtime_error(VM* vm, const char* format, ...)
+{
   va_list args;
   va_start(args, format);
   fprintf(stderr, "Runtime Error: ");
@@ -67,51 +55,61 @@ static void runtime_error(VM* vm, const char* format, ...) {
   va_end(args);
   fputs("\n", stderr);
 
-  print_stacktrace(vm);
-  reset_stack(vm);
+  debug__dump_stacktrace(vm);
+  reset_stacks(vm);
 }
 
-void push(Value value, VM* vm) {
-  *(vm->stack_top) = value;
-  vm->stack_top++;
+static inline void push_value(Value value, VM* vm)
+{
+  *(vm->value_stack_top) = value;
+  vm->value_stack_top++;
 }
 
-Value pop(VM* vm) {
-  vm->stack_top--;
-  return *(vm->stack_top);
+static inline Value pop_value(VM* vm)
+{
+  vm->value_stack_top--;
+  return *(vm->value_stack_top);
 }
 
-static Value peek(int distance, const VM* vm) {
-  // we add -1 because `stack_top` actually points to the next free slot,
+static inline Value peek_value(int distance, const VM* vm)
+{
+  // we add -1 because `value_stack_top` actually points to the next free slot,
   // not to the last occupied slot
-  return vm->stack_top[-1 - distance];
+  return vm->value_stack_top[-1 - distance];
 }
 
-static void define_native(const char* name, NativeFunction function, VM* vm) {
-  // this particular push/push, pop/pop pattern is used to avoid dangling
-  // references during a possible garbage collection triggered by `table__set`
+static void
+define_native_function(const char* name, NativeFunction function, VM* vm)
+{
+  // this particular push/push, pop/pop pattern is used to ensure the native
+  // function is reachable to the garbage collector (remember the value stack is
+  // a root for GC), given that a GC cycle could be triggered by `table__set`
   // (i.e., via a table resizing)
+  //
   // see https://craftinginterpreters.com/garbage-collection.html for details
-  push(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
-  push(OBJECT_VAL(native_function__new(function, vm)), vm);
-  table__set(&vm->global_vars, AS_STRING(vm->stack[0]), vm->stack[1]);
-  pop(vm);
-  pop(vm);
+  push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
+  push_value(OBJECT_VAL(native_function__new(function, vm)), vm);
+  table__set(
+      &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
+  pop_value(vm);
+  pop_value(vm);
 }
 
-void vm__init(VM* vm) {
-  reset_stack(vm);
+void vm__init(VM* vm)
+{
   vm->objects = NULL;
   vm->execution_mode = VM_SCRIPT_MODE;
   vm->trace_execution = false;
   vm->show_bytecode = false;
+  reset_stacks(vm);
   table__init(&vm->interned_strings);
   table__init(&vm->global_vars);
 
-  define_native("clock", clock_native, vm);
+  define_native_function("clock", clock_native, vm);
 }
 
-void vm__dispose(VM* vm) {
+void vm__dispose(VM* vm)
+{
   table__dispose(&vm->interned_strings);
   table__dispose(&vm->global_vars);
 
@@ -125,12 +123,12 @@ void vm__dispose(VM* vm) {
 }
 
 static bool
-validate_call_errors(ObjectFunction* function, int args_count, VM* vm) {
+validate_call_errors(ObjectFunction* function, int args_count, VM* vm)
+{
   if (args_count != function->arity) {
     runtime_error(
         vm, "Expected %d argument%s but got %d", function->arity,
-        function->arity == 1 ? "" : "s", args_count
-    );
+        function->arity == 1 ? "" : "s", args_count);
     return false;
   }
   if (vm->frames_count == FRAMES_MAX) {
@@ -140,20 +138,22 @@ validate_call_errors(ObjectFunction* function, int args_count, VM* vm) {
   return true;
 }
 
-static bool call(ObjectFunction* function, int args_count, VM* vm) {
+static bool call(ObjectFunction* function, int args_count, VM* vm)
+{
   if (!validate_call_errors(function, args_count, vm))
     return false;
 
-  CallFrame* frame = push_callframe(vm);
+  CallFrame* frame = push_frame(vm);
   frame->function = function;
   frame->instruction_pointer = function->bytecode.instructions;
-  // -1 because the function is right below the arguments on the stack
-  frame->slots = vm->stack_top - args_count - 1;
+  // -1 because the function is right below the arguments on the value_stack
+  frame->slots = vm->value_stack_top - args_count - 1;
 
   return true;
 }
 
-static bool call_value(Value callee, int args_count, VM* vm) {
+static bool call_value(Value callee, int args_count, VM* vm)
+{
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
     case OBJECT_FUNCTION: {
@@ -166,9 +166,9 @@ static bool call_value(Value callee, int args_count, VM* vm) {
     }
     case OBJECT_NATIVE_FUNCTION: {
       NativeFunction native = AS_NATIVE_FUNCTION(callee);
-      Value result = native(args_count, vm->stack_top - args_count);
-      vm->stack_top -= args_count + 1;
-      push(result, vm);
+      Value result = native(args_count, vm->value_stack_top - args_count);
+      vm->value_stack_top -= args_count + 1;
+      push_value(result, vm);
       return true;
     }
     default:
@@ -182,13 +182,15 @@ static bool call_value(Value callee, int args_count, VM* vm) {
 // Lox follows Ruby in that `nil` and `false` are falsey and every other
 // value behaves like `true` (this may throw off users from other languages
 // who may be used to having `0` behave like `false`, e.g., C/C++ users)
-static bool is_falsey(Value value) {
+static bool is_falsey(Value value)
+{
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
-static void concatenate(VM* vm) {
-  ObjectString* b = AS_STRING(pop(vm));
-  ObjectString* a = AS_STRING(pop(vm));
+static void concatenate(VM* vm)
+{
+  ObjectString* b = AS_STRING(pop_value(vm));
+  ObjectString* a = AS_STRING(pop_value(vm));
 
   int length = a->length + b->length;
   char* chars = ALLOCATE(char, length + 1);
@@ -198,11 +200,12 @@ static void concatenate(VM* vm) {
 
   ObjectString* result = string__take_ownership(chars, length, vm);
 
-  push(OBJECT_VAL(result), vm);
+  push_value(OBJECT_VAL(result), vm);
 }
 
-static InterpretResult run(VM* vm) {
-  CallFrame* frame = top_callframe(vm);
+static InterpretResult run(VM* vm)
+{
+  CallFrame* frame = top_frame(vm);
 
 #define READ_BYTE() (*frame->instruction_pointer++)
 
@@ -217,13 +220,13 @@ static InterpretResult run(VM* vm) {
 
 #define BINARY_OP(value_type, op)                                              \
   do {                                                                         \
-    if (!IS_NUMBER(peek(0, vm)) || !IS_NUMBER(peek(1, vm))) {                  \
+    if (!IS_NUMBER(peek_value(0, vm)) || !IS_NUMBER(peek_value(1, vm))) {      \
       runtime_error(vm, "Operands must be numbers.");                          \
       return INTERPRET_RUNTIME_ERROR;                                          \
     }                                                                          \
-    double b = AS_NUMBER(pop(vm));                                             \
-    double a = AS_NUMBER(pop(vm));                                             \
-    push(value_type(a op b), vm);                                              \
+    double b = AS_NUMBER(pop_value(vm));                                       \
+    double a = AS_NUMBER(pop_value(vm));                                       \
+    push_value(value_type(a op b), vm);                                        \
   } while (false)
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -236,10 +239,9 @@ static InterpretResult run(VM* vm) {
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     if (vm->trace_execution) {
-      debug__dump_stack(vm);
+      debug__dump_value_stack(vm);
       debug__disassemble_instruction(
-          &frame->function->bytecode, current_offset(frame)
-      );
+          &frame->function->bytecode, callframe__current_offset(frame));
       fprintf(stderr, "\n");
     }
 #endif
@@ -248,29 +250,29 @@ static InterpretResult run(VM* vm) {
     switch (instruction = READ_BYTE()) {
     case OP_CONSTANT: {
       Value constant = READ_CONSTANT();
-      push(constant, vm);
+      push_value(constant, vm);
       break;
     }
     case OP_NIL:
-      push(NIL_VAL, vm);
+      push_value(NIL_VAL, vm);
       break;
     case OP_TRUE:
-      push(BOOL_VAL(true), vm);
+      push_value(BOOL_VAL(true), vm);
       break;
     case OP_FALSE:
-      push(BOOL_VAL(false), vm);
+      push_value(BOOL_VAL(false), vm);
       break;
     case OP_POP:
-      pop(vm);
+      pop_value(vm);
       break;
     case OP_GET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      push(frame->slots[slot], vm);
+      push_value(frame->slots[slot], vm);
       break;
     }
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
-      frame->slots[slot] = peek(0, vm);
+      frame->slots[slot] = peek_value(0, vm);
       break;
     }
     case OP_GET_GLOBAL: {
@@ -280,18 +282,18 @@ static InterpretResult run(VM* vm) {
         runtime_error(vm, "Undefined variable '%s'", name->chars);
         return INTERPRET_RUNTIME_ERROR;
       }
-      push(value, vm);
+      push_value(value, vm);
       break;
     }
     case OP_DEFINE_GLOBAL: {
       ObjectString* name = READ_STRING();
-      table__set(&vm->global_vars, name, peek(0, vm));
-      pop(vm);
+      table__set(&vm->global_vars, name, peek_value(0, vm));
+      pop_value(vm);
       break;
     }
     case OP_SET_GLOBAL: {
       ObjectString* name = READ_STRING();
-      if (table__set(&vm->global_vars, name, peek(0, vm))) {
+      if (table__set(&vm->global_vars, name, peek_value(0, vm))) {
         // `table__set` returns `true` when assigning for the first time, which
         // means the variable hadn't been declared
         table__delete(&vm->global_vars, name);
@@ -302,9 +304,9 @@ static InterpretResult run(VM* vm) {
     }
     // binary operations
     case OP_EQUAL: {
-      Value b = pop(vm);
-      Value a = pop(vm);
-      push(BOOL_VAL(value__equals(a, b)), vm);
+      Value b = pop_value(vm);
+      Value a = pop_value(vm);
+      push_value(BOOL_VAL(value__equals(a, b)), vm);
       break;
     }
     case OP_GREATER:
@@ -314,12 +316,12 @@ static InterpretResult run(VM* vm) {
       BINARY_OP(BOOL_VAL, <);
       break;
     case OP_ADD: {
-      if (IS_STRING(peek(0, vm)) && IS_STRING(peek(1, vm))) {
+      if (IS_STRING(peek_value(0, vm)) && IS_STRING(peek_value(1, vm))) {
         concatenate(vm);
-      } else if (IS_NUMBER(peek(0, vm)) && IS_NUMBER(peek(1, vm))) {
-        double b = AS_NUMBER(pop(vm));
-        double a = AS_NUMBER(pop(vm));
-        push(NUMBER_VAL(a + b), vm);
+      } else if (IS_NUMBER(peek_value(0, vm)) && IS_NUMBER(peek_value(1, vm))) {
+        double b = AS_NUMBER(pop_value(vm));
+        double a = AS_NUMBER(pop_value(vm));
+        push_value(NUMBER_VAL(a + b), vm);
       } else {
         runtime_error(vm, "Operands must be two numbers or two strings.");
         return INTERPRET_RUNTIME_ERROR;
@@ -338,24 +340,24 @@ static InterpretResult run(VM* vm) {
 
       // unary operations
     case OP_NOT:
-      push(BOOL_VAL(is_falsey(pop(vm))), vm);
+      push_value(BOOL_VAL(is_falsey(pop_value(vm))), vm);
       break;
 
     case OP_NEGATE: {
-      if (!IS_NUMBER(peek(0, vm))) {
+      if (!IS_NUMBER(peek_value(0, vm))) {
         runtime_error(vm, "Operand must be a number.");
         return INTERPRET_RUNTIME_ERROR;
       }
-      push(NUMBER_VAL(-AS_NUMBER(pop(vm))), vm);
+      push_value(NUMBER_VAL(-AS_NUMBER(pop_value(vm))), vm);
       break;
     }
     case OP_PRINT: {
-      value__println(pop(vm));
+      value__println(pop_value(vm));
       break;
     }
     case OP_JUMP_IF_FALSE: {
       uint16_t jump_length = READ_SHORT();
-      if (is_falsey(peek(0, vm))) {
+      if (is_falsey(peek_value(0, vm))) {
         frame->instruction_pointer += jump_length;
       }
       break;
@@ -374,15 +376,15 @@ static InterpretResult run(VM* vm) {
       int args_count = READ_BYTE();
       // `call_value` just prepares everything to enter the context of the
       // invoked callable
-      if (!call_value(peek(args_count, vm), args_count, vm)) {
+      if (!call_value(peek_value(args_count, vm), args_count, vm)) {
         return INTERPRET_RUNTIME_ERROR;
       }
-      frame = top_callframe(vm);
+      frame = top_frame(vm);
       break;
     }
     case OP_RETURN: {
-      Value result = pop(vm);
-      pop_callframe(vm);
+      Value result = pop_value(vm);
+      pop_frame(vm);
 
       if (vm->frames_count == 0) {
 #ifdef DEBUG_TRACE_EXECUTION
@@ -390,19 +392,18 @@ static InterpretResult run(VM* vm) {
           debug__print_section_divider();
         }
 #endif
-        // pop the sentinel top-level function wrapper
-        pop(vm);
-        assert(vm->stack_top == vm->stack);
+        // pop_value the sentinel top-level function wrapper
+        pop_value(vm);
+        assert(vm->value_stack_top == vm->value_stack);
 
         return INTERPRET_OK;
       }
 
-      // "pop" arguments from the stack
-      vm->stack_top = frame->slots;
+      pop_frame_args(vm, frame);
       // make the result available to the caller function
-      push(result, vm);
-      // get back to the caller callframe
-      frame = top_callframe(vm);
+      push_value(result, vm);
+      // return control to the caller function
+      frame = top_frame(vm);
       break;
     }
     }
@@ -414,7 +415,8 @@ static InterpretResult run(VM* vm) {
 #undef BINARY_OP
 }
 
-InterpretResult vm__interpret(const char* source, VM* vm) {
+InterpretResult vm__interpret(const char* source, VM* vm)
+{
   // we pass `vm` so we can track all heap-allocated
   // objects and dispose them when the VM shuts down
   ObjectFunction* top_level_wrapper = compiler__compile(source, vm);
@@ -422,7 +424,7 @@ InterpretResult vm__interpret(const char* source, VM* vm) {
     return INTERPRET_COMPILE_ERROR;
   }
 
-  push(OBJECT_VAL(top_level_wrapper), vm);
+  push_value(OBJECT_VAL(top_level_wrapper), vm);
   call(top_level_wrapper, 0, vm);
 
   InterpretResult result = run(vm);

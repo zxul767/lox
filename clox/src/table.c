@@ -26,13 +26,15 @@
 //
 // for full details, see https://craftinginterpreters.com/hash-tables.html
 //
-void table__init(Table* table) {
+void table__init(Table* table)
+{
   table->count = 0;
   table->capacity = 0;
   table->entries = NULL;
 }
 
-void table__dispose(Table* table) {
+void table__dispose(Table* table)
+{
   FREE_ARRAY(Entry, table->entries, table->capacity);
   table__init(table);
 }
@@ -43,7 +45,8 @@ void table__dispose(Table* table) {
 // * an entry is available either because it's never been used or because it's
 // marked for recycling, i.e., it has been previously deleted and marked with a
 // tombstone.
-static Entry* find_entry(Entry* entries, int capacity, ObjectString* key) {
+static Entry* find_entry(Entry* entries, int capacity, ObjectString* key)
+{
   uint32_t index = key->hash % capacity;
   Entry* tombstone = NULL;
 
@@ -78,7 +81,8 @@ static Entry* find_entry(Entry* entries, int capacity, ObjectString* key) {
   return NULL; // unreachable
 }
 
-static Entry* allocate_entries(int capacity) {
+static Entry* allocate_entries(int capacity)
+{
   Entry* entries = ALLOCATE(Entry, capacity);
   for (int i = 0; i < capacity; i++) {
     entries[i].key = NULL;
@@ -87,8 +91,9 @@ static Entry* allocate_entries(int capacity) {
   return entries;
 }
 
-static int copy_entries_from(const Table* table, Entry* new_entries,
-                             int new_capacity) {
+static int
+copy_entries_from(const Table* table, Entry* new_entries, int new_capacity)
+{
   // since we're not copying tombstones, the count will need to be recomputed
   int new_count = 0;
   for (int i = 0; i < table->capacity; i++) {
@@ -107,7 +112,8 @@ static int copy_entries_from(const Table* table, Entry* new_entries,
   return new_count;
 }
 
-static void adjust_capacity(Table* table, int new_capacity) {
+static void adjust_capacity(Table* table, int new_capacity)
+{
   Entry* new_entries = allocate_entries(new_capacity);
   // there is a new count because we're not copying tombstones
   int new_count = copy_entries_from(table, new_entries, new_capacity);
@@ -120,7 +126,8 @@ static void adjust_capacity(Table* table, int new_capacity) {
 
 // returns true if a new entry was set; otherwise false (i.e., when an
 // existing entry was simply updated)
-bool table__set(Table* table, ObjectString* key, Value value) {
+bool table__set(Table* table, ObjectString* key, Value value)
+{
   // grow table if overly loaded
   if (table->count + 1 > table->capacity * TABLE_MAX_LOAD) {
     int capacity = GROW_CAPACITY(table->capacity);
@@ -142,7 +149,8 @@ bool table__set(Table* table, ObjectString* key, Value value) {
   return is_new_key;
 }
 
-bool table__get(Table* table, ObjectString* key, Value* out_value) {
+bool table__get(const Table* table, ObjectString* key, Value* out_value)
+{
   if (table->count == 0)
     return false;
 
@@ -154,7 +162,8 @@ bool table__get(Table* table, ObjectString* key, Value* out_value) {
   return true;
 }
 
-bool table__delete(Table* table, ObjectString* key) {
+bool table__delete(Table* table, ObjectString* key)
+{
   if (table->count == 0)
     return false;
 
@@ -172,7 +181,8 @@ bool table__delete(Table* table, ObjectString* key) {
   return true;
 }
 
-void table__add_all(Table* from, Table* to) {
+void table__add_all(Table* from, Table* to)
+{
   for (int i = 0; i < from->capacity; i++) {
     Entry* entry = &from->entries[i];
     if (entry->key != NULL) {
@@ -197,8 +207,9 @@ void table__add_all(Table* from, Table* to) {
 // See https://craftinginterpreters.com/hash-tables.html#string-interning for
 // details.
 //
-ObjectString* table__find_string(Table* table, const char* chars, int length,
-                                 uint32_t hash) {
+ObjectString* table__find_string(
+    const Table* table, const char* chars, int length, uint32_t hash)
+{
   if (table->count == 0)
     return NULL;
 
@@ -216,8 +227,9 @@ ObjectString* table__find_string(Table* table, const char* chars, int length,
       // variables), it's very important that it is as efficient as possible,
       // hence why we do simpler comparisons (length and hash) first so we can
       // rule out negative cases faster.
-    } else if (entry->key->length == length && entry->key->hash == hash &&
-               !memcmp(entry->key->chars, chars, length)) {
+    } else if (
+        entry->key->length == length && entry->key->hash == hash &&
+        !memcmp(entry->key->chars, chars, length)) {
       // we found it
       return entry->key;
     }

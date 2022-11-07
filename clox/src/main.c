@@ -12,7 +12,8 @@
 #include "vm.h"
 
 static void
-word_completer(ic_completion_env_t* input_until_cursor, const char* word) {
+word_completer(ic_completion_env_t* input_until_cursor, const char* word)
+{
   static const char* commands[] = {"quit", NULL};
 
   ic_add_completions(input_until_cursor, word, commands);
@@ -22,14 +23,16 @@ word_completer(ic_completion_env_t* input_until_cursor, const char* word) {
 // We use `ic_complete_word` to only consider the final token on the input.
 // (almost all user defined completers should use this)
 static void
-completer(ic_completion_env_t* input_until_cursor, const char* input) {
+completer(ic_completion_env_t* input_until_cursor, const char* input)
+{
   ic_complete_word(
       input_until_cursor, input, &word_completer,
       NULL /* from default word boundary; whitespace or separator */
   );
 }
 
-static void setup_line_reader() {
+static void setup_line_reader()
+{
   setlocale(LC_ALL, "C.UTF-8"); // we use utf-8 in this example
 
   ic_style_def("kbd", "gray underline");    // you can define your own styles
@@ -42,8 +45,7 @@ static void setup_line_reader() {
       "- Use [kbd]shift-tab[/] for multiline input. (or [kbd]ctrl-enter[/], or "
       "[kbd]ctrl-j[/])\n"
       "- Use [kbd]tab[/]  for word completion.\n"
-      "- Use [kbd]ctrl-r[/] to search the history.\n\n"
-  );
+      "- Use [kbd]ctrl-r[/] to search the history.\n\n");
 
   // enable completion with a default completion function
   ic_set_default_completer(&completer, NULL);
@@ -55,7 +57,8 @@ static void setup_line_reader() {
   ic_set_history(".lox_repl", -1 /* default entries (= 200) */);
 }
 
-static void repl(VM* vm) {
+static void repl(VM* vm)
+{
   /* clang-format off */
   const char* banner =
       "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗\n"
@@ -96,7 +99,8 @@ static void repl(VM* vm) {
 }
 
 // TODO: replace `74` with symbolic constant
-static char* read_file(const char* path) {
+static char* read_file(const char* path)
+{
   FILE* file = fopen(path, "rb");
   if (file == NULL) {
     fprintf(stderr, "Could not open file \"%s\".\n", path);
@@ -122,7 +126,8 @@ static char* read_file(const char* path) {
   return buffer;
 }
 
-static void run_file(const char* path, VM* vm) {
+static void run_file(const char* path, VM* vm)
+{
   char* source_code = read_file(path);
 
   vm->execution_mode = VM_SCRIPT_MODE;
@@ -136,7 +141,8 @@ static void run_file(const char* path, VM* vm) {
     exit(70);
 }
 
-int main(int args_count, const char* args[]) {
+int main(int args_count, const char* args[])
+{
   VM vm;
   vm__init(&vm);
 

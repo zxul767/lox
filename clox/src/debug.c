@@ -1,29 +1,33 @@
 #include "debug.h"
+#include "object.h"
 #include <stdio.h>
 
 // TODO: parameterize justification values for all helper functions that print
-// bytecode in a table
+// code in a table
 //
-static void print_char(char c, int times) {
+static void print_char(char c, int times)
+{
   for (int i = 0; i < times; i++)
     putchar(c);
 }
 
-void debug__print_section_divider() {
+void debug__print_section_divider()
+{
   print_char('=', 80);
   putchar('\n');
 }
 
-void debug__print_callframe_divider() {
+void debug__print_callframe_divider()
+{
   print_char('-', 80);
   putchar('\n');
 }
 
-void debug__disassemble(const Bytecode* code, const char* name) {
+void debug__disassemble(const Bytecode* code, const char* name)
+{
   printf(
       "BYTECODE for '%s' %s\n", name != NULL ? name : "<script>",
-      name != NULL ? "function" : ""
-  );
+      name != NULL ? "function" : "");
   debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
     offset = debug__disassemble_instruction(code, offset);
@@ -31,7 +35,8 @@ void debug__disassemble(const Bytecode* code, const char* name) {
   debug__print_section_divider();
 }
 
-static int simple_instruction(const char* name, int offset) {
+static int simple_instruction(const char* name, int offset)
+{
   // simple instructions are encoded as:
   // [OP_CODE]...
   //     ^
@@ -42,8 +47,8 @@ static int simple_instruction(const char* name, int offset) {
 }
 
 static int byte_instruction(
-    const char* name, const Bytecode* code, int offset, const char* value_name
-) {
+    const char* name, const Bytecode* code, int offset, const char* value_name)
+{
   // byte instructions are encoded as:
   // [OP_CODE][value]...
   //     ^
@@ -55,8 +60,8 @@ static int byte_instruction(
 }
 
 static int jump_instruction(
-    const char* name, int direction, const Bytecode* code, int offset
-) {
+    const char* name, int direction, const Bytecode* code, int offset)
+{
   // jump instructions are encoded as:
   // [JUMP_OP_CODE][jump_length_high_bits][jump_length_low_bits]...
   //       ^
@@ -69,7 +74,8 @@ static int jump_instruction(
 }
 
 static int
-constant_instruction(const char* name, const Bytecode* code, int offset) {
+constant_instruction(const char* name, const Bytecode* code, int offset)
+{
   // constant instructions are encoded as:
   // [OP_CODE][index]...
   //     ^
@@ -82,17 +88,18 @@ constant_instruction(const char* name, const Bytecode* code, int offset) {
   return offset + 2;
 }
 
-int debug__disassemble_instruction(const Bytecode* code, int offset) {
+int debug__disassemble_instruction(const Bytecode* code, int offset)
+{
   printf("%04d ", offset);
 
   if (offset > 0 &&
-      code->source_lines[offset] == code->source_lines[offset - 1]) {
+      code->to_source_line[offset] == code->to_source_line[offset - 1]) {
     // reduce visual clutter by not printing repeated source line numbers
     // but still add an indicator to let the user know source line number is the
     // same as the previous instruction
     printf("   |   ");
   } else {
-    printf("%4d   ", code->source_lines[offset]);
+    printf("%4d   ", code->to_source_line[offset]);
   }
 
   uint8_t instruction = code->instructions[offset];
@@ -143,8 +150,7 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
     return jump_instruction("OP_JUMP", /*direction:*/ +1, code, offset);
   case OP_JUMP_IF_FALSE:
     return jump_instruction(
-        "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset
-    );
+        "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
   case OP_CALL:
     return byte_instruction("OP_CALL", code, offset, "#args");
   case OP_RETURN:
@@ -155,9 +161,11 @@ int debug__disassemble_instruction(const Bytecode* code, int offset) {
   }
 }
 
-void debug__dump_stack(const VM* vm) {
+void debug__dump_value_stack(const VM* vm)
+{
   printf("            stack:");
-  for (const Value* value = vm->stack; value < vm->stack_top; value++) {
+  for (const Value* value = vm->value_stack; value < vm->value_stack_top;
+       value++) {
     printf("[ ");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
@@ -166,4 +174,30 @@ void debug__dump_stack(const VM* vm) {
     printf(" ]");
   }
   printf("\n");
+}
+
+static int
+get_current_source_line_in_frame(const CallFrame* frame, const VM* vm)
+{
+  const Bytecode* bytecode = &(frame->function->bytecode);
+  int offset = callframe__current_offset(frame);
+
+  return bytecode->to_source_line[offset];
+}
+
+void debug__dump_stacktrace(const VM* vm)
+{
+  for (int i = vm->frames_count - 1; i >= 0; i--) {
+    const CallFrame* frame = &vm->frames[i];
+    ObjectFunction* function = frame->function;
+
+    int line = get_current_source_line_in_frame(frame, vm);
+    fprintf(stderr, "[line %d] in ", line);
+
+    if (function->name == NULL) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()\n", function->name->chars);
+    }
+  }
 }
