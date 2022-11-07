@@ -7,7 +7,7 @@ main:
 	@./gradlew build
 
 run:
-	@./gradlew run --args=$(NAME)
+	@./gradlew run -q --args=$(NAME)
 
 watch:
 	@./gradlew --continuous build
