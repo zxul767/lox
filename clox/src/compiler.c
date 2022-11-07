@@ -313,6 +313,11 @@ static void consume(TokenType type, const char* message, Parser* parser)
   error_at_current(message, parser);
 }
 
+static inline Precedence current_token_precedence(const Parser* parser)
+{
+  return get_parse_rule(parser->current_token.type)->precedence;
+}
+
 // parses (and compiles) either a unary expression; or a binary one, as long as
 // the binary operation's precedence is higher or equal than `min_precedence`
 //
@@ -349,8 +354,7 @@ static void parse_only(Precedence min_precedence, Compiler* compiler)
   // 2) compiled the first operand of a binary expression and we may or may not
   // enter the loop, depending on whether the next token/operator has higher
   // or equal precedence than required by `min_precedence`.
-  while (get_parse_rule(parser->current_token.type)->precedence >=
-         min_precedence) {
+  while (current_token_precedence(parser) >= min_precedence) {
     ParseFn parse_infix = get_parse_rule(parser->current_token.type)->infix;
     // We consume the operator and parse the rest of the expression.
     advance(parser);
