@@ -81,11 +81,34 @@ ObjectString* string__take_ownership(char* chars, int length, VM* vm)
   return string__allocate(chars, length, hash, vm);
 }
 
+ObjectUpvalue* upvalue__new(Value* slot, VM* vm)
+{
+  ObjectUpvalue* upvalue = ALLOCATE_OBJECT(ObjectUpvalue, OBJECT_UPVALUE, vm);
+  upvalue->location = slot;
+
+  return upvalue;
+}
+
+ObjectClosure* closure__new(ObjectFunction* function, VM* vm)
+{
+  ObjectUpvalue** upvalues = ALLOCATE(ObjectUpvalue*, function->upvalues_count);
+  for (int i = 0; i < function->upvalues_count; i++) {
+    upvalues[i] = NULL;
+  }
+  ObjectClosure* closure = ALLOCATE_OBJECT(ObjectClosure, OBJECT_CLOSURE, vm);
+  closure->function = function;
+  closure->upvalues = upvalues;
+  closure->upvalues_count = function->upvalues_count;
+
+  return closure;
+}
+
 ObjectFunction* function__new(VM* vm)
 {
   ObjectFunction* function =
       ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
   function->arity = 0;
+  function->upvalues_count = 0;
   function->name = NULL;
   bytecode__init(&function->bytecode);
 
@@ -112,6 +135,9 @@ static void print_function(const ObjectFunction* function)
 void object__print(Value value)
 {
   switch (OBJECT_TYPE(value)) {
+  case OBJECT_CLOSURE:
+    print_function(AS_CLOSURE(value)->function);
+    break;
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
     break;
@@ -120,6 +146,9 @@ void object__print(Value value)
     break;
   case OBJECT_STRING:
     printf("%s", AS_CSTRING(value));
+    break;
+  case OBJECT_UPVALUE:
+    printf("upvalue");
     break;
   }
 }

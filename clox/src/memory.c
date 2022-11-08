@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -12,8 +13,7 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
   }
   void* result = realloc(pointer, new_size);
   if (result == NULL) {
-    // TODO: replace `1` with appropriate symbolic constant
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   return result;
 }
@@ -21,6 +21,12 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
 static void free_object(Object* object)
 {
   switch (object->type) {
+  case OBJECT_CLOSURE: {
+    ObjectClosure* closure = (ObjectClosure*)object;
+    FREE_ARRAY(ObjectUpvalue*, closure->upvalues, closure->upvalues_count);
+    FREE(ObjectClosure, object);
+    break;
+  }
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
     bytecode__dispose(&function->bytecode);
@@ -37,6 +43,12 @@ static void free_object(Object* object)
     FREE(ObjectString, object);
     break;
   }
+  case OBJECT_UPVALUE: {
+    FREE(ObjectUpvalue, object);
+    break;
+  }
+  default:
+    assert(false);
   }
 }
 

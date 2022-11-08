@@ -5,7 +5,7 @@
 #include "value.h"
 
 typedef struct Bytecode Bytecode;
-typedef struct ObjectFunction ObjectFunction;
+typedef struct ObjectClosure ObjectClosure;
 
 // we need this information to compile a few things differently when running
 // inside a REPL (e.g., statement expressions are expected to print their value
@@ -25,7 +25,7 @@ typedef enum {
 #define STACK_MAX (FRAMES_MAX * UINT8_COUNT)
 
 typedef struct CallFrame {
-  ObjectFunction* function;
+  ObjectClosure* closure;
   uint8_t* instruction_pointer;
   // slots is a "window" onto the values stack of the VM which contains
   // all local information for the function call (i.e., arguments and local

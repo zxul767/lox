@@ -1,6 +1,7 @@
 #include "debug.h"
 #include "object.h"
 #include <stdio.h>
+#include <string.h>
 
 // TODO: parameterize justification values for all helper functions that print
 // code in a table
@@ -81,11 +82,39 @@ constant_instruction(const char* name, const Bytecode* code, int offset)
   //     ^
   //  offset
   uint8_t constant_location = code->instructions[offset + 1];
-  printf("%-20s index:%d (", name, constant_location);
-  value__print_repr(code->constants.values[constant_location]);
-  printf(")\n");
+  if (!strcmp(name, "OP_DEFINE_GLOBAL") || !strcmp(name, "OP_GET_GLOBAL") ||
+      !strcmp(name, "OP_SET_GLOBAL")) {
+    printf("%-20s index:", name);
+    value__print_repr(code->constants.values[constant_location]);
+
+  } else {
+    printf("%-20s index:%d (=", name, constant_location);
+    value__print_repr(code->constants.values[constant_location]);
+    printf(")");
+  }
+  printf("\n");
 
   return offset + 2;
+}
+
+int closure_instruction(const Bytecode* code, int offset)
+{
+  // TODO: why do we skip over one byte here?
+  offset++;
+  uint8_t location = code->instructions[offset++];
+  printf("%-20s index:%d (=", "OP_CLOSURE", location);
+  value__print_repr(code->constants.values[location]);
+  printf(")\n");
+
+  ObjectFunction* function = AS_FUNCTION(code->constants.values[location]);
+  for (int i = 0; i < function->upvalues_count; i++) {
+    int is_local = code->instructions[offset++];
+    int index = code->instructions[offset++];
+    printf(
+        "%04d    |    %-20supvalue:(index:%d,%s)\n", offset - 2, "", index,
+        is_local ? "parent" : "ancestor");
+  }
+  return offset;
 }
 
 int debug__disassemble_instruction(const Bytecode* code, int offset)
@@ -104,8 +133,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
 
   uint8_t instruction = code->instructions[offset];
   switch (instruction) {
-  case OP_CONSTANT:
-    return constant_instruction("OP_CONSTANT", code, offset);
+  case OP_LOAD_CONSTANT:
+    return constant_instruction("OP_LOAD_CONSTANT", code, offset);
   case OP_NIL:
     return simple_instruction("OP_NIL", offset);
   case OP_TRUE:
@@ -120,6 +149,10 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
     return constant_instruction("OP_GET_GLOBAL", code, offset);
   case OP_SET_GLOBAL:
     return constant_instruction("OP_SET_GLOBAL", code, offset);
+  case OP_GET_UPVALUE:
+    return byte_instruction("OP_GET_UPVALUE", code, offset, "index");
+  case OP_SET_UPVALUE:
+    return byte_instruction("OP_SET_UPVALUE", code, offset, "index");
   case OP_GET_LOCAL:
     return byte_instruction("OP_GET_LOCAL", code, offset, "index");
   case OP_SET_LOCAL:
@@ -153,6 +186,9 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
         "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
   case OP_CALL:
     return byte_instruction("OP_CALL", code, offset, "#args");
+  case OP_CLOSURE: {
+    return closure_instruction(code, offset);
+  }
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
   default:
@@ -163,15 +199,15 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
 
 void debug__dump_value_stack(const VM* vm)
 {
-  printf("            stack:");
+  printf("            stack: ");
   for (const Value* value = vm->value_stack; value < vm->value_stack_top;
        value++) {
-    printf("[ ");
+    printf("[");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
     // two, hence the need for `value__print_repr`
     value__print_repr(*value);
-    printf(" ]");
+    printf("]");
   }
   printf("\n");
 }
@@ -179,7 +215,7 @@ void debug__dump_value_stack(const VM* vm)
 static int
 get_current_source_line_in_frame(const CallFrame* frame, const VM* vm)
 {
-  const Bytecode* bytecode = &(frame->function->bytecode);
+  const Bytecode* bytecode = &(frame->closure->function->bytecode);
   int offset = callframe__current_offset(frame);
 
   return bytecode->to_source_line[offset];
@@ -189,7 +225,7 @@ void debug__dump_stacktrace(const VM* vm)
 {
   for (int i = vm->frames_count - 1; i >= 0; i--) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectFunction* function = frame->function;
+    ObjectFunction* function = frame->closure->function;
 
     int line = get_current_source_line_in_frame(frame, vm);
     fprintf(stderr, "[line %d] in ", line);

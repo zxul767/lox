@@ -20,7 +20,8 @@ static Value clock_native(int args_count, Value* args)
 
 inline int callframe__current_offset(const CallFrame* frame)
 {
-  return frame->instruction_pointer - frame->function->bytecode.instructions;
+  return frame->instruction_pointer -
+         frame->closure->function->bytecode.instructions;
 }
 
 static inline CallFrame* top_frame(VM* vm)
@@ -122,13 +123,12 @@ void vm__dispose(VM* vm)
 #endif
 }
 
-static bool
-validate_call_errors(ObjectFunction* function, int args_count, VM* vm)
+static bool validate_call_errors(ObjectClosure* closure, int args_count, VM* vm)
 {
-  if (args_count != function->arity) {
+  if (args_count != closure->function->arity) {
     runtime_error(
-        vm, "Expected %d argument%s but got %d", function->arity,
-        function->arity == 1 ? "" : "s", args_count);
+        vm, "Expected %d argument%s but got %d", closure->function->arity,
+        closure->function->arity == 1 ? "" : "s", args_count);
     return false;
   }
   if (vm->frames_count == FRAMES_MAX) {
@@ -138,14 +138,14 @@ validate_call_errors(ObjectFunction* function, int args_count, VM* vm)
   return true;
 }
 
-static bool call(ObjectFunction* function, int args_count, VM* vm)
+static bool call(ObjectClosure* closure, int args_count, VM* vm)
 {
-  if (!validate_call_errors(function, args_count, vm))
+  if (!validate_call_errors(closure, args_count, vm))
     return false;
 
   CallFrame* frame = push_frame(vm);
-  frame->function = function;
-  frame->instruction_pointer = function->bytecode.instructions;
+  frame->closure = closure;
+  frame->instruction_pointer = closure->function->bytecode.instructions;
   // -1 because the function is right below the arguments on the value_stack
   frame->slots = vm->value_stack_top - args_count - 1;
 
@@ -156,13 +156,13 @@ static bool call_value(Value callee, int args_count, VM* vm)
 {
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
-    case OBJECT_FUNCTION: {
+    case OBJECT_CLOSURE: {
 #ifdef DEBUG_TRACE_EXECUTION
       if (vm->trace_execution) {
         debug__print_callframe_divider();
       }
 #endif
-      return call(AS_FUNCTION(callee), args_count, vm);
+      return call(AS_CLOSURE(callee), args_count, vm);
     }
     case OBJECT_NATIVE_FUNCTION: {
       NativeFunction native = AS_NATIVE_FUNCTION(callee);
@@ -187,6 +187,8 @@ static bool is_falsey(Value value)
   return IS_NIL(value) || (IS_BOOL(value) && !AS_BOOL(value));
 }
 
+// concatenates the two object strings on top of the stack and pushes the result
+// back onto it
 static void concatenate(VM* vm)
 {
   ObjectString* b = AS_STRING(pop_value(vm));
@@ -203,6 +205,12 @@ static void concatenate(VM* vm)
   push_value(OBJECT_VAL(result), vm);
 }
 
+static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
+{
+  ObjectUpvalue* upvalue = upvalue__new(local, vm);
+  return upvalue;
+}
+
 static InterpretResult run(VM* vm)
 {
   CallFrame* frame = top_frame(vm);
@@ -214,7 +222,7 @@ static InterpretResult run(VM* vm)
    ((frame->instruction_pointer[-2] << 8) | (frame->instruction_pointer[-1])))
 
 #define READ_CONSTANT()                                                        \
-  (frame->function->bytecode.constants.values[READ_BYTE()])
+  (frame->closure->function->bytecode.constants.values[READ_BYTE()])
 
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
@@ -241,14 +249,15 @@ static InterpretResult run(VM* vm)
     if (vm->trace_execution) {
       debug__dump_value_stack(vm);
       debug__disassemble_instruction(
-          &frame->function->bytecode, callframe__current_offset(frame));
+          &frame->closure->function->bytecode,
+          callframe__current_offset(frame));
       fprintf(stderr, "\n");
     }
 #endif
 
     uint8_t instruction;
     switch (instruction = READ_BYTE()) {
-    case OP_CONSTANT: {
+    case OP_LOAD_CONSTANT: {
       Value constant = READ_CONSTANT();
       push_value(constant, vm);
       break;
@@ -265,6 +274,11 @@ static InterpretResult run(VM* vm)
     case OP_POP:
       pop_value(vm);
       break;
+    case OP_GET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      push_value(*frame->closure->upvalues[slot]->location, vm);
+      break;
+    }
     case OP_GET_LOCAL: {
       uint8_t slot = READ_BYTE();
       push_value(frame->slots[slot], vm);
@@ -273,6 +287,11 @@ static InterpretResult run(VM* vm)
     case OP_SET_LOCAL: {
       uint8_t slot = READ_BYTE();
       frame->slots[slot] = peek_value(0, vm);
+      break;
+    }
+    case OP_SET_UPVALUE: {
+      uint8_t slot = READ_BYTE();
+      *frame->closure->upvalues[slot]->location = peek_value(0, vm);
       break;
     }
     case OP_GET_GLOBAL: {
@@ -382,6 +401,21 @@ static InterpretResult run(VM* vm)
       frame = top_frame(vm);
       break;
     }
+    case OP_CLOSURE: {
+      ObjectFunction* function = AS_FUNCTION(READ_CONSTANT());
+      ObjectClosure* closure = closure__new(function, vm);
+      push_value(OBJECT_VAL(closure), vm);
+      for (int i = 0; i < closure->upvalues_count; i++) {
+        uint8_t is_local = READ_BYTE();
+        uint8_t index = READ_BYTE();
+        if (is_local) {
+          closure->upvalues[i] = capture_upvalue(frame->slots + index, vm);
+        } else {
+          closure->upvalues[i] = frame->closure->upvalues[index];
+        }
+      }
+      break;
+    }
     case OP_RETURN: {
       Value result = pop_value(vm);
       pop_frame(vm);
@@ -424,8 +458,16 @@ InterpretResult vm__interpret(const char* source, VM* vm)
     return INTERPRET_COMPILE_ERROR;
   }
 
+  // TODO: can we make abstract and hoist this pattern which occurs every time
+  // there's a risk of a garbage collection that will reclaim unreachable
+  // objects that are in the process of being created? (temporarily pushing them
+  // onto the value stack ensures they're reachable)
+  //
   push_value(OBJECT_VAL(top_level_wrapper), vm);
-  call(top_level_wrapper, 0, vm);
+  ObjectClosure* closure = closure__new(top_level_wrapper, vm);
+  pop_value(vm);
+  push_value(OBJECT_VAL(closure), vm);
+  call(closure, 0, vm);
 
   InterpretResult result = run(vm);
 

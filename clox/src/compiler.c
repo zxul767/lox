@@ -60,14 +60,25 @@ typedef struct Local {
 
 typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
 
+// see https://craftinginterpreters.com/closures.html for a full
+// description of the role of upvalues in implementing closures
+typedef struct Upvalue {
+  uint8_t index;
+  bool is_local;
+
+} Upvalue;
+
 typedef struct FunctionCompiler {
   struct FunctionCompiler* enclosing;
   ObjectFunction* function;
   FunctionType function_type;
 
+  Upvalue upvalues[UINT8_COUNT];
   Local locals[UINT8_COUNT];
   int locals_count;
   int scope_depth;
+
+  Parser* parser;
 
 } FunctionCompiler;
 
@@ -248,7 +259,7 @@ static void patch_jump(int offset, Compiler* compiler)
 
 static void emit_constant(Value value, Compiler* compiler)
 {
-  emit_bytes(OP_CONSTANT, store_constant(value, compiler), compiler);
+  emit_bytes(OP_LOAD_CONSTANT, store_constant(value, compiler), compiler);
 }
 
 static void emit_default_return(Compiler* compiler)
@@ -393,10 +404,8 @@ pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
 
 // returns the index of the local variable identified by `name` or -1 if it
 // doesn't exist
-static int resolve_local(Token* name, Compiler* compiler)
+static int resolve_local(Token* name, FunctionCompiler* current)
 {
-  FunctionCompiler* current = compiler->function_compiler;
-
   for (int i = current->locals_count - 1; i >= 0; i--) {
     Local* local = &current->locals[i];
     if (identifier__equals(name, &local->name)) {
@@ -404,7 +413,7 @@ static int resolve_local(Token* name, Compiler* compiler)
       if (local->scope_depth == -1) {
         error(
             "Can't read local variable in its own initializer.",
-            compiler->parser);
+            current->parser);
       }
       return i;
     }
@@ -412,14 +421,133 @@ static int resolve_local(Token* name, Compiler* compiler)
   return -1;
 }
 
+static int
+add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
+{
+  int upvalues_count = current->function->upvalues_count;
+  for (int i = 0; i < upvalues_count; i++) {
+    Upvalue* upvalue = &current->upvalues[i];
+    if (upvalue->index == index && upvalue->is_local == is_local) {
+      return i;
+    }
+  }
+  if (upvalues_count == UINT8_COUNT) {
+    error(
+        "Too many captured (closure) variables in function.", current->parser);
+  }
+  current->upvalues[upvalues_count].is_local = is_local;
+  current->upvalues[upvalues_count].index = index;
+
+  return current->function->upvalues_count++;
+}
+
+// consider the following program:
+//
+// fun out() {
+//    var x = "out";
+//    fun mid() {
+//       fun in() {
+//            print x;
+//       }
+//       in();
+//   }
+//   mid();
+// }
+// out();
+//
+// 1. at compilation time:
+//
+// when we're processing `in` and we find a reference to `x`, we find it
+// impossible to resolve it locally, so we know it is potentially a captured
+// (closure) variable. during this stage we can record the indexing information
+// required to successfully resolve the reference at runtime.
+//
+// for each function capturing non-local variables (i.e., a closure), we keep an
+// "upvalues" array that tells us how to get hold of them by looking at "parent"
+// or "ancestor" call frames at runtime:
+//
+// "mid" (closure) upvalues: [x=(index:1,parent)]
+// "in" (closure) upvalues: [x=(index:0,ancestor)]
+//
+// NOTE: for "parent" upvalues, `index` indexes into the locals array of the
+// parent function (i.e., a portion of the value stack); for "ancestor"
+// upvalues, `index` indexes into the `upvalues` array of the closure.
+//
+// this information is written in the resulting bytecode to be used by the VM to
+// properly instantiate closures and resolve their non-local variable
+// references.
+//
+// 2. at runtime:
+//
+// when processing an OP_CLOSURE instruction, the compile-time upvalues
+// information helps us build the final upvalues arrays, turning this:
+//
+// top-level frame
+//  |
+//  |        `out` frame            `mid` frame       `in` frame
+//  |  ________________________   ________________   _____________
+//  v /    0       1       2   \ /   0         1  \ /   0      1  \
+// [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
+//                ^
+//                |
+//               [x=(index:1, kind:parent)] (`mid` compile-time upvalues)
+//                ^
+//                |
+//               [x=(index:0, kind:ancestor)] (`in` compile-time upvalues)
+//
+// into this (the effective final data structure used at runtime):
+//
+// top-level frame
+//  |
+//  |        `out` frame            `mid` frame       `in` frame
+//  |  ________________________   ________________   _____________
+//  v /    0       1       2   \ /   0         1  \ /   0      1  \
+// [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
+//                ^
+//                |
+//            +---+--------------+
+//            |                  |
+//            |                 [x = &stack[1]]
+//            |                 (`mid` runtime upvalues)
+//            |
+//            |------------------------------------[x = &stack[1]]
+//                                                 (`in` runtime upvalues)
+//
+// with this in place, OP_GET_UPVALUE instructions are very quick to execute
+// since they simply resolve non-local variables in a single array lookup.
+//
+static int resolve_upvalue(Token* name, FunctionCompiler* current)
+{
+  if (current->enclosing == NULL)
+    return -1;
+
+  int index;
+  index = resolve_local(name, current->enclosing);
+  if (index != -1) {
+    return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ true);
+  }
+
+  index = resolve_upvalue(name, current->enclosing);
+  if (index != -1) {
+    return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ false);
+  }
+  return -1;
+}
+
 static void named_variable_or_assignment(Token name, Compiler* compiler)
 {
-  int location = resolve_local(&name, compiler);
+  int location = resolve_local(&name, compiler->function_compiler);
 
   uint8_t get_op, set_op;
   if (location != -1) {
     get_op = OP_GET_LOCAL;
     set_op = OP_SET_LOCAL;
+
+  } else if (
+      (location = resolve_upvalue(&name, compiler->function_compiler)) != -1) {
+    get_op = OP_GET_UPVALUE;
+    set_op = OP_SET_UPVALUE;
+
   } else {
     location = store_identifier_constant(&name, compiler);
     get_op = OP_GET_GLOBAL;
@@ -440,12 +568,11 @@ static void variable(Compiler* compiler)
   named_variable_or_assignment(compiler->parser->previous_token, compiler);
 }
 
-static void mark_latest_local_initialized(Compiler* compiler)
+static void mark_latest_local_initialized(FunctionCompiler* current)
 {
-  if (compiler->function_compiler->scope_depth == 0)
+  if (current->scope_depth == 0)
     return;
 
-  FunctionCompiler* current = compiler->function_compiler;
   current->locals[current->locals_count - 1].scope_depth = current->scope_depth;
 }
 
@@ -453,7 +580,7 @@ static void define_variable(uint8_t location, Compiler* compiler)
 {
   // local variable
   if (compiler->function_compiler->scope_depth > 0) {
-    mark_latest_local_initialized(compiler);
+    mark_latest_local_initialized(compiler->function_compiler);
     return;
   }
   // global variable
@@ -549,12 +676,10 @@ static void or_(Compiler* compiler)
 }
 
 static void
-check_duplicate_declaration(const Token* name, const Compiler* compiler)
+check_duplicate_declaration(const Token* name, const FunctionCompiler* current)
 {
-  FunctionCompiler* current = compiler->function_compiler;
-
   for (int i = current->locals_count - 1; i >= 0; i--) {
-    Local* local = &current->locals[i];
+    const Local* local = &current->locals[i];
     // local->scope_depth == -1 means the local has been declared but not
     // yet initialized
     if (local->scope_depth != -1 && local->scope_depth < current->scope_depth) {
@@ -563,7 +688,7 @@ check_duplicate_declaration(const Token* name, const Compiler* compiler)
     }
     if (identifier__equals(name, &local->name)) {
       error(
-          "Already a variable with this name in this scope.", compiler->parser);
+          "Already a variable with this name in this scope.", current->parser);
     }
   }
 }
@@ -571,7 +696,6 @@ check_duplicate_declaration(const Token* name, const Compiler* compiler)
 static void add_local_variable(Token name, Compiler* compiler)
 {
   FunctionCompiler* current = compiler->function_compiler;
-
   if (current->locals_count == UINT8_COUNT) {
     error("Too many local variables in function.", compiler->parser);
     return;
@@ -586,7 +710,7 @@ static void declare_local_variable(Compiler* compiler)
   assert(compiler->function_compiler->scope_depth > 0);
 
   Token* name = &compiler->parser->previous_token;
-  check_duplicate_declaration(name, compiler);
+  check_duplicate_declaration(name, compiler->function_compiler);
 
   add_local_variable(*name, compiler);
 }
@@ -651,25 +775,26 @@ static void var_declaration(Compiler* compiler)
   define_variable(location, compiler);
 }
 
-static void reserve_local_for_callee(FunctionCompiler* function_compiler)
+static void reserve_local_for_callee(FunctionCompiler* compiler)
 {
-  Local* local = &function_compiler->locals[function_compiler->locals_count++];
+  Local* local = &compiler->locals[compiler->locals_count++];
   local->scope_depth = 0;
   local->name.start = "";
   local->name.length = 0;
 }
 
 static void function_compiler__init(
-    FunctionCompiler* function_compiler, FunctionType function_type,
-    FunctionCompiler* enclosing_compiler, VM* vm)
+    FunctionCompiler* compiler, FunctionType function_type,
+    FunctionCompiler* enclosing, Parser* parser, VM* vm)
 {
-  function_compiler->enclosing = enclosing_compiler;
-  function_compiler->function_type = function_type;
-  function_compiler->function = function__new(vm);
-  function_compiler->locals_count = 0;
-  function_compiler->scope_depth = 0;
+  compiler->enclosing = enclosing;
+  compiler->function_type = function_type;
+  compiler->function = function__new(vm);
+  compiler->locals_count = 0;
+  compiler->scope_depth = 0;
+  compiler->parser = parser;
 
-  reserve_local_for_callee(function_compiler);
+  reserve_local_for_callee(compiler);
 }
 
 static void begin_scope(Compiler* compiler)
@@ -730,7 +855,8 @@ static void start_function_compilation(
 {
   function_compiler__init(
       function_compiler, function_type,
-      /* enclosing_compiler: */ compiler->function_compiler, compiler->vm);
+      /* enclosing_compiler: */ compiler->function_compiler, compiler->parser,
+      compiler->vm);
   compiler->function_compiler = function_compiler;
 
   if (function_type != TYPE_SCRIPT) {
@@ -765,7 +891,12 @@ static void function(FunctionType type, Compiler* compiler)
 
   ObjectFunction* function = finish_function_compilation(compiler);
   emit_bytes(
-      OP_CONSTANT, store_constant(OBJECT_VAL(function), compiler), compiler);
+      OP_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
+
+  for (int i = 0; i < function->upvalues_count; i++) {
+    emit_byte(function_compiler.upvalues[i].is_local ? 1 : 0, compiler);
+    emit_byte(function_compiler.upvalues[i].index, compiler);
+  }
 }
 
 static void fun_declaration(Compiler* compiler)
@@ -774,7 +905,7 @@ static void fun_declaration(Compiler* compiler)
   // this allows recursive functions to work properly (there is no danger since
   // the definition of a function is not executed during the implicit
   // assignment)
-  mark_latest_local_initialized(compiler);
+  mark_latest_local_initialized(compiler->function_compiler);
 
   function(TYPE_FUNCTION, compiler);
 
@@ -1221,7 +1352,8 @@ ObjectFunction* compiler__compile(const char* source_code, VM* vm)
 
   FunctionCompiler function_compiler;
   function_compiler__init(
-      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, vm);
+      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, &parser,
+      vm);
 
   Compiler compiler;
   compiler__init(&compiler, &parser, &function_compiler, vm);
