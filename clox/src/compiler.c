@@ -485,8 +485,8 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 // top-level frame
 //  |
 //  |        `out` frame            `mid` frame       `in` frame
-//  |  ________________________   ________________   _____________
-//  v /    0       1       2   \ /   0         1  \ /   0      1  \
+//  |  ________________________   ________________   ______________
+//  v /    0       1       2   \ /   0         1  \ /   0      1   |
 // [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
 //                ^
 //                |
@@ -500,8 +500,8 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 // top-level frame
 //  |
 //  |        `out` frame            `mid` frame       `in` frame
-//  |  ________________________   ________________   _____________
-//  v /    0       1       2   \ /   0         1  \ /   0      1  \
+//  |  ________________________   ________________   ______________
+//  v /    0       1       2   \ /   0         1  \ /   0      1   |
 // [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
 //                ^
 //                |
