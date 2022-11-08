@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <isocline.h>
+#include <limits.h>
 #include <locale.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -131,22 +132,29 @@ static void read_configuration(const char* file_path, VM* vm)
   fclose(file);
 }
 
-static FILE* open_or_die(const char* path, int die_status)
+static FILE*
+try_open_file(const char* path, int die_status, bool die_on_failure)
 {
-  FILE* file = fopen(path, "rb");
+  char resolved_path[PATH_MAX];
+  realpath(path, resolved_path);
+
+  FILE* file = fopen(resolved_path, "rb");
   if (file == NULL) {
-    fprintf(stderr, "Could not open file \"%s\".\n", path);
-    exit(die_status);
+    fprintf(stderr, "Could not open file \"%s\".\n", resolved_path);
+    if (die_on_failure)
+      exit(die_status);
   }
   return file;
 }
 
-static void* allocate_or_die(size_t size, int die_status)
+static void*
+try_allocate_or_die(size_t size, int die_status, bool die_on_failure)
 {
   void* buffer = malloc(size);
   if (buffer == NULL) {
     fprintf(stderr, "Not enough memory to continue!\n");
-    exit(die_status);
+    if (die_on_failure)
+      exit(die_status);
   }
   return buffer;
 }
@@ -160,45 +168,55 @@ static size_t file_size(FILE* file)
   return size;
 }
 
-static char* read_file_or_die(FILE* file, const char* path, int die_status)
+static char* try_read_stream(
+    FILE* file, const char* path, int die_status, bool die_on_failure)
 {
   size_t size = file_size(file);
-  char* buffer = (char*)allocate_or_die(size + 1, die_status);
+  char* buffer = (char*)try_allocate_or_die(
+      size + 1, die_status, /*die_on_failure:*/ true);
 
   size_t bytes_read = fread(buffer, sizeof(char), size, file);
   if (bytes_read < size) {
     fprintf(stderr, "Could not read file \"%s\".\n", path);
-    exit(die_status);
+    if (die_on_failure)
+      exit(die_status);
+    return NULL;
   }
   buffer[bytes_read] = '\0';
 
   return buffer;
 }
 
-static char* read_file(const char* path)
+static char* try_read_file(const char* path, bool die_on_failure)
 {
   // EX_IOERR == an error occurred while doing I/O on some file
-  FILE* file = open_or_die(path, /*die_status:*/ EX_IOERR);
-  char* buffer = read_file_or_die(file, path, /*die_status:*/ EX_IOERR);
-  fclose(file);
-
+  FILE* file = try_open_file(path, /*die_status:*/ EX_IOERR, die_on_failure);
+  char* buffer = NULL;
+  if (file) {
+    buffer =
+        try_read_stream(file, path, /*die_status:*/ EX_IOERR, die_on_failure);
+    fclose(file);
+  }
   return buffer;
 }
 
-static InterpretResult load_file(const char* path, VM* vm)
+static InterpretResult load_file(const char* path, VM* vm, bool die_on_failure)
 {
-  char* source_code = read_file(path);
-
-  vm->execution_mode = VM_SCRIPT_MODE;
-  InterpretResult result = vm__interpret(source_code, vm);
-  free(source_code);
-
-  return result;
+  char* source_code = try_read_file(path, die_on_failure);
+  if (source_code) {
+    vm->execution_mode = VM_SCRIPT_MODE;
+    InterpretResult result = vm__interpret(source_code, vm);
+    free(source_code);
+    return result;
+  }
+  // FIXME: we should be returning a more general error, since this is strictly
+  // incorrect
+  return INTERPRET_COMPILE_ERROR;
 }
 
 static void run_file(const char* path, VM* vm)
 {
-  InterpretResult result = load_file(path, vm);
+  InterpretResult result = load_file(path, vm, /*die_on_failure:*/ true);
 
   if (result == INTERPRET_COMPILE_ERROR)
     exit(EX_DATAERR);
@@ -236,7 +254,7 @@ static void repl(VM* vm)
     if (cstring__startswith(":load", line)) {
       load_file(
           cstring__trim_leading_whitespace(cstring__trim_prefix(":load", line)),
-          vm);
+          vm, /*die_on_failure:*/ false);
       continue;
     }
 
