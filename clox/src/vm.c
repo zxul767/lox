@@ -162,7 +162,9 @@ static bool call_value(Value callee, int args_count, VM* vm)
         debug__print_callframe_divider();
       }
 #endif
-      return call(AS_CLOSURE(callee), args_count, vm);
+      bool result = call(AS_CLOSURE(callee), args_count, vm);
+      debug__show_callframe_names(vm);
+      return result;
     }
     case OBJECT_NATIVE_FUNCTION: {
       NativeFunction native = AS_NATIVE_FUNCTION(callee);

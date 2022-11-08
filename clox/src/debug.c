@@ -237,3 +237,18 @@ void debug__dump_stacktrace(const VM* vm)
     }
   }
 }
+
+void debug__show_callframe_names(const VM* vm)
+{
+  fprintf(stderr, "CALL STACK: ");
+  for (int i = 0; i < vm->frames_count; i++) {
+    const CallFrame* frame = &vm->frames[i];
+    ObjectString* name = frame->closure->function->name;
+    if (i > 0) {
+      fprintf(stderr, " > ");
+    }
+    fprintf(stderr, "%s", name ? name->chars : "*top*");
+  }
+  fprintf(stderr, "\n");
+  debug__print_callframe_divider();
+}
