@@ -3,3 +3,4 @@
 *.d
 .deps/
 build/bin/clox
+.clox_history
