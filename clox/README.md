@@ -3,6 +3,8 @@
 
 `make run NAME=../samples/fib.lox` -- Builds the project and runs a script.
 
+`make repl` -- Builds the project and fires up the REPL.
+
 # Dependencies
 + A C compiler ([`gcc`]() or [`clang`]() should work fine)
    + Most OS provide easy ways to install a C compiler (e.g., in Debian-based distributions, `apt install build-essentials` installs `gcc`)
