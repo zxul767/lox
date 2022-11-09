@@ -5,7 +5,7 @@ Implementations of the Lox interpreter and compiler described in the wonderful b
 The original code comes straight from the book, but I made quite a few refactorings as I was studying each chapter.
 
 # Book Challenges
-At the end of every chapter in the book, there are a few challenges to deepen the reader's understanding of the material, or to add additional feature to the interpreter or compiler. You can find my answers in the [`challenges.md`](./challenges.md) file.
+At the end of every chapter in the book, there are a few challenges to deepen the reader's understanding of the material, or to add additional feature to the interpreter or compiler. You can find my answers in the [`challenges.md`](./challenges/challenges.md) file.
 
 # `jlox`
 [![jlox](https://github.com/zxul767/lox/actions/workflows/jlox.yml/badge.svg)](https://github.com/zxul767/lox/actions/workflows/jlox.yml)
