@@ -236,6 +236,12 @@ static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
   return new_upvalue;
 }
 
+// for closures whose lifetime will outlive that of its parent function, it is
+// necessary to make sure that non-local variables are migrated from the stack
+// to a more permanent place. that place is the upvalues arrays associated with
+// each closure. the simplest way to accomplish this is to store each closed
+// variable in the upvalue, and simply redirect the upvalue's location to it, as
+// follows:
 static void close_upvalues(Value* last, VM* vm)
 {
   while (vm->open_upvalues != NULL && vm->open_upvalues->location >= last) {
@@ -452,12 +458,19 @@ static InterpretResult run(VM* vm)
       break;
     }
     case OP_CLOSE_UPVALUE: {
+      // "close" the single local variable on top of the stack
       close_upvalues(vm->value_stack_top - 1, vm);
+      // we can get rid of since it is no longer needed by anyone (keep in mind
+      // that this operation only happens when a scope is "popped" so the only
+      // remaining references could by capturing closures)
       pop_value(vm);
       break;
     }
     case OP_RETURN: {
       Value result = pop_value(vm);
+      // before local values are "lost", let's "close" all local variables that
+      // were captured by inner closures (remember that all locals start at
+      // `frame->slots`)
       close_upvalues(frame->slots, vm);
       pop_frame(vm);
 

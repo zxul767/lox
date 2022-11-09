@@ -495,6 +495,7 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 //  |  ________________________   ________________   ______________
 //  v /    0       1       2   \ /   0         1  \ /   0      1   |
 // [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
+// -----------------------------------------------------------------
 //                ^
 //                |
 //               [x=(index:1, kind:parent)] (`mid` compile-time upvalues)
@@ -510,14 +511,15 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 //  |  ________________________   ________________   ______________
 //  v /    0       1       2   \ /   0         1  \ /   0      1   |
 // [*][<fn out>]["out"][<fn mid>][<fn mid>][<fn in>][<fn in>]["out"] (stack)
-//                ^
-//                |
-//            +---+--------------+
+// -----------------------------------------------------------------
+//  0  1         2  ^   3         4         5        6        7
+//                  |
+//            +-----+------------+
 //            |                  |
-//            |                 [x = &stack[1]]
+//            |                 [x = &stack[2]]
 //            |                 (`mid` runtime upvalues)
 //            |
-//            |------------------------------------[x = &stack[1]]
+//            |------------------------------------[x = &stack[2]]
 //                                                 (`in` runtime upvalues)
 //
 // with this in place, OP_GET_UPVALUE instructions are very quick to execute
