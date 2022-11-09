@@ -47,7 +47,7 @@ public class Lox {
 
   private static void runFile(String path) throws IOException {
     byte[] bytes = Files.readAllBytes(Paths.get(path));
-    run(new String(bytes, Charset.defaultCharset()));
+    run(new String(bytes, Charset.defaultCharset()), /* in_repl_mode: */ false);
     if (Errors.hadError)
       System.exit(65);
     if (Errors.hadRuntimeError)
@@ -96,7 +96,7 @@ public class Lox {
         if (!line.endsWith(";") && !line.endsWith("}")) {
           line += ";";
         }
-        run(line);
+        run(line, /* in_repl_mode: */ true);
         System.out.println();
 
         // if the user makes a mistake, we don't kill the session
@@ -112,7 +112,7 @@ public class Lox {
     }
   }
 
-  private static void run(String source) {
+  private static void run(String source, boolean in_repl_mode) {
     Scanner scanner = new Scanner(source);
     List<Token> tokens = scanner.scanTokens();
     Parser parser = new Parser(tokens);
@@ -129,7 +129,9 @@ public class Lox {
     if (Errors.hadError)
       return;
 
-    statements = ensureLastExpressionIsPrinted(statements);
+    if (in_repl_mode)
+      statements = ensureLastExpressionIsPrinted(statements);
+
     interpreter.interpret(statements);
   }
 
