@@ -21,6 +21,22 @@ If you want to test single-line commands in `clox`, you can run its [REPL](https
 
 When you're done with it, you can type `quit` to exit the REPL.
 
+## Debugging
+The REPL also supports a few directives to ease debugging of code:
+
++ `:load <file-path>` loads a Lox file into the current session (absolute and relative paths are supported)
+   + e.g., `:load ../test.lox` should work.
++ `:toggle-tracing` turns on/off execution tracing of any statement/expression you evaluate
++ `:toggle-bytecode` turns on/off the automatic display of bytecode generated for the last statement/expression you typed.
+
+Also, if you want to activate any of these settings when you fire up the REPL (they're both turned off by default), you can write in `.loxrc` with the following flags in the same directory that you launch `clox` from:
+
+```
+# this will make the REPL show bytecode by default but not execution tracing
+:show-bytecode
+#:enable-tracing
+```
+
 # Running Individual Scripts
 Note that the REPL only supports single-line strings, so if you want to test something larger, your best bet is to put it in a script and run it as follows:
 
