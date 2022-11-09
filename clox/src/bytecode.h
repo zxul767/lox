@@ -19,6 +19,8 @@ typedef enum {
   // pop value off of the stack
   OP_POP,
 
+  OP_CLOSE_UPVALUE,
+
   // push a local argument (which itself is stored on the stack) onto the top of
   // the stack
   OP_GET_LOCAL, // [opcode, local_stack_slot]

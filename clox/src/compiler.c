@@ -55,6 +55,7 @@ typedef enum {
 typedef struct Local {
   Token name;
   int scope_depth;
+  bool is_captured;
 
 } Local;
 
@@ -397,7 +398,13 @@ pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
   while (current->locals_count > 0) {
     if (current->locals[current->locals_count - 1].scope_depth < scope_depth)
       break;
-    emit_byte(OP_POP, compiler);
+
+    if (current->locals[current->locals_count - 1].is_captured) {
+      emit_byte(OP_CLOSE_UPVALUE, compiler);
+
+    } else {
+      emit_byte(OP_POP, compiler);
+    }
     current->locals_count--;
   }
 }
@@ -524,6 +531,7 @@ static int resolve_upvalue(Token* name, FunctionCompiler* current)
   int index;
   index = resolve_local(name, current->enclosing);
   if (index != -1) {
+    current->enclosing->locals[index].is_captured = true;
     return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ true);
   }
 
@@ -703,6 +711,7 @@ static void add_local_variable(Token name, Compiler* compiler)
   Local* local = &current->locals[current->locals_count++];
   local->name = name;
   local->scope_depth = -1; // mark declared but uninitialized
+  local->is_captured = false;
 }
 
 static void declare_local_variable(Compiler* compiler)
@@ -731,8 +740,13 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler)
 
 static bool has_implicit_statement_terminator(Parser* parser)
 {
-  return parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
-         parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT;
+  bool result =
+      parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
+      parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT ||
+      // handles statements like `{ return expression }`
+      parser->current_token.type == TOKEN_RIGHT_BRACE;
+
+  return result;
 }
 
 // see "optional semicolon" in `features_design.md`
@@ -746,9 +760,6 @@ static bool optional_semicolon(Parser* parser)
     // track newlines and comments as regular tokens (since otherwise the
     // regular parsing process would break!)
   } else if (has_implicit_statement_terminator(parser)) {
-    // we need to advance because `parse_only` assumes that the next lookahead
-    // token has been consumed already
-    advance(parser);
     return true;
 
   } else if (parser->current_token.type == TOKEN_EOF) {
@@ -781,6 +792,7 @@ static void reserve_local_for_callee(FunctionCompiler* compiler)
   local->scope_depth = 0;
   local->name.start = "";
   local->name.length = 0;
+  local->is_captured = false;
 }
 
 static void function_compiler__init(
@@ -957,11 +969,15 @@ static void return_statement(Compiler* compiler)
 
   if (match(TOKEN_SEMICOLON, compiler->parser)) {
     emit_default_return(compiler);
+
   } else {
     expression(compiler);
-    consume(
-        TOKEN_SEMICOLON, "Expected ';' after return value.", compiler->parser);
-    emit_byte(OP_RETURN, compiler);
+    if (optional_semicolon(compiler->parser)) {
+      emit_byte(OP_RETURN, compiler);
+
+    } else {
+      error_at_current("Expected ';' after return value.", compiler->parser);
+    }
   }
 }
 
@@ -1005,6 +1021,7 @@ static void expression_statement(Compiler* compiler)
   if (!optional_semicolon(parser)) {
     error_at_current("Expected ';' instead", compiler->parser);
   }
+
   // for the benefit of the REPL, we will automatically print the value of the
   // last expression (which would be otherwise lost)
   if (check(TOKEN_EOF, parser) &&

@@ -191,6 +191,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
   }
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
+  case OP_CLOSE_UPVALUE:
+    return simple_instruction("OP_CLOSE_UPVALUE", offset);
   default:
     printf("Unknown opcode %d\n", instruction);
     return offset + 1;

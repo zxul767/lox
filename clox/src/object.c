@@ -85,6 +85,8 @@ ObjectUpvalue* upvalue__new(Value* slot, VM* vm)
 {
   ObjectUpvalue* upvalue = ALLOCATE_OBJECT(ObjectUpvalue, OBJECT_UPVALUE, vm);
   upvalue->location = slot;
+  upvalue->closed = NIL_VAL;
+  upvalue->next = NULL;
 
   return upvalue;
 }

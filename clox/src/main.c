@@ -204,7 +204,6 @@ static InterpretResult load_file(const char* path, VM* vm, bool die_on_failure)
 {
   char* source_code = try_read_file(path, die_on_failure);
   if (source_code) {
-    vm->execution_mode = VM_SCRIPT_MODE;
     InterpretResult result = vm__interpret(source_code, vm);
     free(source_code);
     return result;

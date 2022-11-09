@@ -6,6 +6,7 @@
 
 typedef struct Bytecode Bytecode;
 typedef struct ObjectClosure ObjectClosure;
+typedef struct ObjectUpvalue ObjectUpvalue;
 
 // we need this information to compile a few things differently when running
 // inside a REPL (e.g., statement expressions are expected to print their value
@@ -50,13 +51,13 @@ typedef struct VM {
   // all heap-allocated objects are linked in a list whose head is pointed at by
   // `objects`
   Object* objects;
+  ObjectUpvalue* open_upvalues;
 
   // all strings (including those needed to represent variables), are "interned"
   // (i.e., a single copy is kept and reused when necessary) to minimize memory
   // and make string comparison much faster (essentially a pointer comparison
   // regardless of the string's length)
   Table interned_strings;
-
   Table global_vars;
 
   ExecutionMode execution_mode;

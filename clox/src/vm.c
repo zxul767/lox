@@ -45,6 +45,7 @@ static void reset_stacks(VM* vm)
 {
   vm->value_stack_top = vm->value_stack;
   vm->frames_count = 0;
+  vm->open_upvalues = NULL;
 }
 
 static void runtime_error(VM* vm, const char* format, ...)
@@ -163,7 +164,12 @@ static bool call_value(Value callee, int args_count, VM* vm)
       }
 #endif
       bool result = call(AS_CLOSURE(callee), args_count, vm);
-      debug__show_callframe_names(vm);
+
+#ifdef DEBUG_TRACE_EXECUTION
+      if (vm->trace_execution) {
+        debug__show_callframe_names(vm);
+      }
+#endif
       return result;
     }
     case OBJECT_NATIVE_FUNCTION: {
@@ -209,8 +215,35 @@ static void concatenate(VM* vm)
 
 static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
 {
-  ObjectUpvalue* upvalue = upvalue__new(local, vm);
-  return upvalue;
+  ObjectUpvalue* previous_upvalue = NULL;
+  ObjectUpvalue* upvalue = vm->open_upvalues;
+  while (upvalue != NULL && upvalue->location > local) {
+    previous_upvalue = upvalue;
+    upvalue = upvalue->next;
+  }
+  if (upvalue != NULL && upvalue->location == local) {
+    return upvalue;
+  }
+
+  ObjectUpvalue* new_upvalue = upvalue__new(local, vm);
+  new_upvalue->next = upvalue;
+
+  if (previous_upvalue == NULL) {
+    vm->open_upvalues = new_upvalue;
+  } else {
+    previous_upvalue->next = new_upvalue;
+  }
+  return new_upvalue;
+}
+
+static void close_upvalues(Value* last, VM* vm)
+{
+  while (vm->open_upvalues != NULL && vm->open_upvalues->location >= last) {
+    ObjectUpvalue* upvalue = vm->open_upvalues;
+    upvalue->closed = *upvalue->location;
+    upvalue->location = &upvalue->closed;
+    vm->open_upvalues = upvalue->next;
+  }
 }
 
 static InterpretResult run(VM* vm)
@@ -418,8 +451,14 @@ static InterpretResult run(VM* vm)
       }
       break;
     }
+    case OP_CLOSE_UPVALUE: {
+      close_upvalues(vm->value_stack_top - 1, vm);
+      pop_value(vm);
+      break;
+    }
     case OP_RETURN: {
       Value result = pop_value(vm);
+      close_upvalues(frame->slots, vm);
       pop_frame(vm);
 
       if (vm->frames_count == 0) {
