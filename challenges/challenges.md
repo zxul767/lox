@@ -5,11 +5,11 @@ CSS (for redering graphics), SCSS (a superset of CSS), HTML (for structuring web
 
 **2. Get a "Hello, world!" program written and running in Java. Set up whatever makefiles or IDE projects you need to get it working. If you have a debugger, get comfortable with it and step through your program as it runs.**
 
-I guess this project setup (i.e., [`jlox`](./jlox))covers the above and beyond?
+I guess the setup for (i.e., [`jlox`](../jlox)) covers the above and beyond?
 
 **3. Do the same thing for C. To get some practice with pointers, define a doubly linked list of heap-allocated strings. Write functions to insert, find, and delete items from it. Test them.**
 
-It's been a while but I don't think I've forgotten my pointers from years ago. However, [here](./listoy) is a little project to prove it.
+[listoy](./listoy) is a little project that implements the above.
 
 # Chapter 2
 **1. Pick an open source implementation of a language you like. Download the source code and poke around in it. Try to find the code that implements the scanner and parser. Are they handwritten, or generated using tools like Lex and Yacc? (`.l` or `.y` files usually imply the latter.)**
