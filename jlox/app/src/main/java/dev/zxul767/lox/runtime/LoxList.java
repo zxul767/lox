@@ -29,34 +29,70 @@ class LoxList extends LoxClass {
 
     registerMethod("length", 0, (self, args) -> (double)self.list.size());
     registerMethod("append", 1, (self, args) -> self.list.add(args[0]));
-    registerMethod("at", 1, (self, args) -> at(self, args));
-    registerMethod("clear", 0, (self, args) -> clear(self, args));
-    registerMethod("pop", 0, (self, args) -> pop(self, args));
+    registerMethod("at", 1, (self, args) -> at(self, args[0]));
+    registerMethod("__get__", 1, (self, args) -> at(self, args[0]));
+    registerMethod("set", 2, (self, args) -> set(self, args[0], args[1]));
+    registerMethod(
+        "__set__", 2, (self, args) -> chainable_set(self, args[0], args[1])
+    );
+    registerMethod("clear", 0, (self, args) -> clear(self));
+    registerMethod("pop", 0, (self, args) -> pop(self));
   }
 
   void registerMethod(String name, int arity, Invoker<Object, Object> invoker) {
     this.methods.put(name, new LoxListMethod(name, arity, invoker));
   }
 
-  static Object clear(LoxListInstance instance, Object... args) {
+  static Object clear(LoxListInstance instance) {
     instance.list.clear();
     return null;
   }
 
-  static Object at(LoxListInstance instance, Object... args) {
-    int index = (int)(double)args[0];
-    int normedIndex = index;
-    if (index < 0) {
-      normedIndex = instance.list.size() + index;
+  static int normalizeIndex(Object index, LoxListInstance instance) {
+    int originalIndex = (int)(double)index;
+    int normedIndex = originalIndex;
+    if (originalIndex < 0) {
+      normedIndex = instance.list.size() + originalIndex;
     }
     if (normedIndex < 0 || normedIndex >= instance.list.size()) {
       // we report on the original index to avoid confusing users
-      throwIndexError(instance, "at", index);
+      throwIndexError(instance, "at", originalIndex);
     }
+    return normedIndex;
+  }
+
+  // we need a special method `chainable_set` because `set` returns the previous
+  // value at `instance[index]` and that would produce counterintuitive
+  // (apparently non-deterministic) behavior in programs like:
+  //
+  // >>> var l = list()
+  // >>> l.append(list())
+  // >>> (l[0] = 1).length()
+  // 0
+  // >>> (l[0] = 1).length()
+  // RuntimeError: Only instances have properties
+  // [line 1]
+  //
+  // `list[index] = 1` needs then to desugar to `list.chainable_set(index, 1)`
+  //
+  static Object
+  chainable_set(LoxListInstance instance, Object index, Object expression) {
+    int normedIndex = normalizeIndex(index, instance);
+    instance.list.set(normedIndex, expression);
+    return expression;
+  }
+
+  static Object set(LoxListInstance instance, Object index, Object expression) {
+    int normedIndex = normalizeIndex(index, instance);
+    return instance.list.set(normedIndex, expression);
+  }
+
+  static Object at(LoxListInstance instance, Object index) {
+    int normedIndex = normalizeIndex(index, instance);
     return instance.list.get(normedIndex);
   }
 
-  static Object pop(LoxListInstance instance, Object... args) {
+  static Object pop(LoxListInstance instance) {
     if (instance.list.isEmpty()) {
       throwEmptyListError("pop");
     }

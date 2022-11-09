@@ -317,7 +317,7 @@ public class Parser {
       Expr right = unary();
       return new Expr.Unary(operator, right);
     }
-    return call();
+    return callOrIndex();
   }
 
   // TODO: since we're handling "get" expressions here too, the name "call"
@@ -325,22 +325,50 @@ public class Parser {
   //
   // call -> primary ( "(" arguments? ")" | "." IDENTIFIER )*
   // arguments -> expression ( "," expression )*
-  private Expr call() {
+  private Expr callOrIndex() {
     Expr callee = primary();
+
     // this loop is necessary because we might have an expression like this:
     //    callee(a, b)(c, d, e)(f, g)
     //
     while (true) {
-      if (match(LEFT_PAREN)) {
+      if (match(LEFT_BRACKET)) {
+        callee = index(callee);
+
+      } else if (match(LEFT_PAREN)) {
         callee = finishCall(callee);
+
       } else if (match(DOT)) {
         Token name = consume(IDENTIFIER, "Expected property name after '.'.");
         callee = new Expr.Get(callee, name);
+
       } else {
         break;
       }
     }
     return callee;
+  }
+
+  private Expr index(Expr callee) {
+    // we can desugar the expression `list[index]` down to `list.at(index)`
+    List<Expr> args = new ArrayList<>();
+    Expr index = expression();
+    args.add(index);
+    Token right_bracket =
+        consume(RIGHT_BRACKET, "Expected closing ']' on index access.");
+
+    // we have an assignment
+    // we need to desugar to `list[index] = expr` down to `list.set(index,
+    if (match(EQUAL)) {
+      callee = new Expr.Get(callee, new Token(IDENTIFIER, "__set__"));
+      Expr value = expression();
+      args.add(value);
+
+    } else {
+      callee = new Expr.Get(callee, new Token(IDENTIFIER, "__get__"));
+    }
+
+    return new Expr.Call(callee, right_bracket, args);
   }
 
   // Gather all arguments and create a single call expression
