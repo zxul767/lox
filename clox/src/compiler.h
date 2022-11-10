@@ -17,6 +17,6 @@ typedef struct FunctionCompiler FunctionCompiler;
 // allocated during compilation (e.g., literal strings)
 //
 ObjectFunction* compiler__compile(const char* source, VM* vm);
-void compiler__mark_roots();
+void compiler__mark_roots(FunctionCompiler* current);
 
 #endif // COMPILER_H_
