@@ -7,6 +7,7 @@
 typedef struct Bytecode Bytecode;
 typedef struct ObjectClosure ObjectClosure;
 typedef struct ObjectUpvalue ObjectUpvalue;
+typedef struct FunctionCompiler FunctionCompiler;
 
 // we need this information to compile a few things differently when running
 // inside a REPL (e.g., statement expressions are expected to print their value
@@ -64,6 +65,8 @@ typedef struct VM {
   bool trace_execution;
   bool show_bytecode;
 
+  FunctionCompiler* current_compiler;
+
 } VM;
 
 typedef enum {
@@ -76,6 +79,9 @@ int callframe__current_offset(const CallFrame* frame);
 
 void vm__init(VM* vm);
 void vm__dispose(VM* vm);
+
+void vm__push(Value value, VM* vm);
+void vm__pop(VM* vm);
 
 InterpretResult vm__interpret(const char* source, VM* vm);
 

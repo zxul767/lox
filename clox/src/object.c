@@ -9,8 +9,11 @@
 #define ALLOCATE_OBJECT(type, object_type, vm)                                 \
   (type*)object__allocate(sizeof(type), object_type, vm)
 
+const char* OBJ_TYPE_TO_STRING[] = {FOREACH_OBJ_TYPE(GENERATE_STRING)};
+
 static void track_object_for_gc(Object* object, VM* vm)
 {
+  object->is_alive = false;
   object->next = vm->objects;
   vm->objects = object;
 }
@@ -27,6 +30,13 @@ static Object* object__allocate(size_t size, ObjectType type, VM* vm)
   object->type = type;
 
   track_object_for_gc(object, vm);
+
+#ifdef DEBUG_LOG_GC_DETAILED
+  fprintf(
+      stderr, "%p allocate %zu bytes for %s\n", (void*)object, size,
+      OBJ_TYPE_TO_STRING[type]);
+#endif
+
   return object;
 }
 
@@ -37,7 +47,10 @@ string__allocate(char* chars, int length, uint32_t hash, VM* vm)
   string->length = length;
   string->chars = chars;
   string->hash = hash;
+
+  vm__push(OBJECT_VAL(string), vm);
   table__set(&vm->interned_strings, string, NIL_VAL);
+  vm__pop(vm);
 
   return string;
 }
@@ -128,10 +141,10 @@ ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm)
 static void print_function(const ObjectFunction* function)
 {
   if (function->name == NULL) {
-    printf("<script>");
+    fprintf(stderr, "<script>");
     return;
   }
-  printf("<fn %s>", function->name->chars);
+  fprintf(stderr, "<fn %s>", function->name->chars);
 }
 
 void object__print(Value value)
@@ -144,13 +157,13 @@ void object__print(Value value)
     print_function(AS_FUNCTION(value));
     break;
   case OBJECT_NATIVE_FUNCTION:
-    printf("<native fn>");
+    fprintf(stderr, "<native fn>");
     break;
   case OBJECT_STRING:
-    printf("%s", AS_CSTRING(value));
+    fprintf(stderr, "%s", AS_CSTRING(value));
     break;
   case OBJECT_UPVALUE:
-    printf("upvalue");
+    fprintf(stderr, "upvalue");
     break;
   }
 }
@@ -159,7 +172,7 @@ void object__print_repr(Value value)
 {
   switch (OBJECT_TYPE(value)) {
   case OBJECT_STRING:
-    printf("\"%s\"", AS_CSTRING(value));
+    fprintf(stderr, "\"%s\"", AS_CSTRING(value));
     break;
   default:
     object__print(value);

@@ -14,12 +14,24 @@
 #include "scanner.h"
 #include "vm.h"
 
+// there seems to be an issue with autocompletion of commands starting with `:`
+// this issue is tracking that: https://github.com/daanx/isocline/issues/17
+static char* const TOGGLE_BYTECODE = ":toggle-bytecode";
+static char* const TOGGLE_TRACING = ":toggle-tracing";
+static char* const LOAD_FILE = ":load";
+static char* const GC_RUN = ":gc";
+static char* const GC_STATS = ":gc-stats";
+static char* const QUIT = "quit";
+static char* const EXIT = "exit";
+
+static const char* COMMANDS[] = {
+    TOGGLE_BYTECODE, TOGGLE_TRACING, LOAD_FILE, GC_RUN,
+    GC_STATS,        QUIT,           EXIT,      NULL};
+
 static void
 word_completer(ic_completion_env_t* input_until_cursor, const char* word)
 {
-  static const char* commands[] = {"quit", NULL};
-
-  ic_add_completions(input_until_cursor, word, commands);
+  ic_add_completions(input_until_cursor, word, COMMANDS);
   ic_add_completions(input_until_cursor, word, KEYWORDS);
 }
 
@@ -101,6 +113,8 @@ static bool cstring__startswith(const char* prefix, char* string)
   }
   return *prefix == '\0';
 }
+
+static bool cstring__is_empty(const char* string) { return *string == '\0'; }
 
 static void read_configuration(const char* file_path, VM* vm)
 {
@@ -246,50 +260,71 @@ static void repl(VM* vm)
   char* line;
   while ((line = ic_readline(">>")) != NULL) {
     line = cstring__trim_trailing_whitespace(line);
+    if (cstring__is_empty(line))
+      goto next;
 
-    if (!strcmp("quit", line))
+    if (!strcmp(QUIT, line) || !strcmp(EXIT, line))
       break;
 
-    if (cstring__startswith(":load", line)) {
+    if (cstring__startswith(LOAD_FILE, line)) {
       load_file(
-          cstring__trim_leading_whitespace(cstring__trim_prefix(":load", line)),
+          cstring__trim_leading_whitespace(
+              cstring__trim_prefix(LOAD_FILE, line)),
           vm, /*die_on_failure:*/ false);
-      continue;
+
+      goto next;
     }
 
-    if (!strcmp(":toggle-bytecode", line)) {
+    if (!strcmp(TOGGLE_BYTECODE, line)) {
       vm->show_bytecode = !vm->show_bytecode;
       ic_printf("bytecode display: %s\n", vm->show_bytecode ? "on" : "off");
-      continue;
+      goto next;
     }
 
-    if (!strcmp(":toggle-tracing", line)) {
+    if (!strcmp(TOGGLE_TRACING, line)) {
       vm->trace_execution = !vm->trace_execution;
       ic_printf("execution tracing: %s\n", vm->trace_execution ? "on" : "off");
-      continue;
+      goto next;
+    }
+
+    if (!strcmp(GC_RUN, line)) {
+      memory__run_gc();
+      goto next;
+    }
+
+    if (!strcmp(GC_STATS, line)) {
+      memory__print_gc_stats();
+      goto next;
     }
 
     vm__interpret(line, vm);
 
+  next:
     free(line);
   }
+  free(line);
 }
 
 int main(int args_count, const char* args[])
 {
   VM vm;
   vm__init(&vm);
+  memory__init_gc();
+  memory__register_for_gc(&vm);
 
   if (args_count == 1) {
     repl(&vm);
+
   } else if (args_count == 2) {
     // args[0] is always the name of the program
     run_file(args[1], &vm);
+
   } else {
     fprintf(stderr, "Usage: clox [path]\n");
     exit(EX_USAGE);
   }
   vm__dispose(&vm);
+  memory__shutdown_gc();
 
   return 0;
 }

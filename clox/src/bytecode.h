@@ -4,6 +4,8 @@
 #include "common.h"
 #include "value.h"
 
+typedef struct VM VM;
+
 //
 // our interpreter is a stack-based virtual machine, with instructions that may
 // have arguments stored either in the bytecode itself, in the constants table,
@@ -94,6 +96,6 @@ void bytecode__dispose(Bytecode*);
 void bytecode__append(Bytecode*, uint8_t byte, int source_line);
 // returns the slot index into which `value` was inserted
 // in the code->constants array
-int bytecode__store_constant(Bytecode* code, Value value);
+int bytecode__store_constant(Bytecode* code, Value value, VM* vm);
 
 #endif // BYTECODE_H_

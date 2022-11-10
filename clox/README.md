@@ -30,6 +30,8 @@ The REPL also supports a few directives to ease debugging of code:
    + e.g., `:load ../test.lox` should work.
 + `:toggle-tracing` turns on/off execution tracing of any statement/expression you evaluate
 + `:toggle-bytecode` turns on/off the automatic display of bytecode generated for the last statement/expression you typed.
++ `:gc-stats` prints basic statistics about memory allocation and garbage collection.
++ `:gc` forces a garbage collection run.
 
 Also, if you want any of these settings to be automatically activated (they're both turned off by default), you can write a settings file `.loxrc` in the current working directory[^loxrc] (i.e., the directory you're launching `clox` from):
 

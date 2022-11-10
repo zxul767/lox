@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "compiler.h"
+#include "memory.h"
 #include "object.h"
 #include "scanner.h"
 
@@ -174,7 +175,8 @@ static inline Bytecode* current_bytecode(Compiler* compiler)
 
 static uint8_t store_constant(Value value, Compiler* compiler)
 {
-  int location = bytecode__store_constant(current_bytecode(compiler), value);
+  int location =
+      bytecode__store_constant(current_bytecode(compiler), value, compiler->vm);
   if (location > UINT8_MAX) {
     error("Too many constants in one chunk", compiler->parser);
     return 0;
@@ -807,6 +809,9 @@ static void function_compiler__init(
   compiler->locals_count = 0;
   compiler->scope_depth = 0;
   compiler->parser = parser;
+  // we need this back reference so we can do garbage collection
+  // on objects allocated on all nested function compilers
+  vm->current_compiler = compiler;
 
   reserve_local_for_callee(compiler);
 }
@@ -1437,3 +1442,11 @@ ParseRule rules[] = {
 /* clang-format on */
 
 static ParseRule* get_parse_rule(TokenType type) { return &rules[type]; }
+
+void compiler__mark_roots(FunctionCompiler* current)
+{
+  while (current != NULL) {
+    memory__mark_object_as_alive((Object*)(current->function));
+    current = current->enclosing;
+  }
+}

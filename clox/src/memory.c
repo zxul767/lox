@@ -1,12 +1,65 @@
 #include <assert.h>
-#include <stdio.h>
 #include <stdlib.h>
 
+#include "compiler.h"
 #include "memory.h"
 #include "object.h"
+#include "vm.h"
+
+#include <stdio.h>
+
+#ifdef DEBUG_STRESS_GC
+#include "debug.h"
+#endif
+
+#define GC_HEAP_GROW_FACTOR 2
+
+GC __gc;
+
+void memory__print_gc_stats()
+{
+  // TODO: format numeric output with thousands separators
+  fprintf(stderr, "bytes allocated: %zu.\n", __gc.bytes_allocated);
+  fprintf(
+      stderr, "next gc run after %zu bytes allocated.\n",
+      __gc.next_gc_in_bytes);
+}
+
+void memory__init_gc()
+{
+  __gc.vms_count = 0;
+
+  __gc.gray_capacity = 0;
+  __gc.gray_count = 0;
+  __gc.gray_stack = NULL;
+
+  __gc.bytes_allocated = 0;
+  __gc.next_gc_in_bytes = 1024 * 1024;
+}
+
+void memory__shutdown_gc() { free(__gc.gray_stack); }
+
+void memory__register_for_gc(VM* vm)
+{
+  assert(__gc.vms_count == 0);
+
+  __gc.vms[__gc.vms_count++] = vm;
+}
 
 void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
 {
+  __gc.bytes_allocated += new_size - old_size;
+
+  if (new_size > old_size) {
+#ifdef DEBUG_STRESS_GC
+    memory__run_gc();
+#endif
+
+    if (__gc.bytes_allocated > __gc.next_gc_in_bytes) {
+      memory__run_gc();
+    }
+  }
+
   if (new_size == 0) {
     free(pointer);
     return NULL;
@@ -20,6 +73,12 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
 
 static void free_object(Object* object)
 {
+#ifdef DEBUG_LOG_GC_DETAILED
+  fprintf(
+      stderr, "%p disposing (%s)\n", (void*)object,
+      OBJ_TYPE_TO_STRING[object->type]);
+#endif
+
   switch (object->type) {
   case OBJECT_CLOSURE: {
     ObjectClosure* closure = (ObjectClosure*)object;
@@ -63,4 +122,176 @@ size_t memory__free_objects(Object* objects)
     count++;
   }
   return count;
+}
+
+static void grow_gray_capacity(GC* gc)
+{
+  gc->gray_capacity = GROW_CAPACITY(gc->gray_capacity);
+  gc->gray_stack =
+      (Object**)realloc(gc->gray_stack, sizeof(Object*) * gc->gray_capacity);
+
+  if (gc->gray_stack == NULL) {
+    fprintf(stderr, "Critical failure: cannot allocate gray list during GC.\n");
+    exit(EXIT_FAILURE);
+  }
+}
+
+// see
+// https://craftinginterpreters.com/garbage-collection.html#the-tricolor-abstraction
+// for details on the tricolor abstraction and the meaning of white/gray/black
+// objects during garbage collection
+//
+static void add_to_gray_list(GC* gc, Object* object)
+{
+  if (gc->gray_count + 1 > gc->gray_capacity) {
+    grow_gray_capacity(gc);
+  }
+  gc->gray_stack[gc->gray_count++] = object;
+}
+
+void memory__mark_object_as_alive(Object* object)
+{
+  if (object == NULL || object->is_alive)
+    return;
+
+#ifdef DEBUG_LOG_GC_DETAILED
+  fprintf(stderr, "%p marked as alive\n", (void*)object);
+#endif
+
+  object->is_alive = true;
+  add_to_gray_list(&__gc, object);
+}
+
+void memory__mark_value_as_alive(Value value)
+{
+  if (IS_OBJECT(value))
+    memory__mark_object_as_alive(AS_OBJECT(value));
+}
+
+static void mark_roots(VM* vm)
+{
+  // the value stack
+  for (Value* slot = vm->value_stack; slot < vm->value_stack_top; slot++) {
+    memory__mark_value_as_alive(*slot);
+  }
+
+  // objects allocated during compilation
+  compiler__mark_roots(vm->current_compiler);
+
+  // global variables
+  table__mark_as_alive(&vm->global_vars);
+
+  // closures in current frames
+  for (int i = 0; i < vm->frames_count; i++) {
+    memory__mark_object_as_alive((Object*)vm->frames[i].closure);
+  }
+
+  // open upvalues
+  for (ObjectUpvalue* upvalue = vm->open_upvalues; upvalue != NULL;
+       upvalue = upvalue->next) {
+    memory__mark_object_as_alive((Object*)upvalue);
+  }
+}
+
+static void mark_array_as_alive(ValueArray* array)
+{
+  for (int i = 0; i < array->count; i++) {
+    memory__mark_value_as_alive(array->values[i]);
+  }
+}
+
+static void mark_object_as_processed(Object* object)
+{
+#ifdef DEBUG_LOG_GC_DETAILED
+  printf("%p marked as processed\n", (void*)object);
+#endif
+
+  switch (object->type) {
+  case OBJECT_CLOSURE: {
+    ObjectClosure* closure = (ObjectClosure*)object;
+    memory__mark_object_as_alive((Object*)closure->function);
+    for (int i = 0; i < closure->upvalues_count; i++) {
+      memory__mark_object_as_alive((Object*)closure->upvalues[i]);
+    }
+    break;
+  }
+  case OBJECT_FUNCTION: {
+    ObjectFunction* function = (ObjectFunction*)object;
+    memory__mark_object_as_alive((Object*)function->name);
+    mark_array_as_alive(&function->bytecode.constants);
+    break;
+  }
+  case OBJECT_UPVALUE:
+    memory__mark_value_as_alive(((ObjectUpvalue*)object)->closed);
+    break;
+  case OBJECT_NATIVE_FUNCTION:
+  case OBJECT_STRING:
+    break;
+  }
+}
+
+static void trace_references(GC* gc)
+{
+  while (gc->gray_count > 0) {
+    Object* object = gc->gray_stack[--gc->gray_count];
+    mark_object_as_processed(object);
+  }
+}
+
+static void sweep(VM* vm)
+{
+  Object* previous = NULL;
+  Object* object = vm->objects;
+
+  while (object != NULL) {
+    if (object->is_alive) {
+      object->is_alive = false;
+
+      previous = object;
+      object = object->next;
+
+    } else {
+      Object* unreachable = object;
+
+      object = object->next;
+      if (previous != NULL) {
+        previous->next = object;
+      } else {
+        vm->objects = object;
+      }
+
+      free_object(unreachable);
+    }
+  }
+}
+
+void memory__run_gc()
+{
+#if defined(DEBUG_LOG_GC) || defined(DEBUG_LOG_GC_DETAILED)
+  fprintf(stderr, "-- GC begins\n");
+  size_t before = __gc.bytes_allocated;
+#endif
+
+  // TODO: design a good policy to strike a balance between throughout and
+  // latency
+  for (int i = 0; i < __gc.vms_count; ++i) {
+    assert(__gc.vms[i] != NULL);
+
+    mark_roots(__gc.vms[i]);
+    trace_references(&__gc);
+    table__remove_unvisited_objects(&(__gc.vms[i]->interned_strings));
+    sweep(__gc.vms[i]);
+
+    __gc.next_gc_in_bytes = __gc.bytes_allocated * GC_HEAP_GROW_FACTOR;
+  }
+
+#if defined(DEBUG_LOG_GC) || defined(DEBUG_LOG_GC_DETAILED)
+  fprintf(stderr, "-- GC ends\n");
+
+  fprintf(
+      stderr, "\tcollected %zu bytes (from %zu to %zu).\n",
+      before - __gc.bytes_allocated, before, __gc.bytes_allocated);
+
+  fprintf(stderr, "\tnext collection at %zu bytes\n", __gc.next_gc_in_bytes);
+#endif
 }

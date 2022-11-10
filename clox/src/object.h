@@ -22,20 +22,41 @@ typedef struct VM VM;
 #define AS_STRING(value) ((ObjectString*)AS_OBJECT(value))
 #define AS_CSTRING(value) (((ObjectString*)AS_OBJECT(value))->chars)
 
-typedef enum {
-  OBJECT_CLOSURE,
-  OBJECT_FUNCTION,
-  OBJECT_NATIVE_FUNCTION,
-  OBJECT_STRING,
-  OBJECT_UPVALUE,
+// For details on this peculiar technique to be convert enum symbols to strings
+// without redundancy, see:
+//
+// https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
+#define FOREACH_OBJ_TYPE(TYPE)                                                 \
+  TYPE(OBJECT_CLOSURE)                                                         \
+  TYPE(OBJECT_FUNCTION)                                                        \
+  TYPE(OBJECT_NATIVE_FUNCTION)                                                 \
+  TYPE(OBJECT_STRING)                                                          \
+  TYPE(OBJECT_UPVALUE)
 
-} ObjectType;
+#define GENERATE_ENUM(ENUM) ENUM,
+#define GENERATE_STRING(STRING) #STRING,
+
+typedef enum { FOREACH_OBJ_TYPE(GENERATE_ENUM) } ObjectType;
+
+// We make it `extern` so it can be used from compiler.c;
+// see initialization in scanner.c
+extern const char* OBJ_TYPE_TO_STRING[];
 
 struct Object {
   ObjectType type;
   // an "intrusive" linked list to track all heap-allocated objects and
   // so avoid memory leaks (later on to be replaced by full-blown GC)
   struct Object* next;
+
+  // an object is "dead" by default, meaning that it is assumed to not be
+  // reachable from the roots during a garbage collection. after the
+  // mark-and-sweep phase, it should change its status if it is not actually
+  // dead.
+  //
+  // while this may prone to causing serious errors in the application when the
+  // GC algorithm is not correct, i think this is precisely the kind of stress
+  // testing that we need for such an important part of the program.
+  bool is_alive;
 };
 
 typedef Value (*NativeFunction)(int args_count, Value* args);

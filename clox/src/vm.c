@@ -41,11 +41,12 @@ static inline void pop_frame_args(VM* vm, const CallFrame* frame)
   vm->value_stack_top = frame->slots;
 }
 
-static void reset_stacks(VM* vm)
+static void reset_for_execution(VM* vm)
 {
   vm->value_stack_top = vm->value_stack;
   vm->frames_count = 0;
   vm->open_upvalues = NULL;
+  vm->current_compiler = NULL;
 }
 
 static void runtime_error(VM* vm, const char* format, ...)
@@ -58,7 +59,7 @@ static void runtime_error(VM* vm, const char* format, ...)
   fputs("\n", stderr);
 
   debug__dump_stacktrace(vm);
-  reset_stacks(vm);
+  reset_for_execution(vm);
 }
 
 static inline void push_value(Value value, VM* vm)
@@ -67,11 +68,15 @@ static inline void push_value(Value value, VM* vm)
   vm->value_stack_top++;
 }
 
+void vm__push(Value value, VM* vm) { push_value(value, vm); }
+
 static inline Value pop_value(VM* vm)
 {
   vm->value_stack_top--;
   return *(vm->value_stack_top);
 }
+
+void vm__pop(VM* vm) { pop_value(vm); }
 
 static inline Value peek_value(int distance, const VM* vm)
 {
@@ -103,7 +108,8 @@ void vm__init(VM* vm)
   vm->execution_mode = VM_SCRIPT_MODE;
   vm->trace_execution = false;
   vm->show_bytecode = false;
-  reset_stacks(vm);
+
+  reset_for_execution(vm);
   table__init(&vm->interned_strings);
   table__init(&vm->global_vars);
 
@@ -199,8 +205,8 @@ static bool is_falsey(Value value)
 // back onto it
 static void concatenate(VM* vm)
 {
-  ObjectString* b = AS_STRING(pop_value(vm));
-  ObjectString* a = AS_STRING(pop_value(vm));
+  ObjectString* b = AS_STRING(peek_value(0, vm));
+  ObjectString* a = AS_STRING(peek_value(1, vm));
 
   int length = a->length + b->length;
   char* chars = ALLOCATE(char, length + 1);
@@ -210,6 +216,8 @@ static void concatenate(VM* vm)
 
   ObjectString* result = string__take_ownership(chars, length, vm);
 
+  pop_value(vm);
+  pop_value(vm);
   push_value(OBJECT_VAL(result), vm);
 }
 
@@ -505,6 +513,8 @@ static InterpretResult run(VM* vm)
 
 InterpretResult vm__interpret(const char* source, VM* vm)
 {
+  reset_for_execution(vm);
+
   // we pass `vm` so we can track all heap-allocated
   // objects and dispose them when the VM shuts down
   ObjectFunction* top_level_wrapper = compiler__compile(source, vm);
@@ -520,6 +530,7 @@ InterpretResult vm__interpret(const char* source, VM* vm)
   push_value(OBJECT_VAL(top_level_wrapper), vm);
   ObjectClosure* closure = closure__new(top_level_wrapper, vm);
   pop_value(vm);
+
   push_value(OBJECT_VAL(closure), vm);
   call(closure, 0, vm);
 

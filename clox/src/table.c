@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -238,4 +239,23 @@ ObjectString* table__find_string(
   // in theory, we should never get here, since the table will always have
   // empty entries that terminate probe sequences.
   return NULL; // unreachable
+}
+
+void table__mark_as_alive(const Table* table)
+{
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    memory__mark_object_as_alive((Object*)entry->key);
+    memory__mark_value_as_alive(entry->value);
+  }
+}
+
+void table__remove_unvisited_objects(Table* table)
+{
+  for (int i = 0; i < table->capacity; i++) {
+    Entry* entry = &table->entries[i];
+    if (entry->key != NULL && !entry->key->object.is_alive) {
+      table__delete(table, entry->key);
+    }
+  }
 }

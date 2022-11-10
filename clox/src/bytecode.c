@@ -1,5 +1,6 @@
 #include "bytecode.h"
 #include "memory.h"
+#include "vm.h"
 
 void bytecode__init(Bytecode* code)
 {
@@ -38,8 +39,11 @@ void bytecode__append(Bytecode* code, uint8_t byte, int source_line)
   code->count++;
 }
 
-int bytecode__store_constant(Bytecode* code, Value value)
+int bytecode__store_constant(Bytecode* code, Value value, VM* vm)
 {
+  vm__push(value, vm);
   value_array__append(&code->constants, value);
+  vm__pop(vm);
+
   return code->constants.count - 1;
 }

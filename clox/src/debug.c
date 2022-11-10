@@ -26,8 +26,8 @@ void debug__print_callframe_divider()
 
 void debug__disassemble(const Bytecode* code, const char* name)
 {
-  printf(
-      "BYTECODE for '%s' %s\n", name != NULL ? name : "<script>",
+  fprintf(
+      stderr, "BYTECODE for '%s' %s\n", name != NULL ? name : "<script>",
       name != NULL ? "function" : "");
   debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
@@ -42,7 +42,7 @@ static int simple_instruction(const char* name, int offset)
   // [OP_CODE]...
   //     ^
   //   offset
-  printf("%s\n", name);
+  fprintf(stderr, "%s\n", name);
 
   return offset + 1;
 }
@@ -55,7 +55,7 @@ static int byte_instruction(
   //     ^
   //   offset
   uint8_t value = code->instructions[offset + 1];
-  printf("%-20s %s:%-4d\n", name, value_name, value);
+  fprintf(stderr, "%-20s %s:%-4d\n", name, value_name, value);
 
   return offset + 2;
 }
@@ -69,7 +69,9 @@ static int jump_instruction(
   //     offset
   uint16_t jump_length = (uint16_t)(code->instructions[offset + 1] << 8);
   jump_length |= code->instructions[offset + 2];
-  printf("%-20s -> offset:%04d\n", name, offset + 3 + direction * jump_length);
+  fprintf(
+      stderr, "%-20s -> offset:%04d\n", name,
+      offset + 3 + direction * jump_length);
 
   return offset + 3;
 }
@@ -84,15 +86,15 @@ constant_instruction(const char* name, const Bytecode* code, int offset)
   uint8_t constant_location = code->instructions[offset + 1];
   if (!strcmp(name, "OP_DEFINE_GLOBAL") || !strcmp(name, "OP_GET_GLOBAL") ||
       !strcmp(name, "OP_SET_GLOBAL")) {
-    printf("%-20s index:", name);
+    fprintf(stderr, "%-20s index:", name);
     value__print_repr(code->constants.values[constant_location]);
 
   } else {
-    printf("%-20s index:%d (=", name, constant_location);
+    fprintf(stderr, "%-20s index:%d (=", name, constant_location);
     value__print_repr(code->constants.values[constant_location]);
-    printf(")");
+    fprintf(stderr, ")");
   }
-  printf("\n");
+  fprintf(stderr, "\n");
 
   return offset + 2;
 }
@@ -102,33 +104,33 @@ int closure_instruction(const Bytecode* code, int offset)
   // TODO: why do we skip over one byte here?
   offset++;
   uint8_t location = code->instructions[offset++];
-  printf("%-20s index:%d (=", "OP_CLOSURE", location);
+  fprintf(stderr, "%-20s index:%d (=", "OP_CLOSURE", location);
   value__print_repr(code->constants.values[location]);
-  printf(")\n");
+  fprintf(stderr, ")\n");
 
   ObjectFunction* function = AS_FUNCTION(code->constants.values[location]);
   for (int i = 0; i < function->upvalues_count; i++) {
     int is_local = code->instructions[offset++];
     int index = code->instructions[offset++];
-    printf(
-        "%04d    |    %-20supvalue:(index:%d,%s)\n", offset - 2, "", index,
-        is_local ? "parent" : "ancestor");
+    fprintf(
+        stderr, "%04d    |    %-20supvalue:(index:%d,%s)\n", offset - 2, "",
+        index, is_local ? "parent" : "ancestor");
   }
   return offset;
 }
 
 int debug__disassemble_instruction(const Bytecode* code, int offset)
 {
-  printf("%04d ", offset);
+  fprintf(stderr, "%04d ", offset);
 
   if (offset > 0 &&
       code->to_source_line[offset] == code->to_source_line[offset - 1]) {
     // reduce visual clutter by not printing repeated source line numbers
     // but still add an indicator to let the user know source line number is the
     // same as the previous instruction
-    printf("   |   ");
+    fprintf(stderr, "   |   ");
   } else {
-    printf("%4d   ", code->to_source_line[offset]);
+    fprintf(stderr, "%4d   ", code->to_source_line[offset]);
   }
 
   uint8_t instruction = code->instructions[offset];
@@ -194,24 +196,24 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
   case OP_CLOSE_UPVALUE:
     return simple_instruction("OP_CLOSE_UPVALUE", offset);
   default:
-    printf("Unknown opcode %d\n", instruction);
+    fprintf(stderr, "Unknown opcode %d\n", instruction);
     return offset + 1;
   }
 }
 
 void debug__dump_value_stack(const VM* vm)
 {
-  printf("            stack: ");
+  fprintf(stderr, "            stack: ");
   for (const Value* value = vm->value_stack; value < vm->value_stack_top;
        value++) {
-    printf("[");
+    fprintf(stderr, "[");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
     // two, hence the need for `value__print_repr`
     value__print_repr(*value);
-    printf("]");
+    fprintf(stderr, "]");
   }
-  printf("\n");
+  fprintf(stderr, "\n");
 }
 
 static int

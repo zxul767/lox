@@ -7,6 +7,8 @@ typedef struct VM VM;
 typedef struct Bytecode Bytecode;
 typedef struct ObjectFunction ObjectFunction;
 
+typedef struct FunctionCompiler FunctionCompiler;
+
 // compiles `source` and returns a function object (a program is always wrapped
 // in a sentinel function so we don't have to special case compilation of
 // top-level statements.)
@@ -15,5 +17,6 @@ typedef struct ObjectFunction ObjectFunction;
 // allocated during compilation (e.g., literal strings)
 //
 ObjectFunction* compiler__compile(const char* source, VM* vm);
+void compiler__mark_roots();
 
 #endif // COMPILER_H_

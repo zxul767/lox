@@ -29,4 +29,7 @@ ObjectString* table__find_string(
 
 void table__add_all(Table* from, Table* to);
 
+void table__mark_as_alive(const Table* table);
+void table__remove_unvisited_objects(Table* table);
+
 #endif // TABLE_H_
