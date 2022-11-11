@@ -1,0 +1,14 @@
+fun outer() {
+  var x = "x as a captured variable"
+  fun inner() {
+    println(x)
+  }
+  return inner
+}
+
+fun invoker(closure) {
+   closure()
+}
+
+var closure = outer();
+invoker(closure)

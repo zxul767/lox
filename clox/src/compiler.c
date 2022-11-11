@@ -146,10 +146,13 @@ static void error_at(const Token* token, const char* message, Parser* parser)
   fprintf(stderr, "[line %d] Error", token->line);
   if (token->type == TOKEN_EOF) {
     fprintf(stderr, " at end");
+
   } else if (token->type == TOKEN_ERROR) {
-    fprintf(
-        stderr, " after '%.*s'", parser->previous_token.length,
-        parser->previous_token.start);
+    if (parser->previous_token.type != TOKEN_BOF)
+      fprintf(
+          stderr, " after '%.*s'", parser->previous_token.length,
+          parser->previous_token.start);
+
   } else {
     fprintf(
         stderr, " at '%.*s' [%s]", token->length, token->start,
@@ -958,16 +961,6 @@ static void unary(Compiler* compiler)
   }
 }
 
-static void print_statement(Compiler* compiler)
-{
-  expression(compiler);
-  if (optional_semicolon(compiler->parser)) {
-    emit_byte(OP_PRINT, compiler);
-  } else {
-    error_at_current("Expected ';' instead", compiler->parser);
-  }
-}
-
 static void return_statement(Compiler* compiler)
 {
   if (compiler->function_compiler->function_type == TYPE_SCRIPT) {
@@ -1033,7 +1026,8 @@ static void expression_statement(Compiler* compiler)
   // last expression (which would be otherwise lost)
   if (check(TOKEN_EOF, parser) &&
       compiler->vm->execution_mode == VM_REPL_MODE) {
-    emit_byte(OP_PRINT, compiler);
+    emit_byte(OP_PRINTLN, compiler);
+
   } else {
     emit_byte(OP_POP, compiler);
   }
@@ -1179,7 +1173,6 @@ static void synchronize(Parser* parser)
     case TOKEN_FOR:
     case TOKEN_IF:
     case TOKEN_WHILE:
-    case TOKEN_PRINT:
     case TOKEN_RETURN:
       return;
     default:; // do nothing
@@ -1206,10 +1199,7 @@ static void declaration(Compiler* compiler)
 
 static void statement(Compiler* compiler)
 {
-  if (match(TOKEN_PRINT, compiler->parser)) {
-    print_statement(compiler);
-
-  } else if (match(TOKEN_IF, compiler->parser)) {
+  if (match(TOKEN_IF, compiler->parser)) {
     if_statement(compiler);
 
   } else if (match(TOKEN_RETURN, compiler->parser)) {
@@ -1426,7 +1416,6 @@ ParseRule rules[] = {
   [TOKEN_IF]                = {NULL,     NULL,   PREC_NONE},
   [TOKEN_NIL]               = {literal,  NULL,   PREC_NONE},
   [TOKEN_OR]                = {NULL,     or_,    PREC_OR},
-  [TOKEN_PRINT]             = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RETURN]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]             = {NULL,     NULL,   PREC_NONE},
   [TOKEN_THIS]              = {NULL,     NULL,   PREC_NONE},

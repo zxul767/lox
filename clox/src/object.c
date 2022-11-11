@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "cstring.h"
 #include "memory.h"
 #include "object.h"
 #include "table.h"
@@ -55,36 +56,79 @@ string__allocate(char* chars, int length, uint32_t hash, VM* vm)
   return string;
 }
 
-// FNV-1a hash function. For details, see:
-// https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
-static uint32_t cstring__hash(const char* key, int length)
+static char get_escaped_char(const char* it, const char* end)
 {
-  uint32_t hash = 2166136261u;
-  for (int i = 0; i < length; i++) {
-    hash ^= (uint8_t)key[i];
-    hash *= 16777619;
+  if (*it == '\\' && (it + 1 < end)) {
+    switch (*(it + 1)) {
+    case 'n':
+      return '\n';
+    case 't':
+      return '\t';
+      break;
+    case '\\':
+      return '\\';
+      break;
+    default:
+      return '\0';
+    }
   }
-  return hash;
+  return *it;
+}
+
+static inline int advance_chars_count(const char* iter, const char* end)
+{
+  // for almost all escape sequences ("\n", "\t") the resulting escaped
+  // character will be different than "\", except of course for the escape
+  // sequence "\\"
+  return (*iter == get_escaped_char(iter, end) && *iter != '\\') ? 1 : 2;
+}
+
+static int count_effective_chars(const char* string, int length)
+{
+  int count = 0;
+
+  const char* iter = string;
+  const char* end = string + length;
+  while (iter < end) {
+    iter += advance_chars_count(iter, end);
+    count++;
+  }
+  return count;
+}
+
+// pre-condition: `source` contains, if any, only valid escape sequences
+static void
+copy_with_translated_escapes(char* destination, const char* source, int length)
+{
+  const char* iter = source;
+  const char* end = source + length;
+  while (iter < end) {
+    char c = get_escaped_char(iter, end);
+    iter += advance_chars_count(iter, end);
+    *destination++ = c;
+  }
 }
 
 ObjectString* string__copy(const char* chars, int length, VM* vm)
 {
-  uint32_t hash = cstring__hash(chars, length);
+  uint32_t hash = cstr__hash(chars, length);
   ObjectString* interned =
       table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {
     return interned;
   }
-  char* heap_chars = ALLOCATE(char, length + 1);
-  memcpy(heap_chars, chars, length);
-  heap_chars[length] = '\0';
 
-  return string__allocate(heap_chars, length, hash, vm);
+  int actual_length = count_effective_chars(chars, length);
+  char* heap_chars = ALLOCATE(char, actual_length + 1);
+  copy_with_translated_escapes(heap_chars, chars, length);
+  heap_chars[actual_length] = '\0';
+
+  return string__allocate(heap_chars, actual_length, hash, vm);
 }
 
 ObjectString* string__take_ownership(char* chars, int length, VM* vm)
 {
-  uint32_t hash = cstring__hash(chars, length);
+  uint32_t hash = cstr__hash(chars, length);
   ObjectString* interned =
       table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {

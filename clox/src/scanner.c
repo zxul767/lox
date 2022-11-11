@@ -1,17 +1,18 @@
-#include "scanner.h"
-#include "common.h"
-
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "common.h"
+#include "cstring.h"
+#include "scanner.h"
+
 const char* TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
 
 // TODO: is it possible to elegantly generate the strings from TOKEN_TO_STRING?
-const char* KEYWORDS[] = {"and",  "class", "else", "false", "for",    "fun",
-                          "if",   "nil",   "or",   "print", "return", "super",
-                          "this", "true",  "var",  "while", NULL};
+const char* KEYWORDS[] = {"and",  "class", "else",  "false",  "for",   "fun",
+                          "if",   "nil",   "or",    "return", "super", "this",
+                          "true", "var",   "while", NULL};
 
 // sentinel tokens
 const Token BOF_TOKEN = {
@@ -171,32 +172,11 @@ static Token collapse_whitespace(Scanner* scanner)
   return IGNORABLE_TOKEN;
 }
 
-// returns true if [this_start, this_end) === that; false otherwise
-// pre-conditions:
-// + `this_start` and `this_end` are pointers to sections of a null-terminated
-//    c-string;
-// + the substring to be compared to `that` begins at `this_start` and ends
-//   at `this_end-1` (i.e., `this_end` is a non-inclusive "index")
-// + `that` is a null-terminated c-string;
-static bool
-cstring__equals(const char* this_start, const char* this_end, const char* that)
-{
-  while (*that && this_start < this_end) {
-    if (*this_start != *that)
-      break;
-    that++;
-    this_start++;
-  }
-  // equality only happens if both strings were fully "consumed"
-  return *that == '\0' && this_start == this_end;
-}
-
 static TokenType check_keyword(
     const char* keyword, TokenType type, const Scanner* scanner, int skip)
 {
   // `skip` is the size of the prefix we've already verified for equality
-  if (cstring__equals(
-          scanner->start + skip, scanner->current, keyword + skip)) {
+  if (cstr__equals(scanner->start + skip, scanner->current, keyword + skip)) {
     return type;
   }
   return TOKEN_IDENTIFIER;
@@ -231,8 +211,6 @@ static TokenType identifier_type(Scanner* scanner)
     return check_keyword("nil", TOKEN_NIL, scanner, /*skip:*/ 1);
   case 'o':
     return check_keyword("or", TOKEN_OR, scanner, /*skip:*/ 1);
-  case 'p':
-    return check_keyword("print", TOKEN_PRINT, scanner, /*skip:*/ 1);
   case 'r':
     return check_keyword("return", TOKEN_RETURN, scanner, /*skip:*/ 1);
   case 's':
@@ -279,11 +257,47 @@ static Token number(Scanner* scanner)
   return make_token(TOKEN_NUMBER, scanner);
 }
 
+static bool is_valid_escape_sequence(Scanner* scanner)
+{
+  if (peek(scanner) == '\\') {
+    switch (peek_next(scanner)) {
+    case 'n':
+    case 't':
+    case '\\':
+      return true;
+    default:
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool try_match_escape_sequence(Scanner* scanner, Token* error)
+{
+  // TODO: should store more intermediate errors and not bail out early?
+  if (!is_valid_escape_sequence(scanner)) {
+    *error = error_token(
+        scanner, "Invalid escape sequence \"\\%c\".", peek_next(scanner));
+    return false;
+  }
+  advance(scanner);
+  advance(scanner);
+  return true;
+}
+
 static Token string(Scanner* scanner)
 {
   while (peek(scanner) != '"' && !is_at_end(scanner)) {
-    if (peek(scanner) == '\n')
+    if (peek(scanner) == '\\') {
+      Token error;
+      if (!try_match_escape_sequence(scanner, &error)) {
+        return error;
+      }
+      continue;
+
+    } else if (peek(scanner) == '\n') {
       scanner->current_line++;
+    }
     advance(scanner);
   }
   if (is_at_end(scanner))

@@ -1,0 +1,3 @@
+var i = 1
+{ var i = 0; println(i) }
+println(i)

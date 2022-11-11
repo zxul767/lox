@@ -1,0 +1,34 @@
+fun new_counter(start) {
+   fun up() {
+      return (start = start + 1)
+   }
+
+   fun value() { return start }
+
+   fun down() {
+      return (start = start - 1)
+   }
+
+   fun dispatch(message) {
+       if (message == "up") {
+          return up()
+       }
+       if (message == "down") {
+          return down()
+       }
+       if (message == "value") {
+          return value()
+       }
+   }
+   return dispatch;
+}
+
+var c = new_counter(0)
+println(c("value")) // => 0
+
+println(c("up")) // => 1
+println(c("up")) // => 2
+
+println(c("down")) // => 1
+println(c("down")) // => 0
+println(c("down")) // => -1

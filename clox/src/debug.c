@@ -179,6 +179,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
     return simple_instruction("OP_NEGATE", offset);
   case OP_PRINT:
     return simple_instruction("OP_PRINT", offset);
+  case OP_PRINTLN:
+    return simple_instruction("OP_PRINT", offset);
   case OP_LOOP:
     return jump_instruction("OP_JUMP", /*direction:*/ -1, code, offset);
   case OP_JUMP:

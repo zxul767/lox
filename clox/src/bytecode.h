@@ -60,6 +60,7 @@ typedef enum {
 
   // pop value off of the stack and print it
   OP_PRINT,
+  OP_PRINTLN,
 
   // unconditional forward jump
   OP_JUMP, // [opcode, jump-high-bits, jump-low-bits]

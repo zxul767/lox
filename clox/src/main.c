@@ -9,6 +9,7 @@
 
 #include "bytecode.h"
 #include "common.h"
+#include "cstring.h"
 #include "debug.h"
 #include "memory.h"
 #include "scanner.h"
@@ -72,50 +73,6 @@ static void setup_line_reader()
   ic_set_history(".clox_history", -1 /* default entries (= 200) */);
 }
 
-static char* cstring__trim_leading_whitespace(char* string)
-{
-  while (*string && isspace(*string))
-    string++;
-  return string;
-}
-
-static char* cstring__trim_trailing_whitespace(char* string)
-{
-  if (*string == '\0')
-    return string;
-
-  char* end = string;
-  while (*end)
-    end++;
-
-  end--;
-  while (end >= string && isspace(*end))
-    end--;
-
-  *(end + 1) = '\0';
-  return string;
-}
-
-static char* cstring__trim_prefix(const char* prefix, char* string)
-{
-  while (*prefix && *string && *prefix == *string) {
-    prefix++;
-    string++;
-  }
-  return string;
-}
-
-static bool cstring__startswith(const char* prefix, char* string)
-{
-  while (*prefix && *string && *prefix == *string) {
-    prefix++;
-    string++;
-  }
-  return *prefix == '\0';
-}
-
-static bool cstring__is_empty(const char* string) { return *string == '\0'; }
-
 static void read_configuration(const char* file_path, VM* vm)
 {
   FILE* file = fopen(file_path, "r");
@@ -131,7 +88,7 @@ static void read_configuration(const char* file_path, VM* vm)
   const size_t max_line_length = 256;
   char line[max_line_length];
   while (fgets(line, max_line_length, file)) {
-    cstring__trim_trailing_whitespace(line);
+    cstr__trim_trailing_whitespace(line);
 
     if (!strcmp(":enable-tracing", line)) {
       vm->trace_execution = true;
@@ -259,18 +216,17 @@ static void repl(VM* vm)
 
   char* line;
   while ((line = ic_readline(">>")) != NULL) {
-    line = cstring__trim_trailing_whitespace(line);
-    if (cstring__is_empty(line))
+    line = cstr__trim_trailing_whitespace(line);
+    if (cstr__is_empty(line))
       goto next;
 
     if (!strcmp(QUIT, line) || !strcmp(EXIT, line))
       break;
 
-    if (cstring__startswith(LOAD_FILE, line)) {
+    if (cstr__startswith(LOAD_FILE, line)) {
       load_file(
-          cstring__trim_leading_whitespace(
-              cstring__trim_prefix(LOAD_FILE, line)),
-          vm, /*die_on_failure:*/ false);
+          cstr__trim_leading_whitespace(cstr__trim_prefix(LOAD_FILE, line)), vm,
+          /*die_on_failure:*/ false);
 
       goto next;
     }

@@ -7,16 +7,10 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "lox_stdlib.h"
 #include "memory.h"
 #include "object.h"
 #include "vm.h"
-
-// returns the elapsed time since the program started running, in fractional
-// seconds
-static Value clock_native(int args_count, Value* args)
-{
-  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
-}
 
 inline int callframe__current_offset(const CallFrame* frame)
 {
@@ -114,6 +108,8 @@ void vm__init(VM* vm)
   table__init(&vm->global_vars);
 
   define_native_function("clock", clock_native, vm);
+  define_native_function("print", print, vm);
+  define_native_function("println", println, vm);
 }
 
 void vm__dispose(VM* vm)
@@ -130,7 +126,7 @@ void vm__dispose(VM* vm)
 #endif
 }
 
-static bool validate_call_errors(ObjectClosure* closure, int args_count, VM* vm)
+static bool is_valid_call(ObjectClosure* closure, int args_count, VM* vm)
 {
   if (args_count != closure->function->arity) {
     runtime_error(
@@ -147,7 +143,7 @@ static bool validate_call_errors(ObjectClosure* closure, int args_count, VM* vm)
 
 static bool call(ObjectClosure* closure, int args_count, VM* vm)
 {
-  if (!validate_call_errors(closure, args_count, vm))
+  if (!is_valid_call(closure, args_count, vm))
     return false;
 
   CallFrame* frame = push_frame(vm);
@@ -164,19 +160,20 @@ static bool call_value(Value callee, int args_count, VM* vm)
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
     case OBJECT_CLOSURE: {
+
 #ifdef DEBUG_TRACE_EXECUTION
       if (vm->trace_execution) {
         debug__print_callframe_divider();
       }
 #endif
-      bool result = call(AS_CLOSURE(callee), args_count, vm);
+      bool is_valid_call = call(AS_CLOSURE(callee), args_count, vm);
 
 #ifdef DEBUG_TRACE_EXECUTION
       if (vm->trace_execution) {
         debug__show_callframe_names(vm);
       }
 #endif
-      return result;
+      return is_valid_call;
     }
     case OBJECT_NATIVE_FUNCTION: {
       NativeFunction native = AS_NATIVE_FUNCTION(callee);
@@ -419,8 +416,23 @@ static InterpretResult run(VM* vm)
       push_value(NUMBER_VAL(-AS_NUMBER(pop_value(vm))), vm);
       break;
     }
+      // these two instructions are here for the exclusive benefit of the REPL
+      // (as it is much more convenient to emit these simple instructions than
+      // to prepare the equivalent `OP_CALL`)
+      //
     case OP_PRINT: {
-      value__println(pop_value(vm));
+      Value value = pop_value(vm);
+      // in Python tradition, by default we don't display `nil` in the REPL
+      if (!IS_NIL(value)) {
+        value__print(value);
+      }
+      break;
+    }
+    case OP_PRINTLN: {
+      Value value = pop_value(vm);
+      if (!IS_NIL(value)) {
+        value__println(value);
+      }
       break;
     }
     case OP_JUMP_IF_FALSE: {

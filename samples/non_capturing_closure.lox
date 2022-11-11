@@ -1,0 +1,11 @@
+fun outer(x) {
+    fun middle() {
+        fun inner() {
+            println(x)
+        }
+        inner()
+    }
+    middle()
+}
+outer("first")
+outer("second")

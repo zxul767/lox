@@ -4,9 +4,9 @@ l.append("debra");
 
 print "l = "; println l;
 
-print "l.at(0) = "; println l.at(0);
+print "l.at(0) = "; println l[0];
 
-print "l.at(-1) = "; println l.at(-1);
+print "l.at(-1) = "; println l[-1];
 
 print "l.length() = "; print l.length();
 println " elements";
