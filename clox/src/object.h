@@ -3,6 +3,7 @@
 
 #include "bytecode.h"
 #include "common.h"
+#include "table.h"
 #include "value.h"
 
 // forward declaration to avoid cyclic references during compilation
@@ -10,13 +11,17 @@ typedef struct VM VM;
 
 #define OBJECT_TYPE(value) (AS_OBJECT(value)->type)
 
+#define IS_CLASS(value) is_object_type(value, OBJECT_CLASS)
 #define IS_CLOSURE(value) is_object_type(value, OBJECT_CLOSURE)
 #define IS_FUNCTION(value) is_object_type(value, OBJECT_FUNCTION)
+#define IS_INSTANCE(value) is_object_type(value, OBJECT_INSTANCE)
 #define IS_NATIVE_FUNCTION(value) is_object_type(value, OBJECT_NATIVE_FUNCTION)
 #define IS_STRING(value) is_object_type(value, OBJECT_STRING)
 
+#define AS_CLASS(value) ((ObjectClass*)AS_OBJECT(value))
 #define AS_CLOSURE(value) ((ObjectClosure*)AS_OBJECT(value))
 #define AS_FUNCTION(value) ((ObjectFunction*)AS_OBJECT(value))
+#define AS_INSTANCE(value) ((ObjectInstance*)AS_OBJECT(value))
 #define AS_NATIVE_FUNCTION(value)                                              \
   (((ObjectNativeFunction*)AS_OBJECT(value))->function)
 #define AS_STRING(value) ((ObjectString*)AS_OBJECT(value))
@@ -27,9 +32,11 @@ typedef struct VM VM;
 //
 // https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
 #define FOREACH_OBJ_TYPE(TYPE)                                                 \
+  TYPE(OBJECT_CLASS)                                                           \
   TYPE(OBJECT_CLOSURE)                                                         \
   TYPE(OBJECT_FUNCTION)                                                        \
   TYPE(OBJECT_NATIVE_FUNCTION)                                                 \
+  TYPE(OBJECT_INSTANCE)                                                        \
   TYPE(OBJECT_STRING)                                                          \
   TYPE(OBJECT_UPVALUE)
 
@@ -104,11 +111,25 @@ typedef struct ObjectClosure {
 
 } ObjectClosure;
 
-// TODO: replace `vm` with garbage collector object when we implement it so it
-// is more clear why we're passing such an object
-//
+typedef struct ObjectClass {
+  Object object;
+
+  ObjectString* name;
+
+} ObjectClass;
+
+typedef struct ObjectInstance {
+  Object object;
+
+  ObjectClass* _class;
+  Table fields;
+
+} ObjectInstance;
+
 // all of these functions need to access `vm->objects` so they can track any
 // allocated objects for proper garbage collection
+ObjectInstance* instance__new(ObjectClass* _class, VM* vm);
+ObjectClass* class__new(ObjectString* name, VM* vm);
 ObjectClosure* closure__new(ObjectFunction*, VM* vm);
 ObjectFunction* function__new(VM* vm);
 ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm);

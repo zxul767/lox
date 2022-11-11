@@ -148,6 +148,24 @@ ObjectUpvalue* upvalue__new(Value* slot, VM* vm)
   return upvalue;
 }
 
+ObjectClass* class__new(ObjectString* name, VM* vm)
+{
+  ObjectClass* _class = ALLOCATE_OBJECT(ObjectClass, OBJECT_CLASS, vm);
+  _class->name = name;
+
+  return _class;
+}
+
+ObjectInstance* instance__new(ObjectClass* _class, VM* vm)
+{
+  ObjectInstance* instance =
+      ALLOCATE_OBJECT(ObjectInstance, OBJECT_INSTANCE, vm);
+  instance->_class = _class;
+  table__init(&instance->fields);
+
+  return instance;
+}
+
 ObjectClosure* closure__new(ObjectFunction* function, VM* vm)
 {
   ObjectUpvalue** upvalues = ALLOCATE(ObjectUpvalue*, function->upvalues_count);
@@ -194,11 +212,17 @@ static void print_function(const ObjectFunction* function)
 void object__print(Value value)
 {
   switch (OBJECT_TYPE(value)) {
+  case OBJECT_CLASS:
+    fprintf(stderr, "<class %s>", AS_CLASS(value)->name->chars);
+    break;
   case OBJECT_CLOSURE:
     print_function(AS_CLOSURE(value)->function);
     break;
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
+    break;
+  case OBJECT_INSTANCE:
+    fprintf(stderr, "<%s instance>", AS_INSTANCE(value)->_class->name->chars);
     break;
   case OBJECT_NATIVE_FUNCTION:
     fprintf(stderr, "<native fn>");

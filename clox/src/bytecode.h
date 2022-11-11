@@ -75,6 +75,10 @@ typedef enum {
   OP_CLOSURE, // [opcode, function_constant_location]
   OP_CALL,    // [opcode, args_count]
 
+  OP_CLASS, // [opcode, class_constant_location]
+  OP_GET_PROPERTY,
+  OP_SET_PROPERTY,
+
   // pop result value off of the stack, pop last call frame (including value
   // stack args), and push result back onto the stack (for the caller to use)
   OP_RETURN,

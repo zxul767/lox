@@ -190,9 +190,14 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
         "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
   case OP_CALL:
     return byte_instruction("OP_CALL", code, offset, "#args");
-  case OP_CLOSURE: {
+  case OP_CLASS:
+    return constant_instruction("OP_CLASS", code, offset);
+  case OP_GET_PROPERTY:
+    return constant_instruction("OP_GET_PROPERTY", code, offset);
+  case OP_SET_PROPERTY:
+    return constant_instruction("OP_SET_PROPERTY", code, offset);
+  case OP_CLOSURE:
     return closure_instruction(code, offset);
-  }
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
   case OP_CLOSE_UPVALUE:

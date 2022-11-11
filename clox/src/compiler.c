@@ -921,6 +921,19 @@ static void function(FunctionType type, Compiler* compiler)
   }
 }
 
+static void class_declaration(Compiler* compiler)
+{
+  uint8_t location = declare_variable("Expected class name.", compiler);
+
+  emit_bytes(OP_CLASS, location, compiler);
+  define_variable(location, compiler);
+
+  consume(
+      TOKEN_LEFT_BRACE, "Expected '{' before class body.", compiler->parser);
+  consume(
+      TOKEN_RIGHT_BRACE, "Expected '}' after class body.", compiler->parser);
+}
+
 static void fun_declaration(Compiler* compiler)
 {
   uint8_t location = declare_variable("Expected function name.", compiler);
@@ -1183,7 +1196,10 @@ static void synchronize(Parser* parser)
 
 static void declaration(Compiler* compiler)
 {
-  if (match(TOKEN_FUN, compiler->parser)) {
+  if (match(TOKEN_CLASS, compiler->parser)) {
+    class_declaration(compiler);
+
+  } else if (match(TOKEN_FUN, compiler->parser)) {
     fun_declaration(compiler);
 
   } else if (match(TOKEN_VAR, compiler->parser)) {
@@ -1296,6 +1312,20 @@ static void call(Compiler* compiler)
   emit_bytes(OP_CALL, args_count, compiler);
 }
 
+static void dot(Compiler* compiler)
+{
+  uint8_t location =
+      declare_variable("Expected property name after '.'", compiler);
+
+  if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
+    expression(compiler);
+    emit_bytes(OP_SET_PROPERTY, location, compiler);
+
+  } else {
+    emit_bytes(OP_GET_PROPERTY, location, compiler);
+  }
+}
+
 static void grouping(Compiler* compiler)
 {
   expression(compiler);
@@ -1390,7 +1420,7 @@ ParseRule rules[] = {
   [TOKEN_LEFT_BRACE]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]       = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]             = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_DOT]               = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_DOT]               = {NULL,     dot,    PREC_CALL},
   [TOKEN_MINUS]             = {unary,    binary, PREC_TERM},
   [TOKEN_PLUS]              = {NULL,     binary, PREC_TERM},
   [TOKEN_SEMICOLON]         = {NULL,     NULL,   PREC_NONE},

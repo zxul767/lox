@@ -159,8 +159,14 @@ static bool call_value(Value callee, int args_count, VM* vm)
 {
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
+    case OBJECT_CLASS: {
+      ObjectClass* _class = AS_CLASS(callee);
+      // FIXME: we ignore arguments for now...
+      vm->value_stack_top[-args_count - 1] =
+          OBJECT_VAL(instance__new(_class, vm));
+      return true;
+    }
     case OBJECT_CLOSURE: {
-
 #ifdef DEBUG_TRACE_EXECUTION
       if (vm->trace_execution) {
         debug__print_callframe_divider();
@@ -367,6 +373,33 @@ static InterpretResult run(VM* vm)
       }
       break;
     }
+    case OP_GET_PROPERTY: {
+      if (!IS_INSTANCE(peek_value(0, vm))) {
+        runtime_error(vm, "Only instances have properties");
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      ObjectInstance* instance = AS_INSTANCE(peek_value(0, vm));
+      ObjectString* name = READ_STRING();
+
+      Value value;
+      if (table__get(&instance->fields, name, &value)) {
+        pop_value(vm); // instance
+        push_value(value, vm);
+        break;
+      }
+      runtime_error(vm, "Undefined property '%s'.", name->chars);
+      return INTERPRET_RUNTIME_ERROR;
+    }
+    case OP_SET_PROPERTY: {
+      ObjectInstance* instance = AS_INSTANCE(peek_value(1, vm));
+      ObjectString* name = READ_STRING();
+      table__set(&instance->fields, name, peek_value(0, vm));
+      Value value = pop_value(vm); // pop the assigned value
+      pop_value(vm);               // pop the instance
+      // push the assigned value because assignments are expressions
+      push_value(value, vm);
+      break;
+    }
     // binary operations
     case OP_EQUAL: {
       Value b = pop_value(vm);
@@ -477,6 +510,10 @@ static InterpretResult run(VM* vm)
       }
       break;
     }
+    case OP_CLASS: {
+      push_value(OBJECT_VAL(class__new(READ_STRING(), vm)), vm);
+      break;
+    }
     case OP_CLOSE_UPVALUE: {
       // "close" the single local variable on top of the stack
       close_upvalues(vm->value_stack_top - 1, vm);
@@ -536,8 +573,8 @@ InterpretResult vm__interpret(const char* source, VM* vm)
 
   // TODO: can we make abstract and hoist this pattern which occurs every time
   // there's a risk of a garbage collection that will reclaim unreachable
-  // objects that are in the process of being created? (temporarily pushing them
-  // onto the value stack ensures they're reachable)
+  // objects that are in the process of being created? (temporarily pushing
+  // them onto the value stack ensures they're reachable)
   //
   push_value(OBJECT_VAL(top_level_wrapper), vm);
   ObjectClosure* closure = closure__new(top_level_wrapper, vm);

@@ -80,6 +80,10 @@ static void free_object(Object* object)
 #endif
 
   switch (object->type) {
+  case OBJECT_CLASS: {
+    FREE(ObjectClass, object);
+    break;
+  }
   case OBJECT_CLOSURE: {
     ObjectClosure* closure = (ObjectClosure*)object;
     FREE_ARRAY(ObjectUpvalue*, closure->upvalues, closure->upvalues_count);
@@ -90,6 +94,12 @@ static void free_object(Object* object)
     ObjectFunction* function = (ObjectFunction*)object;
     bytecode__dispose(&function->bytecode);
     FREE(ObjectFunction, object);
+    break;
+  }
+  case OBJECT_INSTANCE: {
+    ObjectInstance* instance = (ObjectInstance*)object;
+    table__dispose(&instance->fields);
+    FREE(ObjectInstance, object);
     break;
   }
   case OBJECT_NATIVE_FUNCTION: {
@@ -207,6 +217,11 @@ static void mark_object_as_processed(Object* object)
 #endif
 
   switch (object->type) {
+  case OBJECT_CLASS: {
+    ObjectClass* _class = (ObjectClass*)object;
+    memory__mark_object_as_alive((Object*)_class->name);
+    break;
+  }
   case OBJECT_CLOSURE: {
     ObjectClosure* closure = (ObjectClosure*)object;
     memory__mark_object_as_alive((Object*)closure->function);
@@ -219,6 +234,12 @@ static void mark_object_as_processed(Object* object)
     ObjectFunction* function = (ObjectFunction*)object;
     memory__mark_object_as_alive((Object*)function->name);
     mark_array_as_alive(&function->bytecode.constants);
+    break;
+  }
+  case OBJECT_INSTANCE: {
+    ObjectInstance* instance = (ObjectInstance*)object;
+    memory__mark_object_as_alive((Object*)instance->_class);
+    table__mark_as_alive(&instance->fields);
     break;
   }
   case OBJECT_UPVALUE:
