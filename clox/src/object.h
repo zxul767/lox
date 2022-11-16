@@ -57,8 +57,7 @@ struct Object {
 
   // an object is "dead" by default, meaning that it is assumed to not be
   // reachable from the roots during a garbage collection. after the
-  // mark-and-sweep phase, it should change its status if it is not actually
-  // dead.
+  // mark phase, it should change its status if it is not actually dead.
   //
   // while this may prone to causing serious errors in the application when the
   // GC algorithm is not correct, i think this is precisely the kind of stress

@@ -210,7 +210,7 @@ static void mark_array_as_alive(ValueArray* array)
   }
 }
 
-static void mark_object_as_processed(Object* object)
+static void mark_object_references(Object* object)
 {
 #ifdef DEBUG_LOG_GC_DETAILED
   printf("%p marked as processed\n", (void*)object);
@@ -255,7 +255,7 @@ static void trace_references(GC* gc)
 {
   while (gc->gray_count > 0) {
     Object* object = gc->gray_stack[--gc->gray_count];
-    mark_object_as_processed(object);
+    mark_object_references(object);
   }
 }
 
@@ -300,7 +300,7 @@ void memory__run_gc()
 
     mark_roots(__gc.vms[i]);
     trace_references(&__gc);
-    table__remove_unvisited_objects(&(__gc.vms[i]->interned_strings));
+    table__remove_dead_objects(&(__gc.vms[i]->interned_strings));
     sweep(__gc.vms[i]);
 
     __gc.next_gc_in_bytes = __gc.bytes_allocated * GC_HEAP_GROW_FACTOR;

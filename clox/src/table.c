@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -79,6 +80,7 @@ static Entry* find_entry(Entry* entries, int capacity, ObjectString* key)
   }
   // in theory, as long as we adjust the table's size before it gets too loaded,
   // we should always find an entry, so this statement should never be reached
+  assert(false);
   return NULL; // unreachable
 }
 
@@ -178,7 +180,6 @@ bool table__delete(Table* table, ObjectString* key)
   // notice we don't reduce the count because tombstones are considered
   // full buckets for the purposes of the loading factor (see the OVERVIEW at
   // the top of this file for more details.)
-
   return true;
 }
 
@@ -238,6 +239,7 @@ ObjectString* table__find_string(
   }
   // in theory, we should never get here, since the table will always have
   // empty entries that terminate probe sequences.
+  assert(false);
   return NULL; // unreachable
 }
 
@@ -250,7 +252,7 @@ void table__mark_as_alive(const Table* table)
   }
 }
 
-void table__remove_unvisited_objects(Table* table)
+void table__remove_dead_objects(Table* table)
 {
   for (int i = 0; i < table->capacity; i++) {
     Entry* entry = &table->entries[i];

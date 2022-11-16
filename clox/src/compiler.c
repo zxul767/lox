@@ -71,7 +71,7 @@ typedef struct Upvalue {
 } Upvalue;
 
 typedef struct FunctionCompiler {
-  struct FunctionCompiler* enclosing;
+  struct FunctionCompiler* enclosing_compiler;
   ObjectFunction* function;
   FunctionType function_type;
 
@@ -120,6 +120,8 @@ typedef struct {
   Precedence precedence;
 
 } ParseRule;
+
+#define NTH_BYTE(n, value) (((value) >> 8 * n) & 0xff)
 
 // ----------------------------------------------------------------------------
 // Forward Declarations (Break Circular References)
@@ -180,9 +182,9 @@ static uint8_t store_constant(Value value, Compiler* compiler)
 {
   int location =
       bytecode__store_constant(current_bytecode(compiler), value, compiler->vm);
-  if (location > UINT8_MAX) {
-    error("Too many constants in one chunk", compiler->parser);
-    return 0;
+  if (location >= UINT8_MAX) {
+    error("Too many constants in bytecode block", compiler->parser);
+    return UINT8_MAX;
   }
   return (uint8_t)location;
 }
@@ -226,8 +228,8 @@ static void emit_loop(int loop_start_offset, Compiler* compiler)
     error("Loop body too large.", compiler->parser);
   }
 
-  emit_byte((jump_length >> 8) & 0xff, compiler);
-  emit_byte(jump_length & 0xff, compiler);
+  emit_byte(NTH_BYTE(1, jump_length), compiler);
+  emit_byte(NTH_BYTE(0, jump_length), compiler);
 }
 
 static int emit_placeholder_jump(uint8_t instruction, Compiler* compiler)
@@ -259,8 +261,8 @@ static void patch_jump(int offset, Compiler* compiler)
   // `jump_length` is encoded [high-bits][low-bits]
   //                               ^         ^
   //                             offset  offset + 1
-  code->instructions[offset] = (jump_length >> 8) & 0xff;
-  code->instructions[offset + 1] = jump_length & 0xff;
+  code->instructions[offset] = NTH_BYTE(1, jump_length);
+  code->instructions[offset + 1] = NTH_BYTE(0, jump_length);
 }
 
 static void emit_constant(Value value, Compiler* compiler)
@@ -532,17 +534,17 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 //
 static int resolve_upvalue(Token* name, FunctionCompiler* current)
 {
-  if (current->enclosing == NULL)
+  if (current->enclosing_compiler == NULL)
     return -1;
 
   int index;
-  index = resolve_local(name, current->enclosing);
+  index = resolve_local(name, current->enclosing_compiler);
   if (index != -1) {
-    current->enclosing->locals[index].is_captured = true;
+    current->enclosing_compiler->locals[index].is_captured = true;
     return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ true);
   }
 
-  index = resolve_upvalue(name, current->enclosing);
+  index = resolve_upvalue(name, current->enclosing_compiler);
   if (index != -1) {
     return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ false);
   }
@@ -751,7 +753,8 @@ static bool has_implicit_statement_terminator(Parser* parser)
       parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
       parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT ||
       // handles statements like `{ return expression }`
-      parser->current_token.type == TOKEN_RIGHT_BRACE;
+      parser->current_token.type == TOKEN_RIGHT_BRACE ||
+      parser->current_token.type == TOKEN_EOF;
 
   return result;
 }
@@ -759,17 +762,11 @@ static bool has_implicit_statement_terminator(Parser* parser)
 // see "optional semicolon" in `features_design.md`
 static bool optional_semicolon(Parser* parser)
 {
-  if (match(TOKEN_SEMICOLON, parser)) {
-    return true;
-
-    // at first glance it may seem like we could use
-    // `match(TOKEN_NEWLINE)` but that's not the case because we don't
-    // track newlines and comments as regular tokens (since otherwise the
-    // regular parsing process would break!)
-  } else if (has_implicit_statement_terminator(parser)) {
-    return true;
-
-  } else if (parser->current_token.type == TOKEN_EOF) {
+  // at first glance it may seem like we could use `match(TOKEN_NEWLINE)` but
+  // that's not the case because we don't track newlines and comments as regular
+  // tokens (since otherwise the regular parsing process would break!)
+  if (match(TOKEN_SEMICOLON, parser) ||
+      has_implicit_statement_terminator(parser)) {
     return true;
   }
   return false;
@@ -804,9 +801,9 @@ static void reserve_local_for_callee(FunctionCompiler* compiler)
 
 static void function_compiler__init(
     FunctionCompiler* compiler, FunctionType function_type,
-    FunctionCompiler* enclosing, Parser* parser, VM* vm)
+    FunctionCompiler* enclosing_compiler, Parser* parser, VM* vm)
 {
-  compiler->enclosing = enclosing;
+  compiler->enclosing_compiler = enclosing_compiler;
   compiler->function_type = function_type;
   compiler->function = function__new(vm);
   compiler->locals_count = 0;
@@ -854,7 +851,7 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
   }
 #endif
 
-  compiler->function_compiler = compiler->function_compiler->enclosing;
+  compiler->function_compiler = compiler->function_compiler->enclosing_compiler;
   return function;
 }
 
@@ -1173,6 +1170,17 @@ static void if_statement(Compiler* compiler)
   patch_jump(else_jump_offset, compiler);
 }
 
+// skips as many tokens as necessary to get out of the current
+// state of confusion (i.e., we've failed to parse a rule but
+// we want to tolerate errors, so we try to move past to the
+// begining of the next statement.)
+//
+// pre-condition: the current token "breaks" the current grammar
+// rule being parsed.
+//
+// post-condition: all tokens in the previous statement have been
+// discarded, and the current token is now at the beginning of the
+// next statement or at EOF
 static void synchronize(Parser* parser)
 {
   parser->panic_mode = false;
@@ -1466,6 +1474,6 @@ void compiler__mark_roots(FunctionCompiler* current)
 {
   while (current != NULL) {
     memory__mark_object_as_alive((Object*)(current->function));
-    current = current->enclosing;
+    current = current->enclosing_compiler;
   }
 }

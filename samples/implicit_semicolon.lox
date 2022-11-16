@@ -1,0 +1,10 @@
+var item1 = "first item"
+var item2 = "second item"/*
+this multiline comment should be considered
+as a newline, and therefore as an implicit
+semicolon
+*/var item3 = "third item"
+var item4 = "last item"
+println(item1)
+println(item2)
+println(item3)
