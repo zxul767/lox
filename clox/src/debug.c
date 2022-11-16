@@ -192,6 +192,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
     return byte_instruction("OP_CALL", code, offset, "#args");
   case OP_CLASS:
     return constant_instruction("OP_CLASS", code, offset);
+  case OP_METHOD:
+    return constant_instruction("OP_METHOD", code, offset);
   case OP_GET_PROPERTY:
     return constant_instruction("OP_GET_PROPERTY", code, offset);
   case OP_SET_PROPERTY:

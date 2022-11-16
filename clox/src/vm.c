@@ -159,6 +159,10 @@ static bool call_value(Value callee, int args_count, VM* vm)
 {
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
+    case OBJECT_BOUND_METHOD: {
+      ObjectBoundMethod* bound = AS_BOUND_METHOD(callee);
+      return call(bound->method, args_count, vm);
+    }
     case OBJECT_CLASS: {
       ObjectClass* _class = AS_CLASS(callee);
       // FIXME: we ignore arguments for now...
@@ -194,6 +198,21 @@ static bool call_value(Value callee, int args_count, VM* vm)
   }
   runtime_error(vm, "Can only call functions and classes.");
   return false;
+}
+
+static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
+{
+  Value method;
+  if (!table__get(&_class->methods, name, &method)) {
+    runtime_error(vm, "Undefined property '%s'.", name->chars);
+    return false;
+  }
+  ObjectBoundMethod* bound = bound_method__new(
+      /* instance: */ peek_value(0, vm), AS_CLOSURE(method), vm);
+  pop_value(vm); // we no longer need the instance around
+  push_value(OBJECT_VAL(bound), vm);
+
+  return true;
 }
 
 // Lox follows Ruby in that `nil` and `false` are falsey and every other
@@ -261,6 +280,14 @@ static void close_upvalues(Value* last, VM* vm)
     upvalue->location = &upvalue->closed;
     vm->open_upvalues = upvalue->next;
   }
+}
+
+static void define_method(ObjectString* name, VM* vm)
+{
+  Value method = peek_value(0, vm);
+  ObjectClass* _class = AS_CLASS(peek_value(1, vm));
+  table__set(&_class->methods, name, method);
+  pop_value(vm); // we no longer need the method on the stack
 }
 
 static InterpretResult run(VM* vm)
@@ -387,8 +414,11 @@ static InterpretResult run(VM* vm)
         push_value(value, vm);
         break;
       }
-      runtime_error(vm, "Undefined property '%s'.", name->chars);
-      return INTERPRET_RUNTIME_ERROR;
+
+      if (!bind_method(instance->_class, name, vm)) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      break;
     }
     case OP_SET_PROPERTY: {
       ObjectInstance* instance = AS_INSTANCE(peek_value(1, vm));
@@ -512,6 +542,10 @@ static InterpretResult run(VM* vm)
     }
     case OP_CLASS: {
       push_value(OBJECT_VAL(class__new(READ_STRING(), vm)), vm);
+      break;
+    }
+    case OP_METHOD: {
+      define_method(READ_STRING(), vm);
       break;
     }
     case OP_CLOSE_UPVALUE: {

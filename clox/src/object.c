@@ -152,6 +152,7 @@ ObjectClass* class__new(ObjectString* name, VM* vm)
 {
   ObjectClass* _class = ALLOCATE_OBJECT(ObjectClass, OBJECT_CLASS, vm);
   _class->name = name;
+  table__init(&_class->methods);
 
   return _class;
 }
@@ -164,6 +165,17 @@ ObjectInstance* instance__new(ObjectClass* _class, VM* vm)
   table__init(&instance->fields);
 
   return instance;
+}
+
+ObjectBoundMethod*
+bound_method__new(Value instance, ObjectClosure* method, VM* vm)
+{
+  ObjectBoundMethod* bound =
+      ALLOCATE_OBJECT(ObjectBoundMethod, OBJECT_BOUND_METHOD, vm);
+  bound->instance = instance;
+  bound->method = method;
+
+  return bound;
 }
 
 ObjectClosure* closure__new(ObjectFunction* function, VM* vm)
@@ -212,6 +224,9 @@ static void print_function(const ObjectFunction* function)
 void object__print(Value value)
 {
   switch (OBJECT_TYPE(value)) {
+  case OBJECT_BOUND_METHOD:
+    print_function(AS_BOUND_METHOD(value)->method->function);
+    break;
   case OBJECT_CLASS:
     fprintf(stderr, "<class %s>", AS_CLASS(value)->name->chars);
     break;

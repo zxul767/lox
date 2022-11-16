@@ -918,17 +918,37 @@ static void function(FunctionType type, Compiler* compiler)
   }
 }
 
+static void method(Compiler* compiler)
+{
+  uint8_t location = declare_variable("Expected method name.", compiler);
+
+  FunctionType type = TYPE_FUNCTION;
+  function(type, compiler);
+
+  emit_bytes(OP_METHOD, location, compiler);
+}
+
 static void class_declaration(Compiler* compiler)
 {
   uint8_t location = declare_variable("Expected class name.", compiler);
+  Token class_name = compiler->parser->previous_token;
 
   emit_bytes(OP_CLASS, location, compiler);
   define_variable(location, compiler);
 
-  consume(
-      TOKEN_LEFT_BRACE, "Expected '{' before class body.", compiler->parser);
-  consume(
-      TOKEN_RIGHT_BRACE, "Expected '}' after class body.", compiler->parser);
+  Parser* parser = compiler->parser;
+  consume(TOKEN_LEFT_BRACE, "Expected '{' before class body.", parser);
+
+  // push the class onto the stack while compiling the methods, so they
+  // can be added to the class's `methods` table
+  named_variable_or_assignment(class_name, compiler);
+  while (!check(TOKEN_RIGHT_BRACE, parser) && !check(TOKEN_EOF, parser)) {
+    method(compiler);
+  }
+
+  consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body.", parser);
+  // we no longer need the class on the stack
+  emit_byte(OP_POP, compiler);
 }
 
 static void fun_declaration(Compiler* compiler)

@@ -1,6 +1,14 @@
-class Pair {  }
+class Pair {
+   __str__(arg) {
+      return "__str__ with arg: " + arg
+   }
+}
 var pair = Pair()
 pair.first = 1
 pair.second = 2
 
 println(pair.first + pair.second)
+println(pair.__str__("one"))
+
+var bound_method = pair.__str__
+println(bound_method("two"))

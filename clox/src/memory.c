@@ -81,6 +81,8 @@ static void free_object(Object* object)
 
   switch (object->type) {
   case OBJECT_CLASS: {
+    ObjectClass* _class = (ObjectClass*)object;
+    table__dispose(&_class->methods);
     FREE(ObjectClass, object);
     break;
   }
@@ -94,6 +96,10 @@ static void free_object(Object* object)
     ObjectFunction* function = (ObjectFunction*)object;
     bytecode__dispose(&function->bytecode);
     FREE(ObjectFunction, object);
+    break;
+  }
+  case OBJECT_BOUND_METHOD: {
+    FREE(ObjectBoundMethod, object);
     break;
   }
   case OBJECT_INSTANCE: {
@@ -217,9 +223,16 @@ static void mark_object_references(Object* object)
 #endif
 
   switch (object->type) {
+  case OBJECT_BOUND_METHOD: {
+    ObjectBoundMethod* bound_method = (ObjectBoundMethod*)object;
+    memory__mark_value_as_alive(bound_method->instance);
+    memory__mark_object_as_alive((Object*)bound_method->method);
+    break;
+  }
   case OBJECT_CLASS: {
     ObjectClass* _class = (ObjectClass*)object;
     memory__mark_object_as_alive((Object*)_class->name);
+    table__mark_as_alive(&_class->methods);
     break;
   }
   case OBJECT_CLOSURE: {

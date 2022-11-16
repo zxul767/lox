@@ -73,6 +73,7 @@ typedef enum {
 
   // all functions are wrapped in closures
   OP_CLOSURE, // [opcode, function_constant_location]
+  OP_METHOD,  // [opcode, method_constant_location]
   OP_CALL,    // [opcode, args_count]
 
   OP_CLASS, // [opcode, class_constant_location]
