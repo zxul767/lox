@@ -349,8 +349,9 @@ public class Parser {
     return callee;
   }
 
-  private Expr index(Expr callee) {
-    // we can desugar the expression `list[index]` down to `list.at(index)`
+  private Expr index(Expr indexable) {
+    // we can desugar the expression `indexable[index]` down to
+    // `indexable.__getitem__(index)`
     List<Expr> args = new ArrayList<>();
     Expr index = expression();
     args.add(index);
@@ -358,17 +359,19 @@ public class Parser {
         consume(RIGHT_BRACKET, "Expected closing ']' on index access.");
 
     // we have an assignment
-    // we need to desugar to `list[index] = expr` down to `list.set(index,
+    // we need to desugar to `indexable[index] = expr` down to
+    // `indexable.__setitem__(index, value)`
     if (match(EQUAL)) {
-      callee = new Expr.Get(callee, new Token(IDENTIFIER, "__set__"));
+      indexable = new Expr.Get(indexable, new Token(IDENTIFIER, "__setitem__"));
       Expr value = expression();
       args.add(value);
 
     } else {
-      callee = new Expr.Get(callee, new Token(IDENTIFIER, "__get__"));
+      indexable = new Expr.Get(indexable, new Token(IDENTIFIER, "__getitem__"));
     }
 
-    return new Expr.Call(callee, right_bracket, args);
+    // we need `right_bracket` to show location information on errors
+    return new Expr.Call(indexable, right_bracket, args);
   }
 
   // Gather all arguments and create a single call expression

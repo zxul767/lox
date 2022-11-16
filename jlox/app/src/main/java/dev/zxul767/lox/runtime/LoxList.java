@@ -30,10 +30,10 @@ class LoxList extends LoxClass {
     registerMethod("length", 0, (self, args) -> (double)self.list.size());
     registerMethod("append", 1, (self, args) -> self.list.add(args[0]));
     registerMethod("at", 1, (self, args) -> at(self, args[0]));
-    registerMethod("__get__", 1, (self, args) -> at(self, args[0]));
+    registerMethod("__getitem__", 1, (self, args) -> at(self, args[0]));
     registerMethod("set", 2, (self, args) -> set(self, args[0], args[1]));
     registerMethod(
-        "__set__", 2, (self, args) -> chainable_set(self, args[0], args[1])
+        "__setitem__", 2, (self, args) -> chainable_set(self, args[0], args[1])
     );
     registerMethod("clear", 0, (self, args) -> clear(self));
     registerMethod("pop", 0, (self, args) -> pop(self));
