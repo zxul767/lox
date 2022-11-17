@@ -14,6 +14,12 @@ I guess the setup for (i.e., [`jlox`](../jlox)) covers the above and beyond?
 # Chapter 2
 **1. Pick an open source implementation of a language you like. Download the source code and poke around in it. Try to find the code that implements the scanner and parser. Are they handwritten, or generated using tools like Lex and Yacc? (`.l` or `.y` files usually imply the latter.)**
 
+I picked Python (the [CPython implementation](https://github.com/python/cpython)). I found it a bit confusing at first since there seemed to be a mixture of auto-generated parsing and tokenization routines. 
+
+But after some digging I realized that tokenization is done manually (since not all tokens can be recognized with regular expressions), but parsing has always been done with an auto-generated parser. 
+
+Up until Python 3.9, the parser-generator was an [`LL(1)`](https://en.wikipedia.org/wiki/LL_parser) tool called [`pgen`](https://python-history.blogspot.com/2018/05/the-origins-of-pgen.html). It was written by Guido Van Rossum (Python's creator) in the early versions of Python. However, in 2020, Guido himself proposed to start using a [PEG parser](https://en.wikipedia.org/wiki/Parsing_expression_grammar), as is described in [PEP 617](https://peps.python.org/pep-0617/) and in [this](https://medium.com/@gvanrossum_83706/peg-parsing-series-de5d41b2ed60) blog post series.
+
 **2. Just-in-time compilation tends to be the fastest way to implement dynamically typed languages, but not all of them use it. What reasons are there to *not* JIT?**
 
 **3. Most Lisp implementations that compile to C also contain an interpreter that lets them execute Lisp code on the fly as well. Why?**
