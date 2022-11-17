@@ -186,13 +186,16 @@ void memory__mark_value_as_alive(Value value)
 
 static void mark_roots(VM* vm)
 {
+  // VM constants
+  memory__mark_object_as_alive((Object*)vm->init_string);
+
   // the value stack
   for (Value* slot = vm->value_stack; slot < vm->value_stack_top; slot++) {
     memory__mark_value_as_alive(*slot);
   }
 
   // objects allocated during compilation
-  compiler__mark_roots(vm->current_compiler);
+  compiler__mark_roots(vm->current_fn_compiler);
 
   // global variables
   table__mark_as_alive(&vm->global_vars);

@@ -40,7 +40,7 @@ static void reset_for_execution(VM* vm)
   vm->value_stack_top = vm->value_stack;
   vm->frames_count = 0;
   vm->open_upvalues = NULL;
-  vm->current_compiler = NULL;
+  vm->current_fn_compiler = NULL;
 }
 
 static void runtime_error(VM* vm, const char* format, ...)
@@ -107,6 +107,12 @@ void vm__init(VM* vm)
   table__init(&vm->interned_strings);
   table__init(&vm->global_vars);
 
+  // `string__copy` can indirectly trigger a GC run, so let's make sure
+  // that the collector will ignore `vm->init_string` until we actually
+  // have a value on it
+  vm->init_string = NULL;
+  vm->init_string = string__copy("__init__", strlen("__init__"), vm);
+
   define_native_function("clock", clock_native, vm);
   define_native_function("print", print, vm);
   define_native_function("println", println, vm);
@@ -116,6 +122,8 @@ void vm__dispose(VM* vm)
 {
   table__dispose(&vm->interned_strings);
   table__dispose(&vm->global_vars);
+  // we don't need to explicitly dispose it, since it's tracked by `vm->objects`
+  vm->init_string = NULL;
 
   size_t count = memory__free_objects(vm->objects);
 
@@ -146,11 +154,23 @@ static bool call(ObjectClosure* closure, int args_count, VM* vm)
   if (!is_valid_call(closure, args_count, vm))
     return false;
 
+#ifdef DEBUG_TRACE_EXECUTION
+  if (vm->trace_execution) {
+    debug__print_callframe_divider();
+  }
+#endif
+
   CallFrame* frame = push_frame(vm);
   frame->closure = closure;
   frame->instruction_pointer = closure->function->bytecode.instructions;
   // -1 because the function is right below the arguments on the value_stack
   frame->slots = vm->value_stack_top - args_count - 1;
+
+#ifdef DEBUG_TRACE_EXECUTION
+  if (vm->trace_execution) {
+    debug__show_callframe_names(vm);
+  }
+#endif
 
   return true;
 }
@@ -159,31 +179,30 @@ static bool call_value(Value callee, int args_count, VM* vm)
 {
   if (IS_OBJECT(callee)) {
     switch (OBJECT_TYPE(callee)) {
+
     case OBJECT_BOUND_METHOD: {
       ObjectBoundMethod* bound = AS_BOUND_METHOD(callee);
+      vm->value_stack_top[-args_count - 1] = bound->instance;
+
       return call(bound->method, args_count, vm);
     }
     case OBJECT_CLASS: {
       ObjectClass* _class = AS_CLASS(callee);
-      // FIXME: we ignore arguments for now...
       vm->value_stack_top[-args_count - 1] =
           OBJECT_VAL(instance__new(_class, vm));
+
+      Value initializer;
+      if (table__get(&_class->methods, vm->init_string, &initializer)) {
+        return call(AS_CLOSURE(initializer), args_count, vm);
+
+      } else if (args_count != 0) {
+        runtime_error(vm, "Expected 0 arguments but got %d.", args_count);
+        return false;
+      }
       return true;
     }
     case OBJECT_CLOSURE: {
-#ifdef DEBUG_TRACE_EXECUTION
-      if (vm->trace_execution) {
-        debug__print_callframe_divider();
-      }
-#endif
-      bool is_valid_call = call(AS_CLOSURE(callee), args_count, vm);
-
-#ifdef DEBUG_TRACE_EXECUTION
-      if (vm->trace_execution) {
-        debug__show_callframe_names(vm);
-      }
-#endif
-      return is_valid_call;
+      return call(AS_CLOSURE(callee), args_count, vm);
     }
     case OBJECT_NATIVE_FUNCTION: {
       NativeFunction native = AS_NATIVE_FUNCTION(callee);
@@ -284,10 +303,10 @@ static void close_upvalues(Value* last, VM* vm)
 
 static void define_method(ObjectString* name, VM* vm)
 {
-  Value method = peek_value(0, vm);
+  Value closure = peek_value(0, vm);
   ObjectClass* _class = AS_CLASS(peek_value(1, vm));
-  table__set(&_class->methods, name, method);
-  pop_value(vm); // we no longer need the method on the stack
+  table__set(&_class->methods, name, closure);
+  pop_value(vm); // we no longer need the closure on the stack
 }
 
 static InterpretResult run(VM* vm)
@@ -316,17 +335,10 @@ static InterpretResult run(VM* vm)
     push_value(value_type(a op b), vm);                                        \
   } while (false)
 
-#ifdef DEBUG_TRACE_EXECUTION
-  if (vm->trace_execution) {
-    fprintf(stderr, "TRACED EXECUTION\n");
-    debug__print_section_divider();
-  }
-#endif
-
   for (;;) {
 #ifdef DEBUG_TRACE_EXECUTION
     if (vm->trace_execution) {
-      debug__dump_value_stack(vm);
+      debug__dump_value_stack(vm, /* from: */ frame->slots);
       debug__disassemble_instruction(
           &frame->closure->function->bytecode,
           callframe__current_offset(frame));
@@ -525,7 +537,7 @@ static InterpretResult run(VM* vm)
       frame = top_frame(vm);
       break;
     }
-    case OP_CLOSURE: {
+    case OP_NEW_CLOSURE: {
       ObjectFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjectClosure* closure = closure__new(function, vm);
       push_value(OBJECT_VAL(closure), vm);
@@ -540,11 +552,11 @@ static InterpretResult run(VM* vm)
       }
       break;
     }
-    case OP_CLASS: {
+    case OP_NEW_CLASS: {
       push_value(OBJECT_VAL(class__new(READ_STRING(), vm)), vm);
       break;
     }
-    case OP_METHOD: {
+    case OP_NEW_METHOD: {
       define_method(READ_STRING(), vm);
       break;
     }
@@ -563,8 +575,8 @@ static InterpretResult run(VM* vm)
       // were captured by inner closures (remember that all locals start at
       // `frame->slots`)
       close_upvalues(frame->slots, vm);
-      pop_frame(vm);
 
+      pop_frame(vm);
       if (vm->frames_count == 0) {
 #ifdef DEBUG_TRACE_EXECUTION
         if (vm->trace_execution) {
@@ -583,6 +595,15 @@ static InterpretResult run(VM* vm)
       push_value(result, vm);
       // return control to the caller function
       frame = top_frame(vm);
+
+#ifdef DEBUG_TRACE_EXECUTION
+      // after a call returns, it's hard to know what was the caller, so let's
+      // reprint that information
+      if (vm->trace_execution) {
+        debug__print_callframe_divider();
+        debug__show_callframe_names(vm);
+      }
+#endif
       break;
     }
     }
@@ -613,6 +634,13 @@ InterpretResult vm__interpret(const char* source, VM* vm)
   push_value(OBJECT_VAL(top_level_wrapper), vm);
   ObjectClosure* closure = closure__new(top_level_wrapper, vm);
   pop_value(vm);
+
+#ifdef DEBUG_TRACE_EXECUTION
+  if (vm->trace_execution) {
+    fprintf(stderr, "TRACED EXECUTION\n");
+    debug__print_section_divider();
+  }
+#endif
 
   push_value(OBJECT_VAL(closure), vm);
   call(closure, 0, vm);

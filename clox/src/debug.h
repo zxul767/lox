@@ -6,7 +6,7 @@
 
 void debug__disassemble(const Bytecode* code, const char* name);
 int debug__disassemble_instruction(const Bytecode* code, int offset);
-void debug__dump_value_stack(const VM* vm);
+void debug__dump_value_stack(const VM* vm, const Value* from);
 // dump the current call frames stack trace
 void debug__dump_stacktrace(const VM* vm);
 void debug__show_callframe_names(const VM* vm);

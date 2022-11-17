@@ -60,7 +60,13 @@ typedef struct Local {
 
 } Local;
 
-typedef enum { TYPE_FUNCTION, TYPE_SCRIPT } FunctionType;
+typedef enum {
+  TYPE_FUNCTION,
+  TYPE_METHOD,
+  TYPE_INITIALIZER,
+  TYPE_SCRIPT
+
+} FunctionType;
 
 // see https://craftinginterpreters.com/closures.html for a full
 // description of the role of upvalues in implementing closures
@@ -84,9 +90,15 @@ typedef struct FunctionCompiler {
 
 } FunctionCompiler;
 
+typedef struct ClassCompiler {
+  struct ClassCompiler* enclosing_compiler;
+
+} ClassCompiler;
+
 typedef struct {
   Parser* parser;
-  FunctionCompiler* function_compiler;
+  FunctionCompiler* current_fn_compiler;
+  ClassCompiler* current_class_compiler;
 
   // `vm->objects` tracks references to all heap-allocated objects to be
   // disposed when the VM shuts-down. In the compiler, such objects are string
@@ -175,18 +187,18 @@ static void error_at_current(const char* message, Parser* parser)
 
 static inline Bytecode* current_bytecode(Compiler* compiler)
 {
-  return &(compiler->function_compiler->function->bytecode);
+  return &(compiler->current_fn_compiler->function->bytecode);
 }
 
 static uint8_t store_constant(Value value, Compiler* compiler)
 {
-  int location =
+  int index =
       bytecode__store_constant(current_bytecode(compiler), value, compiler->vm);
-  if (location >= UINT8_MAX) {
+  if (index >= UINT8_MAX) {
     error("Too many constants in bytecode block", compiler->parser);
     return UINT8_MAX;
   }
-  return (uint8_t)location;
+  return (uint8_t)index;
 }
 
 static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
@@ -272,8 +284,15 @@ static void emit_constant(Value value, Compiler* compiler)
 
 static void emit_default_return(Compiler* compiler)
 {
-  // all functions return `nil` by default
-  emit_byte(OP_NIL, compiler);
+  // class initializers return the `this` instance no matter what
+  if (compiler->current_fn_compiler->function_type == TYPE_INITIALIZER) {
+    // local:0 corresponds to the `this` instance in class initializers
+    emit_bytes(OP_GET_LOCAL, 0, compiler);
+
+  } else {
+    // all other regular functions return `nil` by default
+    emit_byte(OP_NIL, compiler);
+  }
   emit_byte(OP_RETURN, compiler);
 }
 
@@ -401,7 +420,7 @@ static void expression(Compiler* compiler)
 static void
 pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
 {
-  FunctionCompiler* current = compiler->function_compiler;
+  FunctionCompiler* current = compiler->current_fn_compiler;
   while (current->locals_count > 0) {
     if (current->locals[current->locals_count - 1].scope_depth < scope_depth)
       break;
@@ -493,7 +512,7 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 //
 // 2. at runtime:
 //
-// when processing an OP_CLOSURE instruction, the compile-time upvalues
+// when processing an OP_NEW_CLOSURE instruction, the compile-time upvalues
 // information helps us build the final upvalues arrays, turning this:
 //
 // top-level frame
@@ -553,30 +572,30 @@ static int resolve_upvalue(Token* name, FunctionCompiler* current)
 
 static void named_variable_or_assignment(Token name, Compiler* compiler)
 {
-  int location = resolve_local(&name, compiler->function_compiler);
+  int index = resolve_local(&name, compiler->current_fn_compiler);
 
   uint8_t get_op, set_op;
-  if (location != -1) {
+  if (index != -1) {
     get_op = OP_GET_LOCAL;
     set_op = OP_SET_LOCAL;
 
   } else if (
-      (location = resolve_upvalue(&name, compiler->function_compiler)) != -1) {
+      (index = resolve_upvalue(&name, compiler->current_fn_compiler)) != -1) {
     get_op = OP_GET_UPVALUE;
     set_op = OP_SET_UPVALUE;
 
   } else {
-    location = store_identifier_constant(&name, compiler);
+    index = store_identifier_constant(&name, compiler);
     get_op = OP_GET_GLOBAL;
     set_op = OP_SET_GLOBAL;
   }
 
   if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
-    emit_bytes(set_op, location, compiler);
+    emit_bytes(set_op, index, compiler);
 
   } else {
-    emit_bytes(get_op, location, compiler);
+    emit_bytes(get_op, index, compiler);
   }
 }
 
@@ -585,7 +604,19 @@ static void variable(Compiler* compiler)
   named_variable_or_assignment(compiler->parser->previous_token, compiler);
 }
 
-static void mark_latest_local_initialized(FunctionCompiler* current)
+static void this_(Compiler* compiler)
+{
+  if (compiler->current_class_compiler == NULL) {
+    error("Can't use 'this' outside of a class", compiler->parser);
+    return;
+  }
+  bool can_assign_upstream = compiler->can_assign;
+  compiler->can_assign = false; // `this` is immutable
+  variable(compiler);
+  compiler->can_assign = can_assign_upstream;
+}
+
+static void mark_last_local_initialized(FunctionCompiler* current)
 {
   if (current->scope_depth == 0)
     return;
@@ -593,15 +624,15 @@ static void mark_latest_local_initialized(FunctionCompiler* current)
   current->locals[current->locals_count - 1].scope_depth = current->scope_depth;
 }
 
-static void define_variable(uint8_t location, Compiler* compiler)
+static void define_variable(uint8_t index, Compiler* compiler)
 {
   // local variable
-  if (compiler->function_compiler->scope_depth > 0) {
-    mark_latest_local_initialized(compiler->function_compiler);
+  if (compiler->current_fn_compiler->scope_depth > 0) {
+    mark_last_local_initialized(compiler->current_fn_compiler);
     return;
   }
   // global variable
-  emit_bytes(OP_DEFINE_GLOBAL, location, compiler);
+  emit_bytes(OP_DEFINE_GLOBAL, index, compiler);
 }
 
 // returns the number of arguments compiled
@@ -712,7 +743,7 @@ check_duplicate_declaration(const Token* name, const FunctionCompiler* current)
 
 static void add_local_variable(Token name, Compiler* compiler)
 {
-  FunctionCompiler* current = compiler->function_compiler;
+  FunctionCompiler* current = compiler->current_fn_compiler;
   if (current->locals_count == UINT8_COUNT) {
     error("Too many local variables in function.", compiler->parser);
     return;
@@ -725,10 +756,10 @@ static void add_local_variable(Token name, Compiler* compiler)
 
 static void declare_local_variable(Compiler* compiler)
 {
-  assert(compiler->function_compiler->scope_depth > 0);
+  assert(compiler->current_fn_compiler->scope_depth > 0);
 
   Token* name = &compiler->parser->previous_token;
-  check_duplicate_declaration(name, compiler->function_compiler);
+  check_duplicate_declaration(name, compiler->current_fn_compiler);
 
   add_local_variable(*name, compiler);
 }
@@ -736,9 +767,8 @@ static void declare_local_variable(Compiler* compiler)
 static uint8_t declare_variable(const char* error_message, Compiler* compiler)
 {
   consume(TOKEN_IDENTIFIER, error_message, compiler->parser);
-
   // local variables
-  if (compiler->function_compiler->scope_depth > 0) {
+  if (compiler->current_fn_compiler->scope_depth > 0) {
     declare_local_variable(compiler);
     // locals don't need to store their names in constants as globals do
     return 0;
@@ -747,12 +777,12 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler)
   return store_identifier_constant(&compiler->parser->previous_token, compiler);
 }
 
-static bool has_implicit_statement_terminator(Parser* parser)
+static bool has_implicit_semicolon(Parser* parser)
 {
   bool result =
       parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
       parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT ||
-      // handles statements like `{ return expression }`
+      // handles non-empty "returns": `{ ... last_statement }`
       parser->current_token.type == TOKEN_RIGHT_BRACE ||
       parser->current_token.type == TOKEN_EOF;
 
@@ -765,8 +795,7 @@ static bool optional_semicolon(Parser* parser)
   // at first glance it may seem like we could use `match(TOKEN_NEWLINE)` but
   // that's not the case because we don't track newlines and comments as regular
   // tokens (since otherwise the regular parsing process would break!)
-  if (match(TOKEN_SEMICOLON, parser) ||
-      has_implicit_statement_terminator(parser)) {
+  if (match(TOKEN_SEMICOLON, parser) || has_implicit_semicolon(parser)) {
     return true;
   }
   return false;
@@ -774,7 +803,7 @@ static bool optional_semicolon(Parser* parser)
 
 static void var_declaration(Compiler* compiler)
 {
-  uint8_t location = declare_variable("Expected variable's name.", compiler);
+  uint8_t index = declare_variable("Expected variable's name.", compiler);
 
   if (match(TOKEN_EQUAL, compiler->parser)) {
     // optional initialization
@@ -787,45 +816,53 @@ static void var_declaration(Compiler* compiler)
     error_at_current(
         "Expected ';' after variable's declaration", compiler->parser);
   }
-  define_variable(location, compiler);
+  define_variable(index, compiler);
 }
 
-static void reserve_local_for_callee(FunctionCompiler* compiler)
+static void
+reserve_local_for_callee(FunctionCompiler* compiler, FunctionType function_type)
 {
   Local* local = &compiler->locals[compiler->locals_count++];
   local->scope_depth = 0;
-  local->name.start = "";
-  local->name.length = 0;
   local->is_captured = false;
+
+  if (function_type == TYPE_METHOD || function_type == TYPE_INITIALIZER) {
+    local->name.start = "this";
+    local->name.length = 4;
+
+  } else {
+    local->name.start = "";
+    local->name.length = 0;
+  }
 }
 
 static void function_compiler__init(
-    FunctionCompiler* compiler, FunctionType function_type,
+    FunctionCompiler* fn_compiler, FunctionType function_type,
     FunctionCompiler* enclosing_compiler, Parser* parser, VM* vm)
 {
-  compiler->enclosing_compiler = enclosing_compiler;
-  compiler->function_type = function_type;
-  compiler->function = function__new(vm);
-  compiler->locals_count = 0;
-  compiler->scope_depth = 0;
-  compiler->parser = parser;
+  fn_compiler->enclosing_compiler = enclosing_compiler;
+  fn_compiler->function_type = function_type;
+  fn_compiler->function = function__new(vm);
+  fn_compiler->locals_count = 0;
+  fn_compiler->scope_depth = 0;
+  fn_compiler->parser = parser;
   // we need this back reference so we can do garbage collection
   // on objects allocated on all nested function compilers
-  vm->current_compiler = compiler;
+  vm->current_fn_compiler = fn_compiler;
 
-  reserve_local_for_callee(compiler);
+  reserve_local_for_callee(fn_compiler, function_type);
 }
 
 static void begin_scope(Compiler* compiler)
 {
-  compiler->function_compiler->scope_depth++;
+  compiler->current_fn_compiler->scope_depth++;
 }
 
 static void end_scope(Compiler* compiler)
 {
   pop_all_accessible_locals_in_scope(
-      compiler, compiler->function_compiler->scope_depth);
-  compiler->function_compiler->scope_depth--;
+      compiler, compiler->current_fn_compiler->scope_depth);
+  compiler->current_fn_compiler->scope_depth--;
 }
 
 static void block(Compiler* compiler)
@@ -840,7 +877,7 @@ static void block(Compiler* compiler)
 static ObjectFunction* finish_function_compilation(Compiler* compiler)
 {
   emit_default_return(compiler);
-  ObjectFunction* function = compiler->function_compiler->function;
+  ObjectFunction* function = compiler->current_fn_compiler->function;
 
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
@@ -851,35 +888,36 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
   }
 #endif
 
-  compiler->function_compiler = compiler->function_compiler->enclosing_compiler;
+  compiler->current_fn_compiler =
+      compiler->current_fn_compiler->enclosing_compiler;
   return function;
 }
 
 static void function_parameters(Compiler* compiler)
 {
   do {
-    compiler->function_compiler->function->arity++;
-    if (compiler->function_compiler->function->arity > 255) {
+    compiler->current_fn_compiler->function->arity++;
+    if (compiler->current_fn_compiler->function->arity > 255) {
       error_at_current("Can't have more than 255 parameters", compiler->parser);
     }
-    uint8_t location = declare_variable("Expected parameters name.", compiler);
-    define_variable(location, compiler);
+    uint8_t index = declare_variable("Expected parameters name.", compiler);
+    define_variable(index, compiler);
 
   } while (match(TOKEN_COMMA, compiler->parser));
 }
 
 static void start_function_compilation(
-    Compiler* compiler, FunctionCompiler* function_compiler,
+    Compiler* compiler, FunctionCompiler* current_fn_compiler,
     FunctionType function_type)
 {
   function_compiler__init(
-      function_compiler, function_type,
-      /* enclosing_compiler: */ compiler->function_compiler, compiler->parser,
+      current_fn_compiler, function_type,
+      /* enclosing_compiler: */ compiler->current_fn_compiler, compiler->parser,
       compiler->vm);
-  compiler->function_compiler = function_compiler;
+  compiler->current_fn_compiler = current_fn_compiler;
 
   if (function_type != TYPE_SCRIPT) {
-    function_compiler->function->name = string__copy(
+    current_fn_compiler->function->name = string__copy(
         compiler->parser->previous_token.start,
         compiler->parser->previous_token.length, compiler->vm);
   }
@@ -887,11 +925,11 @@ static void start_function_compilation(
 
 static void function(FunctionType type, Compiler* compiler)
 {
-  FunctionCompiler function_compiler;
-  start_function_compilation(compiler, &function_compiler, type);
+  FunctionCompiler fn_compiler;
+  start_function_compilation(compiler, &fn_compiler, type);
 
   // This `begin_scope` doesn’t have a corresponding `end_scope` call because we
-  // end `function_compiler` completely by the end of this function.
+  // end `fn_compiler` completely by the end of this function.
   begin_scope(compiler);
 
   // function parameters
@@ -910,34 +948,43 @@ static void function(FunctionType type, Compiler* compiler)
 
   ObjectFunction* function = finish_function_compilation(compiler);
   emit_bytes(
-      OP_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
+      OP_NEW_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
 
   for (int i = 0; i < function->upvalues_count; i++) {
-    emit_byte(function_compiler.upvalues[i].is_local ? 1 : 0, compiler);
-    emit_byte(function_compiler.upvalues[i].index, compiler);
+    emit_byte(fn_compiler.upvalues[i].is_local ? 1 : 0, compiler);
+    emit_byte(fn_compiler.upvalues[i].index, compiler);
   }
 }
 
 static void method(Compiler* compiler)
 {
-  uint8_t location = declare_variable("Expected method name.", compiler);
+  uint8_t index = declare_variable("Expected method name.", compiler);
 
-  FunctionType type = TYPE_FUNCTION;
+  FunctionType type = TYPE_METHOD;
+  // the `__init__` method
+  if (string__equals_token(
+          compiler->vm->init_string, &compiler->parser->previous_token)) {
+    type = TYPE_INITIALIZER;
+  }
   function(type, compiler);
 
-  emit_bytes(OP_METHOD, location, compiler);
+  emit_bytes(OP_NEW_METHOD, index, compiler);
 }
 
 static void class_declaration(Compiler* compiler)
 {
-  uint8_t location = declare_variable("Expected class name.", compiler);
+  uint8_t index = declare_variable("Expected class name.", compiler);
   Token class_name = compiler->parser->previous_token;
 
-  emit_bytes(OP_CLASS, location, compiler);
-  define_variable(location, compiler);
+  emit_bytes(OP_NEW_CLASS, index, compiler);
+  define_variable(index, compiler);
 
   Parser* parser = compiler->parser;
   consume(TOKEN_LEFT_BRACE, "Expected '{' before class body.", parser);
+
+  ClassCompiler class_compiler;
+  class_compiler.enclosing_compiler = compiler->current_class_compiler;
+  compiler->current_class_compiler = &class_compiler;
 
   // push the class onto the stack while compiling the methods, so they
   // can be added to the class's `methods` table
@@ -949,19 +996,22 @@ static void class_declaration(Compiler* compiler)
   consume(TOKEN_RIGHT_BRACE, "Expected '}' after class body.", parser);
   // we no longer need the class on the stack
   emit_byte(OP_POP, compiler);
+
+  compiler->current_class_compiler =
+      compiler->current_class_compiler->enclosing_compiler;
 }
 
 static void fun_declaration(Compiler* compiler)
 {
-  uint8_t location = declare_variable("Expected function name.", compiler);
+  uint8_t index = declare_variable("Expected function name.", compiler);
   // this allows recursive functions to work properly (there is no danger since
   // the definition of a function is not executed during the implicit
   // assignment)
-  mark_latest_local_initialized(compiler->function_compiler);
+  mark_last_local_initialized(compiler->current_fn_compiler);
 
   function(TYPE_FUNCTION, compiler);
 
-  define_variable(location, compiler);
+  define_variable(index, compiler);
 }
 
 // pre-conditions: the operator for this expression has just been consumed (it
@@ -993,15 +1043,19 @@ static void unary(Compiler* compiler)
 
 static void return_statement(Compiler* compiler)
 {
-  if (compiler->function_compiler->function_type == TYPE_SCRIPT) {
+  if (compiler->current_fn_compiler->function_type == TYPE_SCRIPT) {
     error("Can't return from top-level code", compiler->parser);
   }
 
-  if (match(TOKEN_SEMICOLON, compiler->parser)) {
+  if (optional_semicolon(compiler->parser)) {
     emit_default_return(compiler);
 
   } else {
+    if (compiler->current_fn_compiler->function_type == TYPE_INITIALIZER) {
+      error("Can't return a value from an initializer", compiler->parser);
+    }
     expression(compiler);
+
     if (optional_semicolon(compiler->parser)) {
       emit_byte(OP_RETURN, compiler);
 
@@ -1342,15 +1396,18 @@ static void call(Compiler* compiler)
 
 static void dot(Compiler* compiler)
 {
-  uint8_t location =
-      declare_variable("Expected property name after '.'", compiler);
+  consume(
+      TOKEN_IDENTIFIER, "Expected property name after '.'.", compiler->parser);
+
+  uint8_t index =
+      store_identifier_constant(&compiler->parser->previous_token, compiler);
 
   if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
-    emit_bytes(OP_SET_PROPERTY, location, compiler);
+    emit_bytes(OP_SET_PROPERTY, index, compiler);
 
   } else {
-    emit_bytes(OP_GET_PROPERTY, location, compiler);
+    emit_bytes(OP_GET_PROPERTY, index, compiler);
   }
 }
 
@@ -1408,12 +1465,15 @@ static void parser__init(Parser* parser, const char* source_code)
 }
 
 static void compiler__init(
-    Compiler* compiler, Parser* parser, FunctionCompiler* function_compiler,
+    Compiler* compiler, Parser* parser, FunctionCompiler* current_fn_compiler,
     VM* vm)
 {
   compiler->vm = vm;
   compiler->parser = parser;
-  compiler->function_compiler = function_compiler;
+  // there is always a function to compile (the top-level wrapper)...
+  compiler->current_fn_compiler = current_fn_compiler;
+  // ... but not always a class
+  compiler->current_class_compiler = NULL;
   compiler->can_assign = false;
 }
 
@@ -1422,13 +1482,13 @@ ObjectFunction* compiler__compile(const char* source_code, VM* vm)
   Parser parser;
   parser__init(&parser, source_code);
 
-  FunctionCompiler function_compiler;
+  FunctionCompiler current_fn_compiler;
   function_compiler__init(
-      &function_compiler, TYPE_SCRIPT, /*enclosing_compiler:*/ NULL, &parser,
-      vm);
+      &current_fn_compiler, TYPE_SCRIPT, /* enclosing_compiler: */ NULL,
+      &parser, vm);
 
   Compiler compiler;
-  compiler__init(&compiler, &parser, &function_compiler, vm);
+  compiler__init(&compiler, &parser, &current_fn_compiler, vm);
 
   // kickstart parsing & compilation
   advance(&parser);
@@ -1476,7 +1536,7 @@ ParseRule rules[] = {
   [TOKEN_OR]                = {NULL,     or_,    PREC_OR},
   [TOKEN_RETURN]            = {NULL,     NULL,   PREC_NONE},
   [TOKEN_SUPER]             = {NULL,     NULL,   PREC_NONE},
-  [TOKEN_THIS]              = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_THIS]              = {this_,    NULL,   PREC_NONE},
   [TOKEN_TRUE]              = {literal,  NULL,   PREC_NONE},
   [TOKEN_VAR]               = {NULL,     NULL,   PREC_NONE},
   [TOKEN_WHILE]             = {NULL,     NULL,   PREC_NONE},

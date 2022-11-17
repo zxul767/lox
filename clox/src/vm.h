@@ -54,6 +54,8 @@ typedef struct VM {
   Object* objects;
   ObjectUpvalue* open_upvalues;
 
+  FunctionCompiler* current_fn_compiler;
+
   // all strings (including those needed to represent variables), are "interned"
   // (i.e., a single copy is kept and reused when necessary) to minimize memory
   // and make string comparison much faster (essentially a pointer comparison
@@ -65,7 +67,10 @@ typedef struct VM {
   bool trace_execution;
   bool show_bytecode;
 
-  FunctionCompiler* current_compiler;
+  // some constants (e.g., names for conventional methods, such as `__init__`)
+  // are very commonly referenced, so we want them to be interned for better
+  // performance
+  ObjectString* init_string;
 
 } VM;
 
@@ -73,6 +78,7 @@ typedef enum {
   INTERPRET_OK,
   INTERPRET_COMPILE_ERROR,
   INTERPRET_RUNTIME_ERROR,
+
 } InterpretResult;
 
 int callframe__current_offset(const CallFrame* frame);

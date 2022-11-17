@@ -6,6 +6,9 @@
 #include "table.h"
 #include "value.h"
 
+// forward declaration for cases where we just need the pointer
+typedef struct Token Token;
+
 // forward declaration to avoid cyclic references during compilation
 typedef struct VM VM;
 
@@ -72,6 +75,7 @@ typedef Value (*NativeFunction)(int args_count, Value* args);
 
 typedef struct ObjectNative {
   Object object;
+
   NativeFunction function;
 
 } ObjectNativeFunction;
@@ -152,6 +156,8 @@ ObjectUpvalue* upvalue__new(Value* slot, VM* vm);
 
 ObjectString* string__copy(const char* chars, int length, VM* vm);
 ObjectString* string__take_ownership(char* chars, int length, VM* vm);
+
+bool string__equals_token(ObjectString* string, const Token* token);
 
 void object__print(Value value);
 void object__print_repr(Value value);

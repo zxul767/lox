@@ -87,11 +87,21 @@ constant_instruction(const char* name, const Bytecode* code, int offset)
   if (!strcmp(name, "OP_DEFINE_GLOBAL") || !strcmp(name, "OP_GET_GLOBAL") ||
       !strcmp(name, "OP_SET_GLOBAL")) {
     fprintf(stderr, "%-20s index:", name);
-    value__print_repr(code->constants.values[constant_location]);
+    // variables should be printed without quotes for easier identification
+    value__print(code->constants.values[constant_location]);
 
   } else {
     fprintf(stderr, "%-20s index:%d (=", name, constant_location);
-    value__print_repr(code->constants.values[constant_location]);
+    Value value = code->constants.values[constant_location];
+    if (!strcmp(name, "OP_SET_PROPERTY") || !strcmp(name, "OP_GET_PROPERTY")) {
+      // variables should be printed without quotes for easier identification
+      value__print(value);
+
+    } else {
+      // string constants should be printed with quotes for easier
+      // identification
+      value__print_repr(value);
+    }
     fprintf(stderr, ")");
   }
   fprintf(stderr, "\n");
@@ -104,7 +114,7 @@ int closure_instruction(const Bytecode* code, int offset)
   // TODO: why do we skip over one byte here?
   offset++;
   uint8_t location = code->instructions[offset++];
-  fprintf(stderr, "%-20s index:%d (=", "OP_CLOSURE", location);
+  fprintf(stderr, "%-20s index:%d (=", "OP_NEW_CLOSURE", location);
   value__print_repr(code->constants.values[location]);
   fprintf(stderr, ")\n");
 
@@ -190,15 +200,15 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
         "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
   case OP_CALL:
     return byte_instruction("OP_CALL", code, offset, "#args");
-  case OP_CLASS:
-    return constant_instruction("OP_CLASS", code, offset);
-  case OP_METHOD:
-    return constant_instruction("OP_METHOD", code, offset);
+  case OP_NEW_CLASS:
+    return constant_instruction("OP_NEW_CLASS", code, offset);
+  case OP_NEW_METHOD:
+    return constant_instruction("OP_NEW_METHOD", code, offset);
   case OP_GET_PROPERTY:
     return constant_instruction("OP_GET_PROPERTY", code, offset);
   case OP_SET_PROPERTY:
     return constant_instruction("OP_SET_PROPERTY", code, offset);
-  case OP_CLOSURE:
+  case OP_NEW_CLOSURE:
     return closure_instruction(code, offset);
   case OP_RETURN:
     return simple_instruction("OP_RETURN", offset);
@@ -210,11 +220,15 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
   }
 }
 
-void debug__dump_value_stack(const VM* vm)
+// we're not always interested in printing the whole stack but only the values
+// from a given frame (typically the current frame); `from` allows us to
+// parameterize that.
+//
+void debug__dump_value_stack(const VM* vm, const Value* from)
 {
   fprintf(stderr, "            stack: ");
-  for (const Value* value = vm->value_stack; value < vm->value_stack_top;
-       value++) {
+  for (const Value* value = from ? from : vm->value_stack;
+       value < vm->value_stack_top; value++) {
     fprintf(stderr, "[");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the

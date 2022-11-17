@@ -60,11 +60,12 @@ typedef enum { FOREACH_TOKEN(GENERATE_ENUM) } TokenType;
 extern const char* TOKEN_TO_STRING[];
 extern const char* KEYWORDS[];
 
-typedef struct {
+typedef struct Token {
   TokenType type;
   const char* start;
   int length;
   int line;
+
 } Token;
 
 extern const Token BOF_TOKEN;
@@ -75,6 +76,7 @@ typedef struct {
   const char* start;
   const char* current;
   int current_line;
+
 } Scanner;
 
 void scanner__init(Scanner* scanner, const char* source);

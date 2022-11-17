@@ -4,6 +4,7 @@
 #include "cstring.h"
 #include "memory.h"
 #include "object.h"
+#include "scanner.h"
 #include "table.h"
 #include "vm.h"
 
@@ -136,6 +137,12 @@ ObjectString* string__take_ownership(char* chars, int length, VM* vm)
     return interned;
   }
   return string__allocate(chars, length, hash, vm);
+}
+
+bool string__equals_token(ObjectString* string, const Token* token)
+{
+  return string->length == token->length &&
+         memcmp(string->chars, token->start, string->length) == 0;
 }
 
 ObjectUpvalue* upvalue__new(Value* slot, VM* vm)

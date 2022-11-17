@@ -72,11 +72,11 @@ typedef enum {
   OP_LOOP, // [opcode, jump-high-bits, jump-low-bits]
 
   // all functions are wrapped in closures
-  OP_CLOSURE, // [opcode, function_constant_location]
-  OP_METHOD,  // [opcode, method_constant_location]
-  OP_CALL,    // [opcode, args_count]
+  OP_NEW_CLOSURE, // [opcode, function_constant_location]
+  OP_NEW_METHOD,  // [opcode, method_constant_location]
+  OP_CALL,        // [opcode, args_count]
 
-  OP_CLASS, // [opcode, class_constant_location]
+  OP_NEW_CLASS, // [opcode, class_constant_location]
   OP_GET_PROPERTY,
   OP_SET_PROPERTY,
 

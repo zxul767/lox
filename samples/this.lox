@@ -1,0 +1,20 @@
+class CoffeeMaker {
+  __init__(coffee) {
+    this.coffee = coffee
+  }
+
+  brew() {
+    if (this.coffee == nil) {
+       println("You cannot reuse the grounds! Feed the machine new ones ;-)")
+       return
+    }
+    println("Enjoy your cup of " + this.coffee)
+
+    // No reusing the grounds!
+    this.coffee = nil
+  }
+}
+
+var maker = CoffeeMaker("coffee and chicory")
+maker.brew()
+maker.brew()
