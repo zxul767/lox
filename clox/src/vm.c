@@ -7,6 +7,7 @@
 #include "common.h"
 #include "compiler.h"
 #include "debug.h"
+#include "lox_list.h"
 #include "lox_stdlib.h"
 #include "memory.h"
 #include "object.h"
@@ -23,21 +24,38 @@ static inline CallFrame* top_frame(VM* vm)
   return &vm->frames[vm->frames_count - 1];
 }
 
-static inline CallFrame* push_frame(VM* vm)
+static void push_new_frame(ObjectClosure* closure, int args_count, VM* vm)
 {
-  return &vm->frames[vm->frames_count++];
+  CallFrame* frame = &vm->frames[vm->frames_count++];
+  frame->closure = closure;
+  frame->instruction_pointer = closure->function->bytecode.instructions;
+  // vm value stack:
+  // [<script>]...[ some-value ][ function ][ arg1 ]...[ arg k ][ . ]
+  //                                 ^                            ^
+  //                                 |                            |
+  //                            frame->slots            vm->stack_free_slot
+  // where k = args_count
+  frame->slots = vm->stack_free_slot - (args_count + 1);
 }
 
 static inline void pop_frame(VM* vm) { vm->frames_count--; }
 
-static inline void pop_frame_args(VM* vm, const CallFrame* frame)
+static inline void discard_frame_window(VM* vm, const CallFrame* frame)
 {
-  vm->value_stack_top = frame->slots;
+  vm->stack_free_slot = frame->slots;
+  // after a call is done, `vm->stack_free_slot` is pointing back at where the
+  // callee was (and still is, since we don't bother to "erase" it or its
+  // arguments):
+  //
+  // [<script>]...[ some-value ][ function ][ arg1 ]...[ arg k ]...
+  //                                 ^
+  //                                 |
+  //                          vm->stack_free_slot
 }
 
 static void reset_for_execution(VM* vm)
 {
-  vm->value_stack_top = vm->value_stack;
+  vm->stack_free_slot = vm->value_stack;
   vm->frames_count = 0;
   vm->open_upvalues = NULL;
   vm->current_fn_compiler = NULL;
@@ -58,29 +76,40 @@ static void runtime_error(VM* vm, const char* format, ...)
 
 static inline void push_value(Value value, VM* vm)
 {
-  *(vm->value_stack_top) = value;
-  vm->value_stack_top++;
+  *(vm->stack_free_slot) = value;
+  vm->stack_free_slot++;
 }
 
 void vm__push(Value value, VM* vm) { push_value(value, vm); }
 
 static inline Value pop_value(VM* vm)
 {
-  vm->value_stack_top--;
-  return *(vm->value_stack_top);
+  vm->stack_free_slot--;
+  return *(vm->stack_free_slot);
 }
 
 void vm__pop(VM* vm) { pop_value(vm); }
 
 static inline Value peek_value(int distance, const VM* vm)
 {
-  // we add -1 because `value_stack_top` actually points to the next free slot,
-  // not to the last occupied slot
-  return vm->value_stack_top[-1 - distance];
+  // -1 because `stack_free_slot` always points right after the top of the stack
+  return vm->stack_free_slot[-1 - distance];
 }
 
-static void
-define_native_function(const char* name, NativeFunction function, VM* vm)
+Value vm__peek(int distance, VM* vm) { return peek_value(distance, vm); }
+
+static void define_native_class(const char* name, ObjectClass* _class, VM* vm)
+{
+  push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
+  push_value(OBJECT_VAL(_class), vm);
+  table__set(
+      &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
+  pop_value(vm);
+  pop_value(vm);
+}
+
+static void define_native_function(
+    const char* name, int arity, NativeFunction function, VM* vm)
 {
   // this particular push/push, pop/pop pattern is used to ensure the native
   // function is reachable to the garbage collector (remember the value stack is
@@ -88,8 +117,10 @@ define_native_function(const char* name, NativeFunction function, VM* vm)
   // (i.e., via a table resizing)
   //
   // see https://craftinginterpreters.com/garbage-collection.html for details
-  push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
-  push_value(OBJECT_VAL(native_function__new(function, vm)), vm);
+  ObjectString* function_name = string__copy(name, (int)strlen(name), vm);
+  push_value(OBJECT_VAL(function_name), vm);
+  push_value(
+      OBJECT_VAL(native_function__new(function, function_name, arity, vm)), vm);
   table__set(
       &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
   pop_value(vm);
@@ -113,9 +144,11 @@ void vm__init(VM* vm)
   vm->init_string = NULL;
   vm->init_string = string__copy("__init__", strlen("__init__"), vm);
 
-  define_native_function("clock", clock_native, vm);
-  define_native_function("print", print, vm);
-  define_native_function("println", println, vm);
+  define_native_function("clock", 0, clock_native, vm);
+  define_native_function("print", 1, print, vm);
+  define_native_function("println", 1, println, vm);
+
+  define_native_class("list", lox_list__new_class("list", vm), vm);
 }
 
 void vm__dispose(VM* vm)
@@ -134,12 +167,12 @@ void vm__dispose(VM* vm)
 #endif
 }
 
-static bool is_valid_call(ObjectClosure* closure, int args_count, VM* vm)
+static bool is_valid_call(ObjectCallable* callable, int args_count, VM* vm)
 {
-  if (args_count != closure->function->arity) {
+  if (args_count != callable->arity) {
     runtime_error(
-        vm, "Expected %d argument%s but got %d", closure->function->arity,
-        closure->function->arity == 1 ? "" : "s", args_count);
+        vm, "Expected %d argument%s but got %d", callable->arity,
+        callable->arity == 1 ? "" : "s", args_count);
     return false;
   }
   if (vm->frames_count == FRAMES_MAX) {
@@ -149,28 +182,63 @@ static bool is_valid_call(ObjectClosure* closure, int args_count, VM* vm)
   return true;
 }
 
-static bool call(ObjectClosure* closure, int args_count, VM* vm)
+static bool call_closure(ObjectClosure* closure, int args_count, VM* vm)
 {
-  if (!is_valid_call(closure, args_count, vm))
+  if (!is_valid_call(CALLABLE_CAST(closure->function), args_count, vm))
     return false;
 
 #ifdef DEBUG_TRACE_EXECUTION
   if (vm->trace_execution) {
     debug__print_callframe_divider();
-  }
-#endif
-
-  CallFrame* frame = push_frame(vm);
-  frame->closure = closure;
-  frame->instruction_pointer = closure->function->bytecode.instructions;
-  // -1 because the function is right below the arguments on the value_stack
-  frame->slots = vm->value_stack_top - args_count - 1;
-
-#ifdef DEBUG_TRACE_EXECUTION
-  if (vm->trace_execution) {
     debug__show_callframe_names(vm);
   }
 #endif
+
+  push_new_frame(closure, args_count, vm);
+
+  return true;
+}
+
+static bool call_native(ObjectNativeFunction* native, int args_count, VM* vm)
+{
+  if (!is_valid_call(CALLABLE_CAST(native), args_count, vm))
+    return false;
+
+  // for regular native function calls:
+  //
+  //                                           native function frame
+  // VM value stack:                           _________________
+  //                                          /                 |
+  // [<script>]...[ some-value ][ native-fn ][ arg1 ]...[ arg k ][ . ]
+  //                                  ^                            ^
+  //                                  |                            |
+  //                                  |                 `vm->stack_free_slot`
+  //                                  |
+  //                       `vm->stack_free_slot` after call
+  //
+  // where k = args_count
+
+  // for native method calls (e.g., for methods of the `list` class):
+  //
+  //                                 native method frame
+  // VM value stack:              ___________________________
+  //                             /                           |
+  // [<script>]...[ some-value ][ `this` ][ arg1 ]...[ arg k ][ . ]
+  //                                 ^                          ^
+  //                                 |                          |
+  //                                 |                   vm->stack_free_slot
+  //                                 |
+  //                     `vm->stack_free_slot` after call
+  //
+  // where k = args_count, and `this` is the method's instance
+
+  int include_this_arg = native->is_method ? 1 : 0;
+  Value result = native->function(
+      args_count, vm->stack_free_slot - args_count - include_this_arg);
+
+  // +1 to clobber the native function or instance with the call's result
+  vm->stack_free_slot -= args_count + 1;
+  push_value(result, vm);
 
   return true;
 }
@@ -182,18 +250,18 @@ static bool call_value(Value callee, int args_count, VM* vm)
 
     case OBJECT_BOUND_METHOD: {
       ObjectBoundMethod* bound = AS_BOUND_METHOD(callee);
-      vm->value_stack_top[-args_count - 1] = bound->instance;
+      vm->stack_free_slot[-args_count - 1] = bound->instance;
 
-      return call(bound->method, args_count, vm);
+      return call_value(bound->method, args_count, vm);
     }
     case OBJECT_CLASS: {
       ObjectClass* _class = AS_CLASS(callee);
-      vm->value_stack_top[-args_count - 1] =
-          OBJECT_VAL(instance__new(_class, vm));
+      vm->stack_free_slot[-args_count - 1] =
+          OBJECT_VAL(_class->new_instance(_class, vm));
 
       Value initializer;
       if (table__get(&_class->methods, vm->init_string, &initializer)) {
-        return call(AS_CLOSURE(initializer), args_count, vm);
+        return call_closure(AS_CLOSURE(initializer), args_count, vm);
 
       } else if (args_count != 0) {
         runtime_error(vm, "Expected 0 arguments but got %d.", args_count);
@@ -202,14 +270,10 @@ static bool call_value(Value callee, int args_count, VM* vm)
       return true;
     }
     case OBJECT_CLOSURE: {
-      return call(AS_CLOSURE(callee), args_count, vm);
+      return call_closure(AS_CLOSURE(callee), args_count, vm);
     }
     case OBJECT_NATIVE_FUNCTION: {
-      NativeFunction native = AS_NATIVE_FUNCTION(callee);
-      Value result = native(args_count, vm->value_stack_top - args_count);
-      vm->value_stack_top -= args_count + 1;
-      push_value(result, vm);
-      return true;
+      return call_native(AS_NATIVE_FUNCTION(callee), args_count, vm);
     }
     default:
       break; // non-callable object type
@@ -227,7 +291,7 @@ static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
     return false;
   }
   ObjectBoundMethod* bound = bound_method__new(
-      /* instance: */ peek_value(0, vm), AS_CLOSURE(method), vm);
+      /* instance: */ peek_value(0, vm), method, vm);
   pop_value(vm); // we no longer need the instance around
   push_value(OBJECT_VAL(bound), vm);
 
@@ -285,14 +349,14 @@ static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
   return new_upvalue;
 }
 
-// for closures whose lifetime will outlive that of its parent function, it is
-// necessary to make sure that non-local variables are migrated from the stack
-// to a more permanent place. that place is the upvalues arrays associated with
-// each closure. the simplest way to accomplish this is to store each closed
-// variable in the upvalue, and simply redirect the upvalue's location to it, as
-// follows:
 static void close_upvalues(Value* last, VM* vm)
 {
+  // for closures whose lifetime will outlive that of its parent function, it is
+  // necessary to make sure that non-local variables are migrated from the stack
+  // to a more permanent place. that place is the "upvalues" arrays associated
+  // with each closure. the simplest way to accomplish this is to store each
+  // closed variable in the upvalue, and simply redirect the upvalue's location
+  // to it, as follows:
   while (vm->open_upvalues != NULL && vm->open_upvalues->location >= last) {
     ObjectUpvalue* upvalue = vm->open_upvalues;
     upvalue->closed = *upvalue->location;
@@ -534,7 +598,9 @@ static InterpretResult run(VM* vm)
       if (!call_value(peek_value(args_count, vm), args_count, vm)) {
         return INTERPRET_RUNTIME_ERROR;
       }
+      // update local frame to last on call stack
       frame = top_frame(vm);
+
       break;
     }
     case OP_NEW_CLOSURE: {
@@ -562,7 +628,7 @@ static InterpretResult run(VM* vm)
     }
     case OP_CLOSE_UPVALUE: {
       // "close" the single local variable on top of the stack
-      close_upvalues(vm->value_stack_top - 1, vm);
+      close_upvalues(vm->stack_free_slot - 1, vm);
       // we can get rid of since it is no longer needed by anyone (keep in mind
       // that this operation only happens when a scope is "popped" so the only
       // remaining references could by capturing closures)
@@ -585,20 +651,21 @@ static InterpretResult run(VM* vm)
 #endif
         // pop_value the sentinel top-level function wrapper
         pop_value(vm);
-        assert(vm->value_stack_top == vm->value_stack);
+        // if there are no bugs, we should always end with an empty stack
+        assert(vm->stack_free_slot == vm->value_stack);
 
         return INTERPRET_OK;
       }
 
-      pop_frame_args(vm, frame);
+      discard_frame_window(vm, frame);
       // make the result available to the caller function
       push_value(result, vm);
       // return control to the caller function
       frame = top_frame(vm);
 
 #ifdef DEBUG_TRACE_EXECUTION
-      // after a call returns, it's hard to know what was the caller, so let's
-      // reprint that information
+      // after a call returns, it's hard to know what was the caller, so
+      // let's reprint that information
       if (vm->trace_execution) {
         debug__print_callframe_divider();
         debug__show_callframe_names(vm);
@@ -643,7 +710,7 @@ InterpretResult vm__interpret(const char* source, VM* vm)
 #endif
 
   push_value(OBJECT_VAL(closure), vm);
-  call(closure, 0, vm);
+  call_closure(closure, 0, vm);
 
   InterpretResult result = run(vm);
 

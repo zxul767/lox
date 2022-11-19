@@ -2,14 +2,12 @@
 #include <string.h>
 
 #include "cstring.h"
+#include "lox_list.h"
 #include "memory.h"
 #include "object.h"
 #include "scanner.h"
 #include "table.h"
 #include "vm.h"
-
-#define ALLOCATE_OBJECT(type, object_type, vm)                                 \
-  (type*)object__allocate(sizeof(type), object_type, vm)
 
 const char* OBJ_TYPE_TO_STRING[] = {FOREACH_OBJ_TYPE(GENERATE_STRING)};
 
@@ -20,7 +18,7 @@ static void track_object_for_gc(Object* object, VM* vm)
   vm->objects = object;
 }
 
-static Object* object__allocate(size_t size, ObjectType type, VM* vm)
+Object* object__allocate(size_t size, ObjectType type, VM* vm)
 {
   // We use `size` instead of `sizeof(Object)` because `Object` is always
   // a "base" object that is never allocated on its own, but rather as
@@ -159,6 +157,8 @@ ObjectClass* class__new(ObjectString* name, VM* vm)
 {
   ObjectClass* _class = ALLOCATE_OBJECT(ObjectClass, OBJECT_CLASS, vm);
   _class->name = name;
+  _class->new_instance = instance__new;
+
   table__init(&_class->methods);
 
   return _class;
@@ -174,8 +174,7 @@ ObjectInstance* instance__new(ObjectClass* _class, VM* vm)
   return instance;
 }
 
-ObjectBoundMethod*
-bound_method__new(Value instance, ObjectClosure* method, VM* vm)
+ObjectBoundMethod* bound_method__new(Value instance, Value method, VM* vm)
 {
   ObjectBoundMethod* bound =
       ALLOCATE_OBJECT(ObjectBoundMethod, OBJECT_BOUND_METHOD, vm);
@@ -203,39 +202,55 @@ ObjectFunction* function__new(VM* vm)
 {
   ObjectFunction* function =
       ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
-  function->arity = 0;
+
+  ObjectCallable* callable = CALLABLE_CAST(function);
+  callable->name = NULL;
+  callable->arity = 0;
+
   function->upvalues_count = 0;
-  function->name = NULL;
   bytecode__init(&function->bytecode);
 
   return function;
 }
 
-ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm)
+ObjectNativeFunction* native_function__new(
+    NativeFunction primitive, ObjectString* name, int arity, VM* vm)
 {
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
-  native->function = function;
+
+  ObjectCallable* callable = CALLABLE_CAST(native);
+  callable->name = name;
+  callable->arity = arity;
+
+  native->function = primitive;
+  native->is_method = false;
+
   return native;
 }
 
 static void print_function(const ObjectFunction* function)
 {
-  if (function->name == NULL) {
+  ObjectCallable* callable = CALLABLE_CAST(function);
+  if (callable->name == NULL) {
     fprintf(stderr, "<script>");
     return;
   }
-  fprintf(stderr, "<fn %s>", function->name->chars);
+  fprintf(stderr, "<fn %s>", callable->name->chars);
 }
 
 void object__print(Value value)
 {
   switch (OBJECT_TYPE(value)) {
-  case OBJECT_BOUND_METHOD:
-    print_function(AS_BOUND_METHOD(value)->method->function);
-    break;
   case OBJECT_CLASS:
     fprintf(stderr, "<class %s>", AS_CLASS(value)->name->chars);
+    break;
+  case OBJECT_CALLABLE:
+    fprintf(stderr, "<callable>");
+    break;
+  case OBJECT_BOUND_METHOD:
+    fprintf(stderr, "bound:");
+    object__print(AS_BOUND_METHOD(value)->method);
     break;
   case OBJECT_CLOSURE:
     print_function(AS_CLOSURE(value)->function);
@@ -243,14 +258,18 @@ void object__print(Value value)
   case OBJECT_FUNCTION:
     print_function(AS_FUNCTION(value));
     break;
-  case OBJECT_INSTANCE:
-    fprintf(stderr, "<%s instance>", AS_INSTANCE(value)->_class->name->chars);
-    break;
   case OBJECT_NATIVE_FUNCTION:
     fprintf(stderr, "<native fn>");
     break;
+  case OBJECT_INSTANCE:
+    fprintf(stderr, "<%s instance>", AS_INSTANCE(value)->_class->name->chars);
+    break;
   case OBJECT_STRING:
     fprintf(stderr, "%s", AS_CSTRING(value));
+    break;
+  case OBJECT_LIST:
+    lox_list__print(AS_LIST(value));
+    /* fprintf(stderr, "<native list>"); */
     break;
   case OBJECT_UPVALUE:
     fprintf(stderr, "upvalue");
@@ -265,7 +284,7 @@ void object__print_repr(Value value)
     fprintf(stderr, "\"%s\"", AS_CSTRING(value));
     break;
   default:
-    object__print(value);
+    value__print(value);
     break;
   }
 }

@@ -86,7 +86,7 @@ constant_instruction(const char* name, const Bytecode* code, int offset)
   uint8_t constant_location = code->instructions[offset + 1];
   if (!strcmp(name, "OP_DEFINE_GLOBAL") || !strcmp(name, "OP_GET_GLOBAL") ||
       !strcmp(name, "OP_SET_GLOBAL")) {
-    fprintf(stderr, "%-20s index:", name);
+    fprintf(stderr, "%-20s name:", name);
     // variables should be printed without quotes for easier identification
     value__print(code->constants.values[constant_location]);
 
@@ -228,7 +228,7 @@ void debug__dump_value_stack(const VM* vm, const Value* from)
 {
   fprintf(stderr, "            stack: ");
   for (const Value* value = from ? from : vm->value_stack;
-       value < vm->value_stack_top; value++) {
+       value < vm->stack_free_slot; value++) {
     fprintf(stderr, "[");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
@@ -252,7 +252,7 @@ void debug__dump_stacktrace(const VM* vm)
 {
   for (int i = vm->frames_count - 1; i >= 0; i--) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectFunction* function = frame->closure->function;
+    ObjectCallable* function = CALLABLE_CAST(frame->closure->function);
 
     int line = get_current_source_line_in_frame(frame, vm);
     fprintf(stderr, "[line %d] in ", line);
@@ -270,7 +270,7 @@ void debug__show_callframe_names(const VM* vm)
   fprintf(stderr, "CALL STACK: ");
   for (int i = 0; i < vm->frames_count; i++) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectString* name = frame->closure->function->name;
+    ObjectString* name = CALLABLE_CAST(frame->closure->function)->name;
     if (i > 0) {
       fprintf(stderr, " > ");
     }
@@ -278,4 +278,16 @@ void debug__show_callframe_names(const VM* vm)
   }
   fprintf(stderr, "\n");
   debug__print_callframe_divider();
+}
+
+void debug__show_entries(const Table* table)
+{
+  for (int i = 0; i < table->capacity; ++i) {
+    if (table->entries[i].key != NULL) {
+      fprintf(stderr, "%s -> ", table->entries[i].key->chars);
+      value__print(table->entries[i].value);
+      fprintf(stderr, "\n");
+    }
+  }
+  fprintf(stderr, "\n");
 }

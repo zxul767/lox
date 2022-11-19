@@ -29,6 +29,14 @@ void value_array__append(ValueArray* array, Value value)
   array->count++;
 }
 
+Value value_array__pop(ValueArray* array)
+{
+  if (array->count == 0) {
+    return NIL_VAL;
+  }
+  return array->values[--array->count];
+}
+
 void value_array__dispose(ValueArray* array)
 {
   FREE_ARRAY(Value, array->values, array->capacity);

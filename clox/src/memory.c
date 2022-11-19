@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "compiler.h"
+#include "lox_list.h"
 #include "memory.h"
 #include "object.h"
 #include "vm.h"
@@ -118,6 +119,16 @@ static void free_object(Object* object)
     FREE(ObjectString, object);
     break;
   }
+  case OBJECT_LIST: {
+    // `ObjectList` is a kind of instance (it "inherits" from `ObjectInstance`)
+    ObjectInstance* instance = (ObjectInstance*)object;
+    table__dispose(&instance->fields);
+
+    ObjectList* list = (ObjectList*)object;
+    value_array__dispose(&list->array);
+    FREE(ObjectList, object);
+    break;
+  }
   case OBJECT_UPVALUE: {
     FREE(ObjectUpvalue, object);
     break;
@@ -190,7 +201,7 @@ static void mark_roots(VM* vm)
   memory__mark_object_as_alive((Object*)vm->init_string);
 
   // the value stack
-  for (Value* slot = vm->value_stack; slot < vm->value_stack_top; slot++) {
+  for (Value* slot = vm->value_stack; slot < vm->stack_free_slot; slot++) {
     memory__mark_value_as_alive(*slot);
   }
 
@@ -229,7 +240,7 @@ static void mark_object_references(Object* object)
   case OBJECT_BOUND_METHOD: {
     ObjectBoundMethod* bound_method = (ObjectBoundMethod*)object;
     memory__mark_value_as_alive(bound_method->instance);
-    memory__mark_object_as_alive((Object*)bound_method->method);
+    memory__mark_value_as_alive(bound_method->method);
     break;
   }
   case OBJECT_CLASS: {
@@ -248,10 +259,12 @@ static void mark_object_references(Object* object)
   }
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)function->name);
+    memory__mark_object_as_alive((Object*)CALLABLE_CAST(function)->name);
     mark_array_as_alive(&function->bytecode.constants);
     break;
   }
+    // `ObjectList` is a kind of instance (it "inherits" from `ObjectInstance`)
+  case OBJECT_LIST:
   case OBJECT_INSTANCE: {
     ObjectInstance* instance = (ObjectInstance*)object;
     memory__mark_object_as_alive((Object*)instance->_class);
@@ -261,8 +274,14 @@ static void mark_object_references(Object* object)
   case OBJECT_UPVALUE:
     memory__mark_value_as_alive(((ObjectUpvalue*)object)->closed);
     break;
-  case OBJECT_NATIVE_FUNCTION:
+  case OBJECT_NATIVE_FUNCTION: {
+    ObjectFunction* function = (ObjectFunction*)object;
+    memory__mark_object_as_alive((Object*)CALLABLE_CAST(function)->name);
+  } break;
   case OBJECT_STRING:
+  case OBJECT_CALLABLE:
+    // a callable is never used on its own; it is always a "super-class" of
+    // `ObjectFunction` or others, which are handled above
     break;
   }
 }

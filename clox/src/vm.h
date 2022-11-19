@@ -47,7 +47,7 @@ typedef struct VM {
   // this stack holds all local variables and temporaries in the whole stack of
   // call frames. all instructions take their operands from this stack
   Value value_stack[STACK_MAX];
-  Value* value_stack_top;
+  Value* stack_free_slot;
 
   // all heap-allocated objects are linked in a list whose head is pointed at by
   // `objects`
@@ -88,6 +88,7 @@ void vm__dispose(VM* vm);
 
 void vm__push(Value value, VM* vm);
 void vm__pop(VM* vm);
+Value vm__peek(int distance, VM* vm);
 
 InterpretResult vm__interpret(const char* source, VM* vm);
 
