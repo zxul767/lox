@@ -21,7 +21,7 @@ class LoxClass implements LoxCallable {
       this.signature = initializer.signature().withName(name);
 
     } else {
-      this.signature = new CallableSignature(name);
+      this.signature = new CallableSignature(name, /*returnType:*/ name);
     }
   }
 
