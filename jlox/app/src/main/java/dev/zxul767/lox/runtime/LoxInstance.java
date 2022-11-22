@@ -28,6 +28,6 @@ class LoxInstance {
 
   @Override
   public String toString() {
-    return _class.toString() + " instance";
+    return String.format("<%s instance>", _class.name);
   }
 }

@@ -1,0 +1,8 @@
+var item = "hola";
+println(item.length() == 4);
+println(item.slice(0, 2).length() == 2);
+println(item.starts_with("ho") == true);
+println(item.ends_with("la") == true);
+println(item.index_of("la") == 2);
+println(item.index_of("nope") == -1);
+println(item == "hola");
