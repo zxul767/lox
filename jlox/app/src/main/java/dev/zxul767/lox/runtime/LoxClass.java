@@ -15,7 +15,6 @@ class LoxClass implements LoxCallable {
     this.name = name;
     this.methods = methods;
 
-    List<Parameter> parameters = Collections.emptyList();
     if (methods.containsKey("__init__")) {
       LoxCallable initializer = methods.get("__init__");
       this.signature = initializer.signature().withName(name);
