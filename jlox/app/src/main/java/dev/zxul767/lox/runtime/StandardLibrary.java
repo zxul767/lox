@@ -160,12 +160,9 @@ public final class StandardLibrary {
   public static final Map<String, LoxCallable> members;
   static {
     members = new HashMap<>();
-    // native classes
-    members.put(list.signature().name, list);
-    members.put(string.signature().name, string);
-    // native functions
-    members.put(clock.signature().name, clock);
-    members.put(sin.signature().name, sin);
-    members.put(help.signature().name, help);
+    List<LoxCallable> callables = Arrays.asList(list, string, clock, sin, help);
+    for (LoxCallable callable : callables) {
+      members.put(callable.signature().name, callable);
+    }
   }
 }
