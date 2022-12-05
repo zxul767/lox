@@ -93,7 +93,7 @@ abstract class OneArgCallable extends NativeCallable {
     this(name, parameter, "any");
   }
   OneArgCallable(String name, Parameter parameter, String returnType) {
-    super(new CallableSignature(name, Arrays.asList(parameter), returnType));
+    super(new CallableSignature(name, parameter, returnType));
   }
 }
 
