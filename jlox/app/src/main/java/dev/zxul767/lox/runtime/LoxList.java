@@ -10,71 +10,41 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-class LoxList extends LoxClass {
-  public static final Map<String, CallableSignature> signatures;
+class LoxList extends LoxNativeClass {
+  static final Map<String, CallableSignature> signatures;
   static {
-    List<CallableSignature> members = Arrays.asList(
-        new CallableSignature("__init__", "list"),
-        new CallableSignature("length", "number"),
-        new CallableSignature("append", new Parameter("value"), "bool"),
-        new CallableSignature("at", new Parameter("index", "int")),
-        new CallableSignature("__getitem__", new Parameter("index", "int")),
-        new CallableSignature(
-            "set", Parameter.list("index", "int").add("value").build()
-        ),
-        new CallableSignature(
-            "__setitem__", Parameter.list("index", "int").add("value").build()
-        ),
-        new CallableSignature("clear", "nil"), new CallableSignature("pop")
+    signatures = createSignatures(
+        /* clang-format off */
+        "__init__    ()                 -> list",
+        "length      ()                 -> int",
+        "append      (value)            -> bool",
+        "at          (index:int)        -> any",
+        "set         (index:int, value) -> any",
+        "__getitem__ (index:int)        -> any",
+        "__setitem__ (index:int, value) -> any",
+        "clear       ()                 -> nil",
+        "pop         ()                 -> any"
+        /* clang-format on */
     );
-    signatures = new HashMap<>();
-    for (CallableSignature signature : members) {
-      signatures.put(signature.name, signature);
-    }
-  }
-  static Map<String, LoxCallable> buildConstructorMethod() {
-    Map<String, LoxCallable> methods = new HashMap<String, LoxCallable>();
-    methods.put(
-        "__init__",
-        new NativeBoundMethod(
-            signatures.get("__init__"), (self, args) -> { return null; }
-        )
-    );
-    return methods;
   }
 
   LoxList() {
     super(
-        "list", /*superclass:*/ null,
-        /*methods:*/ buildConstructorMethod()
+        "list",
+        /*methods:*/ createDunderMethods(signatures)
     );
 
-    registerMethod("length", (self, args) -> length(self));
-    registerMethod("append", (self, args) -> add(self, args[0]));
-    registerMethod("at", (self, args) -> at(self, args[0]));
-    registerMethod("__getitem__", (self, args) -> at(self, args[0]));
-    registerMethod("set", (self, args) -> set(self, args[0], args[1]));
-    registerMethod(
-        "__setitem__", (self, args) -> chainable_set(self, args[0], args[1])
+    define("length", (self, args) -> length(self), signatures);
+    define("append", (self, args) -> add(self, args[0]), signatures);
+    define("at", (self, args) -> at(self, args[0]), signatures);
+    define("set", (self, args) -> set(self, args[0], args[1]), signatures);
+    define("clear", (self, args) -> clear(self), signatures);
+    define("pop", (self, args) -> pop(self), signatures);
+    define("__getitem__", (self, args) -> at(self, args[0]), signatures);
+    define(
+        "__setitem__",
+        (self, args) -> chainable_set(self, args[0], args[1]), signatures
     );
-    registerMethod("clear", (self, args) -> clear(self));
-    registerMethod("pop", (self, args) -> pop(self));
-  }
-
-  // TODO: Create a NativeClass subclass so we can hoist common methods and code
-  // between LoxString and LoxList
-  void
-  registerMethod(String name, NativeMethod<Object, Object> nativeFunction) {
-    CallableSignature signature = signatures.getOrDefault(name, null);
-    if (signature == null) {
-      System.err.println(
-          String.format("ERROR: failed to register method: %s", name)
-      );
-    } else {
-      this.methods.put(
-          signature.name, new NativeBoundMethod(signature, nativeFunction)
-      );
-    }
   }
 
   // constructor call
@@ -84,17 +54,17 @@ class LoxList extends LoxClass {
   }
 
   static Object length(LoxInstance instance) {
-    LoxListInstance self = (LoxListInstance)instance;
+    var self = (LoxListInstance)instance;
     return (double)self.list.size();
   }
 
   static Object add(LoxInstance instance, Object value) {
-    LoxListInstance self = (LoxListInstance)instance;
+    var self = (LoxListInstance)instance;
     return self.list.add(value);
   }
 
   static Object clear(LoxInstance instance) {
-    LoxListInstance self = (LoxListInstance)instance;
+    var self = (LoxListInstance)instance;
     self.list.clear();
     return null;
   }
@@ -156,7 +126,7 @@ class LoxList extends LoxClass {
 
   static void throwEmptyListError(String lexeme) {
     String message = "cannot perform operation on empty list";
-    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
+    throwRuntimeError(lexeme, message);
   }
 
   static void throwIndexError(LoxListInstance self, String lexeme, int index) {
@@ -167,12 +137,7 @@ class LoxList extends LoxClass {
     if (self.list.size() == 0)
       message = "cannot access elements in empty list";
 
-    throw new RuntimeError(new Token(TokenType.IDENTIFIER, lexeme), message);
-  }
-
-  @Override
-  public String toString() {
-    return "<built-in class>";
+    throwRuntimeError(lexeme, message);
   }
 }
 
@@ -183,7 +148,7 @@ class LoxListInstance extends LoxInstance {
 
   @Override
   public String toString() {
-    ArrayList<String> strings = new ArrayList<>();
+    var strings = new ArrayList<String>();
     for (Object object : this.list) {
       // if we don't stop the recursion here, we risk getting an infinite cycle
       if (object == this) {
@@ -204,13 +169,10 @@ class LoxListInstance extends LoxInstance {
     if (other == this) {
       return true;
     }
-
     if (!(other instanceof LoxListInstance)) {
       return false;
     }
-
-    LoxListInstance instance = (LoxListInstance)other;
-
+    var instance = (LoxListInstance)other;
     return this.list.equals(instance.list);
   }
 }

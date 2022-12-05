@@ -19,15 +19,9 @@ class Parameter {
   public Parameter(String name) { this(name, "any"); }
 
   public Parameter(String name, String type) {
+    assert name != null : "name is mandatory in Parameter";
     this.name = name;
-    this.type = type;
-  }
-
-  public static ParameterBuilder list(String name) { return list(name, "any"); }
-
-  public static ParameterBuilder list(String name, String type) {
-    var builder = new ParameterBuilder(name, type);
-    return builder;
+    this.type = type != null ? type : "any";
   }
 
   @Override
@@ -36,42 +30,12 @@ class Parameter {
   }
 }
 
-class ParameterBuilder {
-  private ArrayList<Parameter> parameters;
-
-  ParameterBuilder(String name, String type) {
-    this.parameters = new ArrayList<Parameter>();
-    add(name, type);
-  }
-
-  public ParameterBuilder add(String name) {
-    this.parameters.add(new Parameter(name));
-    return this;
-  }
-
-  public ParameterBuilder add(String name, String type) {
-    this.parameters.add(new Parameter(name, type));
-    return this;
-  }
-
-  public List<Parameter> build() {
-    if (this.parameters == null) {
-      throw new IllegalStateException(
-          "ParameterBuilder.build() is meant to be used once only"
-      );
-    }
-    var result = this.parameters;
-    this.parameters = null;
-    return result;
-  }
-}
-
 class CallableSignature {
   public final String name;
   public final List<Parameter> parameters;
   public final String returnType;
 
-  CallableSignature(String name) { this(name, Collections.emptyList(), "any"); }
+  CallableSignature(String name) { this(name, Collections.emptyList()); }
 
   CallableSignature(String name, String returnType) {
     this(name, Collections.emptyList(), returnType);
