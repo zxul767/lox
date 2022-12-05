@@ -39,13 +39,21 @@ abstract class NativeCallable implements LoxCallable {
 class NativeBoundMethod implements LoxCallable {
   private final NativeMethod<Object, Object> nativeFunction;
   private final CallableSignature signature;
-  private LoxInstance instance = null;
+  private LoxInstance instance;
 
   NativeBoundMethod(
       CallableSignature signature, NativeMethod<Object, Object> nativeFunction
   ) {
+    this(signature, nativeFunction, /* instance: */ null);
+  }
+
+  NativeBoundMethod(
+      CallableSignature signature, NativeMethod<Object, Object> nativeFunction,
+      LoxInstance instance
+  ) {
     this.signature = signature;
     this.nativeFunction = nativeFunction;
+    this.instance = instance;
   }
 
   @Override
@@ -57,8 +65,7 @@ class NativeBoundMethod implements LoxCallable {
   public Object call(Interpreter interpreter, List<Object> args) {
     if (this.instance == null) {
       throw new RuntimeError(
-          new Token(IDENTIFIER, this.signature.name),
-          "Cannot invoke unbound method."
+          this.signature.name, "Cannot invoke unbound method."
       );
     }
     return this.nativeFunction.invoke(
@@ -69,8 +76,7 @@ class NativeBoundMethod implements LoxCallable {
   @Override
   public LoxCallable bind(LoxInstance instance) {
     NativeBoundMethod method =
-        new NativeBoundMethod(this.signature, this.nativeFunction);
-    method.instance = instance;
+        new NativeBoundMethod(this.signature, this.nativeFunction, instance);
 
     return method;
   }
