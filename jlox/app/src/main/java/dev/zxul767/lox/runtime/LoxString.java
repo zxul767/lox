@@ -9,7 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-class LoxString extends LoxNativeClass {
+class LoxStringClass extends LoxNativeClass {
   static final Map<String, CallableSignature> signatures;
   static {
     signatures = createSignatures(
@@ -24,7 +24,7 @@ class LoxString extends LoxNativeClass {
     );
   }
 
-  LoxString() {
+  LoxStringClass() {
     super(
         "str",
         /* methods: */ createDunderMethods(signatures)
@@ -43,46 +43,46 @@ class LoxString extends LoxNativeClass {
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
     Object arg = args.get(0);
-    if (arg instanceof LoxStringInstance) {
-      return new LoxStringInstance(((LoxStringInstance)arg).string);
+    if (arg instanceof LoxString) {
+      return new LoxString(((LoxString)arg).string);
     }
-    return new LoxStringInstance(Interpreter.stringify(args.get(0)));
+    return new LoxString(Interpreter.stringify(args.get(0)));
   }
 
   static Object length(LoxInstance instance) {
-    var self = (LoxStringInstance)instance;
+    var self = (LoxString)instance;
     return (double)self.string.length();
   }
 
   static Object starts_with(LoxInstance instance, Object value) {
-    var self = (LoxStringInstance)instance;
-    if (!(value instanceof LoxStringInstance)) {
-      // TODO: define token information when creating a `LoxStringInstance` in
+    var self = (LoxString)instance;
+    if (!(value instanceof LoxString)) {
+      // TODO: define token information when creating a `LoxString` in
       // the interpreter so we can report good errors
       throwRuntimeError("starts_with", "argument must be a string");
     }
-    LoxStringInstance arg = (LoxStringInstance)value;
+    var arg = (LoxString)value;
     return self.string.startsWith(arg.string);
   }
 
   static Object ends_with(LoxInstance instance, Object value) {
-    var self = (LoxStringInstance)instance;
-    if (!(value instanceof LoxStringInstance)) {
+    var self = (LoxString)instance;
+    if (!(value instanceof LoxString)) {
       throwRuntimeError("starts_with", "argument must be a string");
     }
-    LoxStringInstance arg = (LoxStringInstance)value;
+    var arg = (LoxString)value;
     return self.string.endsWith(arg.string);
   }
 
   static Object index_of(LoxInstance instance, Object target) {
-    var self = (LoxStringInstance)instance;
-    var arg = (LoxStringInstance)target;
+    var self = (LoxString)instance;
+    var arg = (LoxString)target;
     return (double)self.string.indexOf(arg.string);
   }
 
   static Object
   slice(LoxInstance instance, Object startIndex, Object endIndex) {
-    var self = (LoxStringInstance)instance;
+    var self = (LoxString)instance;
     int start = ((Double)startIndex).intValue();
     int end = ((Double)endIndex).intValue();
 
@@ -97,11 +97,10 @@ class LoxString extends LoxNativeClass {
     if (start > end) {
       throwRuntimeError("slice", "start cannot be greater than end");
     }
-    return new LoxStringInstance(self.string.substring(start, end));
+    return new LoxString(self.string.substring(start, end));
   }
 
-  static void
-  throwIndexError(LoxStringInstance self, String lexeme, int index) {
+  static void throwIndexError(LoxString self, String lexeme, int index) {
     var message = String.format(
         "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
         index, self.string.length() - 1, self.string.length()
@@ -113,16 +112,16 @@ class LoxString extends LoxNativeClass {
   }
 }
 
-class LoxStringInstance extends LoxInstance {
+class LoxString extends LoxInstance {
   public String string;
 
-  LoxStringInstance(String string) {
+  LoxString(String string) {
     super(StandardLibrary.string);
     this.string = string;
   }
 
-  public LoxStringInstance concatenate(LoxStringInstance other) {
-    return new LoxStringInstance(this.string + other.string);
+  public LoxString concatenate(LoxString other) {
+    return new LoxString(this.string + other.string);
   }
 
   @Override
@@ -135,10 +134,10 @@ class LoxStringInstance extends LoxInstance {
     if (other == this) {
       return true;
     }
-    if (!(other instanceof LoxStringInstance)) {
+    if (!(other instanceof LoxString)) {
       return false;
     }
-    var instance = (LoxStringInstance)other;
+    var instance = (LoxString)other;
     return this.string.equals(instance.string);
   }
 }

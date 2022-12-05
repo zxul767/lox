@@ -10,7 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
-class LoxList extends LoxNativeClass {
+class LoxListClass extends LoxNativeClass {
   static final Map<String, CallableSignature> signatures;
   static {
     signatures = createSignatures(
@@ -28,7 +28,7 @@ class LoxList extends LoxNativeClass {
     );
   }
 
-  LoxList() {
+  LoxListClass() {
     super(
         "list",
         /*methods:*/ createDunderMethods(signatures)
@@ -50,21 +50,21 @@ class LoxList extends LoxNativeClass {
   // constructor call
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
-    return new LoxListInstance();
+    return new LoxList();
   }
 
   static Object length(LoxInstance instance) {
-    var self = (LoxListInstance)instance;
+    var self = (LoxList)instance;
     return (double)self.list.size();
   }
 
   static Object add(LoxInstance instance, Object value) {
-    var self = (LoxListInstance)instance;
+    var self = (LoxList)instance;
     return self.list.add(value);
   }
 
   static Object clear(LoxInstance instance) {
-    var self = (LoxListInstance)instance;
+    var self = (LoxList)instance;
     self.list.clear();
     return null;
   }
@@ -85,33 +85,33 @@ class LoxList extends LoxNativeClass {
   //
   static Object
   chainable_set(LoxInstance instance, Object index, Object expression) {
-    LoxListInstance self = (LoxListInstance)instance;
+    LoxList self = (LoxList)instance;
     int normedIndex = normalizeIndex(index, self);
     self.list.set(normedIndex, expression);
     return expression;
   }
 
   static Object set(LoxInstance instance, Object index, Object expression) {
-    LoxListInstance self = (LoxListInstance)instance;
+    LoxList self = (LoxList)instance;
     int normedIndex = normalizeIndex(index, self);
     return self.list.set(normedIndex, expression);
   }
 
   static Object at(LoxInstance instance, Object index) {
-    LoxListInstance self = (LoxListInstance)instance;
+    LoxList self = (LoxList)instance;
     int normedIndex = normalizeIndex(index, self);
     return self.list.get(normedIndex);
   }
 
   static Object pop(LoxInstance instance) {
-    LoxListInstance self = (LoxListInstance)instance;
+    LoxList self = (LoxList)instance;
     if (self.list.isEmpty()) {
       throwEmptyListError("pop");
     }
     return self.list.remove(self.list.size() - 1);
   }
 
-  static int normalizeIndex(Object index, LoxListInstance self) {
+  static int normalizeIndex(Object index, LoxList self) {
     int originalIndex = (int)(double)index;
     int normedIndex = originalIndex;
     if (originalIndex < 0) {
@@ -129,7 +129,7 @@ class LoxList extends LoxNativeClass {
     throwRuntimeError(lexeme, message);
   }
 
-  static void throwIndexError(LoxListInstance self, String lexeme, int index) {
+  static void throwIndexError(LoxList self, String lexeme, int index) {
     String message = String.format(
         "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
         index, self.list.size() - 1, self.list.size()
@@ -141,10 +141,10 @@ class LoxList extends LoxNativeClass {
   }
 }
 
-class LoxListInstance extends LoxInstance {
+class LoxList extends LoxInstance {
   public ArrayList<Object> list = new ArrayList<>();
 
-  LoxListInstance() { super(StandardLibrary.list); }
+  LoxList() { super(StandardLibrary.list); }
 
   @Override
   public String toString() {
@@ -154,7 +154,7 @@ class LoxListInstance extends LoxInstance {
       if (object == this) {
         strings.add("@");
 
-      } else if (object instanceof LoxListInstance) {
+      } else if (object instanceof LoxList) {
         strings.add("[...]");
 
       } else {
@@ -169,10 +169,10 @@ class LoxListInstance extends LoxInstance {
     if (other == this) {
       return true;
     }
-    if (!(other instanceof LoxListInstance)) {
+    if (!(other instanceof LoxList)) {
       return false;
     }
-    var instance = (LoxListInstance)other;
+    var instance = (LoxList)other;
     return this.list.equals(instance.list);
   }
 }

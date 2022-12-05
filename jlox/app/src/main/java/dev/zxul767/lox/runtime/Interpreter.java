@@ -172,7 +172,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Object visitLiteralExpr(Expr.Literal expr) {
     if (expr.value instanceof String) {
-      return new LoxStringInstance((String)expr.value);
+      return new LoxString((String)expr.value);
     }
     return expr.value;
   }
@@ -281,9 +281,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       if (left instanceof Double && right instanceof Double) {
         return (double)left + (double)right;
       }
-      if (left instanceof LoxStringInstance && right instanceof
-                                                   LoxStringInstance) {
-        return ((LoxStringInstance)left).concatenate((LoxStringInstance)right);
+      if (left instanceof LoxString && right instanceof
+                                                   LoxString) {
+        return ((LoxString)left).concatenate((LoxString)right);
       }
       throw new RuntimeError(
           expr.operator, "Operands must be two numbers or two strings"
@@ -375,14 +375,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       }
       return text;
     }
-    if (object instanceof LoxStringInstance) {
+    if (object instanceof LoxString) {
       return String.format("'%s'", object.toString());
     }
     return object.toString();
   }
 
   public static String repr(Object object) {
-    if (object instanceof LoxStringInstance) {
+    if (object instanceof LoxString) {
       return String.format("\"%s\"", object.toString());
     }
     return stringify(object);

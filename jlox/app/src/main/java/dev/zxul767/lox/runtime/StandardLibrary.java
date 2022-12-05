@@ -101,8 +101,8 @@ public final class StandardLibrary {
   private StandardLibrary() {}
 
   // the constructor for the native list type in Lox
-  static final LoxClass list = new LoxList();
-  static final LoxClass string = new LoxString();
+  static final LoxClass list = new LoxListClass();
+  static final LoxClass string = new LoxStringClass();
 
   static final LoxCallable clock = new NoArgsCallable("clock", "number") {
     @Override
@@ -141,7 +141,7 @@ public final class StandardLibrary {
           } else if (arg instanceof Boolean) {
             System.out.println(arg.toString() + " : boolean");
 
-          } else if (arg instanceof LoxStringInstance) {
+          } else if (arg instanceof LoxString) {
             System.out.println(String.format(
                 "'%s' : %s", arg.toString(), ((LoxInstance)arg)._class.name
             ));
