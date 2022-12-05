@@ -107,15 +107,12 @@ class LoxNativeClass extends LoxClass {
       Map<String, CallableSignature> signatures
   ) {
     CallableSignature signature = signatures.getOrDefault(name, null);
-    if (signature == null) {
-      System.err.println(String.format(
-          "ERROR: failed to register method: %s::%s", this.name, name
-      ));
-    } else {
-      this.methods.put(
-          signature.name, new NativeBoundMethod(signature, nativeMethod)
-      );
-    }
+    assert signature != null
+        : String.format("Failed to define method: %s::%s", this.name, name);
+
+    this.methods.put(
+        signature.name, new NativeBoundMethod(signature, nativeMethod)
+    );
   }
 
   @Override
