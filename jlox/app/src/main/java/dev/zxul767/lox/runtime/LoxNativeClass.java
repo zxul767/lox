@@ -35,9 +35,9 @@ class LoxNativeClass extends LoxClass {
     // `Map.of` provides nice "literal" syntax but always returns immutable
     // maps; hence why we copy it into a mutable one.
     return new HashMap<>(Map.of(
-        "__init__",
+        "init",
         new NativeBoundMethod(
-            signatures.get("__init__"), (self, args) -> { return self; }
+            signatures.get(LoxClass.INIT), (self, args) -> { return self; }
         )
     ));
   }

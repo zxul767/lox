@@ -78,7 +78,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     for (Stmt.Function method : stmt.methods) {
       LoxFunction function = new LoxFunction(
           method, environment,
-          /* isInitializer: */ method.name.lexeme.equals("__init__")
+          /* isInitializer: */ method.name.lexeme.equals(LoxClass.INIT)
       );
       methods.put(method.name.lexeme, function);
     }

@@ -10,7 +10,7 @@ run:
 	@./gradlew run -q --args=$(NAME)
 
 watch:
-	@./gradlew --continuous build
+	@./gradlew --continuous --watch-fs build
 
 # run the REPL using java directly (instead of using gradle) because `jline3`
 # (the console input library) has issues setting a system terminal due to how

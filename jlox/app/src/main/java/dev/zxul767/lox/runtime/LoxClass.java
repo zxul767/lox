@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 class LoxClass implements LoxCallable {
+  public static final String INIT = "__init__";
+
   final String name;
   final LoxClass superclass;
   final CallableSignature signature;
@@ -15,8 +17,8 @@ class LoxClass implements LoxCallable {
     this.name = name;
     this.methods = methods;
 
-    if (methods.containsKey("__init__")) {
-      LoxCallable initializer = methods.get("__init__");
+    if (methods.containsKey(INIT)) {
+      LoxCallable initializer = methods.get(INIT);
       this.signature = initializer.signature().withName(name);
 
     } else {
@@ -49,7 +51,7 @@ class LoxClass implements LoxCallable {
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
     LoxInstance instance = new LoxInstance(this);
-    LoxCallable initializer = findMethod("__init__");
+    LoxCallable initializer = findMethod(INIT);
     if (initializer != null) {
       initializer.bind(instance).call(interpreter, args);
     }
