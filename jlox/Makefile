@@ -9,6 +9,9 @@ main:
 run:
 	@./gradlew run -q --args=$(NAME)
 
+# `--continuous` watches for changes but using polling, whereas
+# `--watch-fs` uses the OS filesystem events to trigger rebuilds,
+# thus providing a more snappy experience
 watch:
 	@./gradlew --continuous --watch-fs build
 

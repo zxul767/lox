@@ -17,7 +17,7 @@ class LoxListClass extends LoxNativeClass {
         /* clang-format off */
         "__init__    ()                 -> list",
         "length      ()                 -> int",
-        "append      (value)            -> bool",
+        "append      (value)            -> nil",
         "at          (index:int)        -> any",
         "set         (index:int, value) -> any",
         "__getitem__ (index:int)        -> any",
@@ -47,24 +47,26 @@ class LoxListClass extends LoxNativeClass {
     );
   }
 
-  // constructor call
+  // constructor call; this is equivalent to `__new__` in Python, in that it
+  // only performs allocation, leaving initialization to `__init__`
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
     return new LoxList();
   }
 
   static Object length(LoxInstance instance) {
-    var self = (LoxList)instance;
+    LoxList self = assertList(instance);
     return (double)self.list.size();
   }
 
   static Object add(LoxInstance instance, Object value) {
-    var self = (LoxList)instance;
-    return self.list.add(value);
+    LoxList self = assertList(instance);
+    self.list.add(value);
+    return null;
   }
 
   static Object clear(LoxInstance instance) {
-    var self = (LoxList)instance;
+    LoxList self = assertList(instance);
     self.list.clear();
     return null;
   }
@@ -85,41 +87,46 @@ class LoxListClass extends LoxNativeClass {
   //
   static Object
   chainable_set(LoxInstance instance, Object index, Object expression) {
-    LoxList self = (LoxList)instance;
-    int normedIndex = normalizeIndex(index, self);
+    LoxList self = assertList(instance);
+
+    int normedIndex = normalizeIndex(index, self, "set");
     self.list.set(normedIndex, expression);
+
     return expression;
   }
 
   static Object set(LoxInstance instance, Object index, Object expression) {
-    LoxList self = (LoxList)instance;
-    int normedIndex = normalizeIndex(index, self);
+    LoxList self = assertList(instance);
+
+    int normedIndex = normalizeIndex(index, self, "set");
     return self.list.set(normedIndex, expression);
   }
 
   static Object at(LoxInstance instance, Object index) {
-    LoxList self = (LoxList)instance;
-    int normedIndex = normalizeIndex(index, self);
+    LoxList self = assertList(instance);
+
+    int normedIndex = normalizeIndex(index, self, "at");
     return self.list.get(normedIndex);
   }
 
   static Object pop(LoxInstance instance) {
-    LoxList self = (LoxList)instance;
+    LoxList self = assertList(instance);
+
     if (self.list.isEmpty()) {
       throwEmptyListError("pop");
     }
     return self.list.remove(self.list.size() - 1);
   }
 
-  static int normalizeIndex(Object index, LoxList self) {
-    int originalIndex = (int)(double)index;
+  static int normalizeIndex(Object index, LoxList self, String methodName) {
+    int originalIndex = requireInt(index, methodName);
     int normedIndex = originalIndex;
     if (originalIndex < 0) {
       normedIndex = self.list.size() + originalIndex;
     }
     if (normedIndex < 0 || normedIndex >= self.list.size()) {
       // we report on the original index to avoid confusing users
-      throwIndexError(self, "at", originalIndex);
+      throwIndexError(self, methodName, originalIndex);
     }
     return normedIndex;
   }
@@ -129,15 +136,15 @@ class LoxListClass extends LoxNativeClass {
     throwRuntimeError(lexeme, message);
   }
 
-  static void throwIndexError(LoxList self, String lexeme, int index) {
+  static void throwIndexError(LoxList self, String token, int index) {
     String message = String.format(
         "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
         index, self.list.size() - 1, self.list.size()
     );
-    if (self.list.size() == 0)
+    if (self.list.size() == 0) {
       message = "cannot access elements in empty list";
-
-    throwRuntimeError(lexeme, message);
+    }
+    throwRuntimeError(token, message);
   }
 }
 

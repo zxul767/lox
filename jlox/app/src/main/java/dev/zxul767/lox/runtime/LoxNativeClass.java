@@ -13,18 +13,21 @@ class LoxNativeClass extends LoxClass {
 
   private final static String signatureRegex = String.join(
       "",
-      "(?<name>[A-Za-z_]+) \\s*",       // name
-      "\\( (?<params> [^)]*) \\) \\s*", // parameters with optional type
+      "(?<name>[A-Za-z_]+) \\s*",                 // name
+      "\\( (?<params> [^)]*) \\) \\s*",           // parameters
       "(->\\s*(?<return>" + loxTypes + ") \\s*)?" // optional return type
   );
 
   private final static Pattern signaturePattern =
       Pattern.compile(signatureRegex, Pattern.COMMENTS);
 
-  private final static Pattern paramPattern = Pattern.compile(
-      "\\s*(?<name>[A-Za-z_]+)\\s*(:(?<type>" + loxTypes + "))?\\s*",
-      Pattern.COMMENTS
+  private final static String paramRegex = String.join(
+      "", "\\s*(?<name>[A-Za-z_]+)\\s*",  // parameter name
+      "(:(?<type>" + loxTypes + "))?\\s*" // optional type
   );
+
+  private final static Pattern paramPattern =
+      Pattern.compile(paramRegex, Pattern.COMMENTS);
 
   LoxNativeClass(String name, Map<String, LoxCallable> methods) {
     super(name, /*superclass:*/ null, methods);
@@ -35,7 +38,7 @@ class LoxNativeClass extends LoxClass {
     // `Map.of` provides nice "literal" syntax but always returns immutable
     // maps; hence why we copy it into a mutable one.
     return new HashMap<>(Map.of(
-        "init",
+        LoxClass.INIT,
         new NativeBoundMethod(
             signatures.get(LoxClass.INIT), (self, args) -> { return self; }
         )
@@ -91,15 +94,48 @@ class LoxNativeClass extends LoxClass {
       boolean matchedParam = matcher.matches();
       assert matchedParam : String.format("invalid parameter: %s", param);
 
-      String name = matcher.group("name");
-      String type = matcher.group("type");
-      result.add(new Parameter(name, type));
+      result.add(new Parameter(matcher.group("name"), matcher.group("type")));
     }
     return result;
   }
 
-  static void throwRuntimeError(String lexeme, String message) {
-    throw new RuntimeError(lexeme, message);
+  static void throwRuntimeError(String token, String message) {
+    throw new RuntimeError(token, message);
+  }
+
+  // TODO: can we unify these methods using generics?
+  // https://github.com/zxul767/lox/issues/27
+  static LoxString assertString(LoxInstance instance) {
+    assert (instance instanceof LoxString)
+        : "instance was expected to be a LoxString";
+    return (LoxString)instance;
+  }
+
+  static LoxList assertList(LoxInstance instance) {
+    assert (instance instanceof LoxList)
+        : "instance was expected to be a LoxList";
+    return (LoxList)instance;
+  }
+
+  static LoxString requireString(Object value, String functionName) {
+    if (!(value instanceof LoxString)) {
+      throwRuntimeError(functionName, "argument must be a string");
+    }
+    return (LoxString)value;
+  }
+
+  static double requireDouble(Object value, String functionName) {
+    if (!(value instanceof Double)) {
+      throwRuntimeError(functionName, "argument must be a double");
+    }
+    return (double)value;
+  }
+
+  static int requireInt(Object value, String functionName) {
+    if (!(value instanceof Double)) {
+      throwRuntimeError(functionName, "argument must be an integer");
+    }
+    return ((Double)value).intValue();
   }
 
   void define(

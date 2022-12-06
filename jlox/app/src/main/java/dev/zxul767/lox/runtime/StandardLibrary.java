@@ -26,7 +26,7 @@ abstract class NativeCallable implements LoxCallable {
 
   @Override
   public LoxCallable bind(LoxInstance instance) {
-    // by default, methods don't bind to anything
+    // by default, native functions don't bind to anything
     return this;
   }
 
@@ -75,10 +75,7 @@ class NativeBoundMethod implements LoxCallable {
 
   @Override
   public LoxCallable bind(LoxInstance instance) {
-    NativeBoundMethod method =
-        new NativeBoundMethod(this.signature, this.nativeFunction, instance);
-
-    return method;
+    return new NativeBoundMethod(this.signature, this.nativeFunction, instance);
   }
 
   @Override
@@ -106,10 +103,12 @@ abstract class OneArgCallable extends NativeCallable {
 public final class StandardLibrary {
   private StandardLibrary() {}
 
-  // the constructor for the native list type in Lox
   static final LoxClass list = new LoxListClass();
   static final LoxClass string = new LoxStringClass();
 
+  // TODO: use the same machinery to build signatures that is being used in
+  // `LoxNativeClass`
+  //
   static final LoxCallable clock = new NoArgsCallable("clock", "number") {
     @Override
     public Object call(Interpreter interpreter, List<Object> args) {
@@ -121,12 +120,8 @@ public final class StandardLibrary {
       new OneArgCallable("sin", new Parameter("n", "number"), "number") {
         @Override
         public Object call(Interpreter interpreter, List<Object> args) {
-          if (!(args.get(0) instanceof Double)) {
-            throw new RuntimeError(
-                new Token(IDENTIFIER, "sin(..)"), "argument must be a number"
-            );
-          }
-          return Math.sin((double)args.get(0));
+          double value = LoxNativeClass.requireDouble(args.get(0), "sin");
+          return Math.sin(value);
         }
       };
 
@@ -135,28 +130,31 @@ public final class StandardLibrary {
         @Override
         public Object call(Interpreter interpreter, List<Object> args) {
           Object arg = args.get(0);
+
+          String valueRepr = arg == null ? "nil" : arg.toString();
+          String valueType = arg == null ? "nil" : "any";
+
           if (arg instanceof LoxCallable) {
-            System.out.println(String.format(
-                "{ %s } : %s", ((LoxCallable)arg).signature().toString(),
-                arg.toString()
-            ));
+            // TODO: show members for native classes
+            valueRepr = ((LoxCallable)arg).signature().toString();
+            valueType = arg.toString();
 
           } else if (arg instanceof Double) {
-            System.out.println(arg.toString() + " : number");
+            valueType = "number";
 
           } else if (arg instanceof Boolean) {
-            System.out.println(arg.toString() + " : boolean");
+            valueType = "boolean";
 
           } else if (arg instanceof LoxString) {
-            System.out.println(String.format(
-                "'%s' : %s", arg.toString(), ((LoxInstance)arg)._class.name
-            ));
+            valueRepr = String.format("'%s'", valueRepr);
+            valueType = ((LoxInstance)arg)._class.name;
 
           } else if (arg instanceof LoxInstance) {
-            System.out.println(String.format(
-                "%s : %s", arg.toString(), ((LoxInstance)arg)._class.name
-            ));
+            valueType = ((LoxInstance)arg)._class.name;
           }
+
+          System.out.println(String.format("%s : %s", valueRepr, valueType));
+
           return null;
         }
       };

@@ -70,9 +70,9 @@ class CallableSignature {
   @Override
   public String toString() {
     String params = String.join(
-        ",", this.parameters.stream()
-                 .map(p -> p.toString())
-                 .collect(Collectors.toList())
+        ", ", this.parameters.stream()
+                  .map(p -> p.toString())
+                  .collect(Collectors.toList())
     );
     return String.format("%s(%s) -> %s", this.name, params, this.returnType);
   }

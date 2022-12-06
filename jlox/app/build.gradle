@@ -33,6 +33,7 @@ dependencies {
 application {
     // Define the main class for the application.
     mainClass = 'dev.zxul767.lox.Lox'
+    // enable assertions at runtime
     applicationDefaultJvmArgs = ['-ea']
 }
 

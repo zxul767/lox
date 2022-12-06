@@ -172,6 +172,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Object visitLiteralExpr(Expr.Literal expr) {
     if (expr.value instanceof String) {
+      // we do this to support methods on literal strings (i.e.,
+      // `"hello".starts_with("hell")`)
       return new LoxString((String)expr.value);
     }
     return expr.value;
@@ -281,8 +283,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       if (left instanceof Double && right instanceof Double) {
         return (double)left + (double)right;
       }
-      if (left instanceof LoxString && right instanceof
-                                                   LoxString) {
+      if (left instanceof LoxString && right instanceof LoxString) {
         return ((LoxString)left).concatenate((LoxString)right);
       }
       throw new RuntimeError(

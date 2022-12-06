@@ -29,7 +29,8 @@ public class Errors {
 
   public static void runtimeError(RuntimeError error) {
     System.err.println(String.format(
-        "Runtime Error: %s\n[line %d]", error.getMessage(), error.token.line
+        "Runtime Error: %s\n[line %d, token: '%s']", error.getMessage(),
+        error.token.line, error.token.lexeme
     ));
     System.err.flush();
     hadRuntimeError = true;

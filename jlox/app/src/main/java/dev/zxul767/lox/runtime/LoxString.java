@@ -50,49 +50,46 @@ class LoxStringClass extends LoxNativeClass {
   }
 
   static Object length(LoxInstance instance) {
-    var self = (LoxString)instance;
+    LoxString self = assertString(instance);
     return (double)self.string.length();
   }
 
   static Object starts_with(LoxInstance instance, Object value) {
-    var self = (LoxString)instance;
-    if (!(value instanceof LoxString)) {
-      // TODO: define token information when creating a `LoxString` in
-      // the interpreter so we can report good errors
-      throwRuntimeError("starts_with", "argument must be a string");
-    }
-    var arg = (LoxString)value;
-    return self.string.startsWith(arg.string);
+    LoxString self = assertString(instance);
+    LoxString prefix = requireString(value, "starts_with");
+
+    return self.string.startsWith(prefix.string);
   }
 
   static Object ends_with(LoxInstance instance, Object value) {
-    var self = (LoxString)instance;
-    if (!(value instanceof LoxString)) {
-      throwRuntimeError("starts_with", "argument must be a string");
-    }
-    var arg = (LoxString)value;
-    return self.string.endsWith(arg.string);
+    LoxString self = assertString(instance);
+    LoxString suffix = requireString(value, "ends_with");
+
+    return self.string.endsWith(suffix.string);
   }
 
-  static Object index_of(LoxInstance instance, Object target) {
-    var self = (LoxString)instance;
-    var arg = (LoxString)target;
-    return (double)self.string.indexOf(arg.string);
+  static Object index_of(LoxInstance instance, Object value) {
+    LoxString self = assertString(instance);
+    LoxString target = requireString(value, "index_of");
+
+    return (double)self.string.indexOf(target.string);
   }
 
   static Object
   slice(LoxInstance instance, Object startIndex, Object endIndex) {
-    var self = (LoxString)instance;
-    int start = ((Double)startIndex).intValue();
-    int end = ((Double)endIndex).intValue();
+    LoxString self = assertString(instance);
+    int start = requireInt(startIndex, "slice");
+    int end = requireInt(endIndex, "slice");
 
     // TODO: research why python simply returns empy strings instead of these
     // errors. should we do the same?
     if (start < 0 || start >= self.string.length()) {
-      throwIndexError(self, "slice(start, ...)", start);
+      throwIndexError(
+          self, String.format("slice(start=%d, ...)", start), start
+      );
     }
     if (end < 0 || end >= self.string.length()) {
-      throwIndexError(self, "slice(..., end)", start);
+      throwIndexError(self, String.format("slice(..., end=%d)", end), end);
     }
     if (start > end) {
       throwRuntimeError("slice", "start cannot be greater than end");
