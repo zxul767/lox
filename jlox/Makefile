@@ -9,8 +9,11 @@ main:
 run:
 	@./gradlew run -q --args=$(NAME)
 
+# `--continuous` watches for changes but using polling, whereas
+# `--watch-fs` uses the OS filesystem events to trigger rebuilds,
+# thus providing a more snappy experience
 watch:
-	@./gradlew --continuous build
+	@./gradlew --continuous --watch-fs build
 
 # run the REPL using java directly (instead of using gradle) because `jline3`
 # (the console input library) has issues setting a system terminal due to how

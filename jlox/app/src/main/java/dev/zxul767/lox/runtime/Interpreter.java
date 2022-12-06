@@ -15,9 +15,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   private final Map<Expr, Integer> locals = new HashMap<>();
 
   public Interpreter() {
-    globals.define("clock", StandardLibrary.clock);
-    globals.define("sin", StandardLibrary.sin);
-    globals.define("list", StandardLibrary.list);
+    for (var entry : StandardLibrary.members.entrySet()) {
+      globals.define(entry.getKey(), entry.getValue());
+    }
   }
 
   public void interpret(List<Stmt> statements) {
@@ -78,7 +78,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     for (Stmt.Function method : stmt.methods) {
       LoxFunction function = new LoxFunction(
           method, environment,
-          /* isInitializer: */ method.name.lexeme.equals("__init__")
+          /* isInitializer: */ method.name.lexeme.equals(LoxClass.INIT)
       );
       methods.put(method.name.lexeme, function);
     }
@@ -171,6 +171,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   @Override
   public Object visitLiteralExpr(Expr.Literal expr) {
+    if (expr.value instanceof String) {
+      // we do this to support methods on literal strings (i.e.,
+      // `"hello".starts_with("hell")`)
+      return new LoxString((String)expr.value);
+    }
     return expr.value;
   }
 
@@ -278,8 +283,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       if (left instanceof Double && right instanceof Double) {
         return (double)left + (double)right;
       }
-      if (left instanceof String && right instanceof String) {
-        return (String)left + (String)right;
+      if (left instanceof LoxString && right instanceof LoxString) {
+        return ((LoxString)left).concatenate((LoxString)right);
       }
       throw new RuntimeError(
           expr.operator, "Operands must be two numbers or two strings"
@@ -312,12 +317,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       );
     }
     LoxCallable function = (LoxCallable)callee;
-    if (args.size() != function.arity()) {
+    if (args.size() != function.signature().arity()) {
       throw new RuntimeError(
-          expr.paren,
-          String.format(
-              "Expected %d arguments but got %d.", function.arity(), args.size()
-          )
+          expr.paren, String.format(
+                          "Expected %d arguments but got %d.",
+                          function.signature().arity(), args.size()
+                      )
       );
     }
     return function.call(this, args);
@@ -371,15 +376,15 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       }
       return text;
     }
-    if (object instanceof String) {
-      return String.format("%s", object);
+    if (object instanceof LoxString) {
+      return String.format("'%s'", object.toString());
     }
     return object.toString();
   }
 
   public static String repr(Object object) {
-    if (object instanceof String) {
-      return String.format("\"%s\"", object);
+    if (object instanceof LoxString) {
+      return String.format("\"%s\"", object.toString());
     }
     return stringify(object);
   }

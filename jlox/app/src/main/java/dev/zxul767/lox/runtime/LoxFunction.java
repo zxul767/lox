@@ -2,11 +2,13 @@ package dev.zxul767.lox.runtime;
 
 import dev.zxul767.lox.parsing.Stmt;
 import java.util.List;
+import java.util.stream.Collectors;
 
 class LoxFunction implements LoxCallable {
   private final Stmt.Function declaration;
   private final Environment closure;
   private final boolean isInitializer;
+  private final CallableSignature signature;
 
   LoxFunction(
       Stmt.Function declaration, Environment closure, boolean isInitializer
@@ -14,6 +16,12 @@ class LoxFunction implements LoxCallable {
     this.isInitializer = isInitializer;
     this.declaration = declaration;
     this.closure = closure;
+
+    List<Parameter> parameters = declaration.params.stream()
+                                     .map(token -> new Parameter(token.lexeme))
+                                     .collect(Collectors.toList());
+    this.signature =
+        new CallableSignature(this.declaration.name.lexeme, parameters);
   }
 
   @Override
@@ -42,12 +50,12 @@ class LoxFunction implements LoxCallable {
   }
 
   @Override
-  public int arity() {
-    return declaration.params.size();
+  public CallableSignature signature() {
+    return this.signature;
   }
 
   @Override
   public String toString() {
-    return String.format("<fn %s>", declaration.name.lexeme);
+    return String.format("<user-defined function>");
   }
 }

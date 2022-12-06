@@ -1,17 +1,29 @@
 package dev.zxul767.lox.runtime;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 class LoxClass implements LoxCallable {
+  public static final String INIT = "__init__";
+
   final String name;
   final LoxClass superclass;
+  final CallableSignature signature;
   protected final Map<String, LoxCallable> methods;
 
   LoxClass(String name, LoxClass superclass, Map<String, LoxCallable> methods) {
     this.superclass = superclass;
     this.name = name;
     this.methods = methods;
+
+    if (methods.containsKey(INIT)) {
+      LoxCallable initializer = methods.get(INIT);
+      this.signature = initializer.signature().withName(name);
+
+    } else {
+      this.signature = new CallableSignature(name, /*returnType:*/ name);
+    }
   }
 
   LoxCallable findMethod(String name) {
@@ -25,6 +37,11 @@ class LoxClass implements LoxCallable {
   }
 
   @Override
+  public CallableSignature signature() {
+    return this.signature;
+  }
+
+  @Override
   public LoxCallable bind(LoxInstance instance) {
     // as a callable, a class is just a constructor, so it can't be bound.
     return this;
@@ -34,19 +51,11 @@ class LoxClass implements LoxCallable {
   @Override
   public Object call(Interpreter interpreter, List<Object> args) {
     LoxInstance instance = new LoxInstance(this);
-    LoxCallable initializer = findMethod("__init__");
+    LoxCallable initializer = findMethod(INIT);
     if (initializer != null) {
       initializer.bind(instance).call(interpreter, args);
     }
     return instance;
-  }
-
-  @Override
-  public int arity() {
-    LoxCallable initializer = findMethod("__init__");
-    if (initializer == null)
-      return 0;
-    return initializer.arity();
   }
 
   @Override
