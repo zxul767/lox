@@ -75,8 +75,8 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void resolveFunction(Stmt.Function function,
-                               FunctionType functionType) {
+  private void
+  resolveFunction(Stmt.Function function, FunctionType functionType) {
     FunctionType enclosingFunction = currentFunction;
     currentFunction = functionType;
 
@@ -126,26 +126,28 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   @Override
-  public Void visitClassStmt(Stmt.Class stmt) {
-    if (stmt.superclass != null &&
-        stmt.name.lexeme.equals(stmt.superclass.name.lexeme)) {
-      Errors.error(stmt.superclass.name, "A class can't inherit from itself.");
+  public Void visitClassStmt(Stmt.Class statement) {
+    if (statement.superclass != null &&
+        statement.name.lexeme.equals(statement.superclass.name.lexeme)) {
+      Errors.error(
+          statement.superclass.name, "A class can't inherit from itself."
+      );
     }
 
     ClassType enclosingClass = currentClass;
 
     // It is valid to refer to the class name inside its definition,
     // so we'll pretend that it is defined at this point.
-    declareAndDefine(stmt.name);
+    declareAndDefine(statement.name);
 
-    if (stmt.superclass != null) {
+    if (statement.superclass != null) {
       // This doesn't usually do anything useful (since classes are usually
       // declared at the top level). However, classes can be declared even
       // inside blocks, so it's possible the superclass name refers to a local
       // variable.
       // TODO: do we really want/need to allow classes to be defined locally?
       currentClass = ClassType.SUBCLASS;
-      resolve(stmt.superclass);
+      resolve(statement.superclass);
 
       // This scope ensures that "super.method(...)" references are resolved
       // by starting the lookup on the superclass containing the "super"
@@ -182,7 +184,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     // since its definition is implicit in the construction of the instance)
     beginScope();
     declare(new Token(THIS, "this"));
-    for (Stmt.Function method : stmt.methods) {
+    for (Stmt.Function method : statement.methods) {
       FunctionType declaration = FunctionType.METHOD;
       if (method.name.lexeme.equals(LoxClass.INIT)) {
         declaration = FunctionType.INITIALIZER;
@@ -191,7 +193,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
     endScope();
 
-    if (stmt.superclass != null) {
+    if (statement.superclass != null) {
       // ends the scope associated with the "super" keyword
       endScope();
     }
