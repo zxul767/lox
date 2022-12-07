@@ -158,10 +158,10 @@ public class Scanner {
     int openComments = 1; // we've just consumed the opening delimiter
 
     while (!isAtEnd()) {
-      if (peek() == '/' && peekNext() == '*') {
+      if (peek() == '/' && peekAhead(1) == '*') {
         openComments++;
         advance(2);
-      } else if (peek() == '*' && peekNext() == '/') {
+      } else if (peek() == '*' && peekAhead(1) == '/') {
         openComments--;
         advance(2);
       } else {
@@ -214,7 +214,7 @@ public class Scanner {
       advance();
 
     // we're looking at a decimal number...
-    if (peek() == '.' && isDigit(peekNext())) {
+    if (peek() == '.' && isDigit(peekAhead(1))) {
       // consume the "."
       advance();
       while (isDigit(peek()))
@@ -233,16 +233,14 @@ public class Scanner {
     return true;
   }
 
-  private char peek() {
-    if (isAtEnd())
-      return '\0';
-    return sourceCode.charAt(current);
-  }
+  // returns the next character to be consumed
+  private char peek() { return peekAhead(0); }
 
-  private char peekNext() {
-    if (current + 1 >= sourceCode.length())
+  // returns the character to be consumed `distance` chars ahead
+  private char peekAhead(int distance) {
+    if (current + distance >= sourceCode.length())
       return '\0';
-    return sourceCode.charAt(current + 1);
+    return sourceCode.charAt(current + distance);
   }
 
   private boolean isAlpha(char c) {
