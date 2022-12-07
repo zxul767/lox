@@ -55,7 +55,11 @@ class LoxNativeClass extends LoxClass {
     return signatures;
   }
 
-  static List<CallableSignature> parseSignatures(String... texts) {
+  static void throwRuntimeError(String token, String message) {
+    throw new RuntimeError(token, message);
+  }
+
+  private static List<CallableSignature> parseSignatures(String... texts) {
     var signatures = new ArrayList<CallableSignature>();
     for (String text : texts) {
       signatures.add(parseSignature(text));
@@ -63,7 +67,7 @@ class LoxNativeClass extends LoxClass {
     return signatures;
   }
 
-  static CallableSignature parseSignature(String text) {
+  private static CallableSignature parseSignature(String text) {
     Matcher matcher = signaturePattern.matcher(text);
     boolean matchedSignature = matcher.matches();
     assert matchedSignature : String.format("invalid signature: %s", text);
@@ -81,7 +85,7 @@ class LoxNativeClass extends LoxClass {
     return new CallableSignature(name, parseParameters(params), returnType);
   }
 
-  static List<Parameter> parseParameters(String text) {
+  private static List<Parameter> parseParameters(String text) {
     if (text == null)
       return Collections.emptyList();
 
@@ -99,11 +103,7 @@ class LoxNativeClass extends LoxClass {
     return result;
   }
 
-  static void throwRuntimeError(String token, String message) {
-    throw new RuntimeError(token, message);
-  }
-
-  static <T> T assertType(LoxInstance instance, Class<T> type) {
+  private static <T> T assertType(LoxInstance instance, Class<T> type) {
     assert (type.isInstance(instance)) : "unexpected instance type";
     return type.cast(instance);
   }
@@ -116,7 +116,7 @@ class LoxNativeClass extends LoxClass {
     return assertType(instance, LoxList.class);
   }
 
-  static <T> T requireType(
+  private static <T> T requireType(
       Object value, Class<T> type, String functionName, String loxTypeName
   ) {
     if (!type.isInstance(value)) {
