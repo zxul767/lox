@@ -103,39 +103,41 @@ class LoxNativeClass extends LoxClass {
     throw new RuntimeError(token, message);
   }
 
-  // TODO: can we unify these methods using generics?
-  // https://github.com/zxul767/lox/issues/27
+  static <T> T assertType(LoxInstance instance, Class<T> type) {
+    assert (type.isInstance(instance)) : "unexpected instance type";
+    return type.cast(instance);
+  }
+
   static LoxString assertString(LoxInstance instance) {
-    assert (instance instanceof LoxString)
-        : "instance was expected to be a LoxString";
-    return (LoxString)instance;
+    return assertType(instance, LoxString.class);
   }
 
   static LoxList assertList(LoxInstance instance) {
-    assert (instance instanceof LoxList)
-        : "instance was expected to be a LoxList";
-    return (LoxList)instance;
+    return assertType(instance, LoxList.class);
+  }
+
+  static <T> T requireType(
+      Object value, Class<T> type, String functionName, String loxTypeName
+  ) {
+    if (!type.isInstance(value)) {
+      throwRuntimeError(
+          functionName,
+          String.format("argument must be of type '%s'", loxTypeName)
+      );
+    }
+    return type.cast(value);
   }
 
   static LoxString requireString(Object value, String functionName) {
-    if (!(value instanceof LoxString)) {
-      throwRuntimeError(functionName, "argument must be a string");
-    }
-    return (LoxString)value;
+    return requireType(value, LoxString.class, functionName, "string");
   }
 
   static double requireDouble(Object value, String functionName) {
-    if (!(value instanceof Double)) {
-      throwRuntimeError(functionName, "argument must be a double");
-    }
-    return (double)value;
+    return requireType(value, Double.class, functionName, "number");
   }
 
   static int requireInt(Object value, String functionName) {
-    if (!(value instanceof Double)) {
-      throwRuntimeError(functionName, "argument must be an integer");
-    }
-    return ((Double)value).intValue();
+    return requireType(value, Double.class, functionName, "int").intValue();
   }
 
   void define(
