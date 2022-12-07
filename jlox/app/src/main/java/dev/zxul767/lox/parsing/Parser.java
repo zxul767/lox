@@ -73,7 +73,6 @@ public class Parser {
 
   // statement -> expressionStatement
   //            | ifStatement
-  //            | printStatement
   //            | block
   private Stmt statement() {
     if (match(FOR))
@@ -81,9 +80,6 @@ public class Parser {
 
     if (match(IF))
       return ifStatement();
-
-    if (match(PRINT, PRINTLN))
-      return printStatement();
 
     if (match(RETURN))
       return returnStatement();
@@ -156,15 +152,6 @@ public class Parser {
       elseBranch = statement();
     }
     return new Stmt.If(condition, thenBranch, elseBranch);
-  }
-
-  // printStatement -> "print" expression ";"
-  private Stmt printStatement() {
-    boolean includeNewline = (previous().type == PRINTLN);
-    Expr value = expression();
-    consume(SEMICOLON, "Expected ';' after value.");
-
-    return new Stmt.Print(value, includeNewline);
   }
 
   // returnStatement -> "return" expression? ";"
@@ -515,7 +502,6 @@ public class Parser {
       case FOR:
       case IF:
       case WHILE:
-      case PRINT:
       case RETURN:
         return;
       }

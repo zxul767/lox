@@ -198,7 +198,11 @@ public class Lox {
     if (last instanceof Stmt.Expression) {
       ArrayList<Stmt> patched = new ArrayList<>(statements);
       Expr expression = ((Stmt.Expression)last).expression;
-      patched.set(n, new Stmt.Print(expression, /*includeNewline:*/ false));
+      patched.set(
+          n, new Stmt.Print(
+                 expression, /* includeNewline: */ false, /* unquote: */ false
+             )
+      );
 
       return patched;
     }

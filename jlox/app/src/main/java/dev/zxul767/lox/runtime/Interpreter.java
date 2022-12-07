@@ -123,7 +123,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Void visitPrintStmt(Stmt.Print stmt) {
     Object value = evaluate(stmt.expression);
-    System.out.print(stringify(value));
+    if (stmt.unquote) {
+      System.out.print(stringify(value));
+
+    } else {
+      System.out.print(repr(value));
+    }
     if (stmt.includeNewline)
       System.out.println();
 
@@ -375,9 +380,6 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         text = text.substring(0, text.length() - 2);
       }
       return text;
-    }
-    if (object instanceof LoxString) {
-      return String.format("'%s'", object.toString());
     }
     return object.toString();
   }

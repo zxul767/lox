@@ -322,8 +322,9 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (currentClass == ClassType.NONE) {
       Errors.error(expr.keyword, "Can't use 'super' outside of class.");
     } else if (currentClass != ClassType.SUBCLASS) {
-      Errors.error(expr.keyword,
-                   "Can't use 'super' in a class with no superclass.");
+      Errors.error(
+          expr.keyword, "Can't use 'super' in a class with no superclass."
+      );
     }
     resolveLocal(expr, expr.keyword);
     return null;
@@ -348,8 +349,9 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override
   public Void visitVariableExpr(Expr.Variable expr) {
     if (isDeclaredButUninitialized(expr)) {
-      Errors.error(expr.name,
-                   "Can't read local variable in its own initializer.");
+      Errors.error(
+          expr.name, "Can't read local variable in its own initializer."
+      );
     }
     resolveLocal(expr, expr.name);
     return null;

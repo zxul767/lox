@@ -125,6 +125,24 @@ public final class StandardLibrary {
         }
       };
 
+  static final LoxCallable print =
+      new OneArgCallable("print", new Parameter("value"), "nil") {
+        @Override
+        public Object call(Interpreter interpreter, List<Object> args) {
+          System.out.print(Interpreter.stringify(args.get(0)));
+          return null;
+        }
+      };
+
+  static final LoxCallable println =
+      new OneArgCallable("println", new Parameter("value"), "nil") {
+        @Override
+        public Object call(Interpreter interpreter, List<Object> args) {
+          System.out.println(Interpreter.stringify(args.get(0)));
+          return null;
+        }
+      };
+
   static final LoxCallable help =
       new OneArgCallable("help", new Parameter("object")) {
         @Override
@@ -163,8 +181,10 @@ public final class StandardLibrary {
   // provide auto-completion)
   public static final Map<String, LoxCallable> members;
   static {
+    List<LoxCallable> callables =
+        Arrays.asList(list, string, clock, sin, print, println, help);
+
     members = new HashMap<>();
-    List<LoxCallable> callables = Arrays.asList(list, string, clock, sin, help);
     for (LoxCallable callable : callables) {
       members.put(callable.signature().name, callable);
     }

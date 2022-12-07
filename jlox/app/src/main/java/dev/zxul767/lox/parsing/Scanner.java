@@ -21,8 +21,6 @@ public class Scanner {
     keywords.put("if", IF);
     keywords.put("nil", NIL);
     keywords.put("or", OR);
-    keywords.put("print", PRINT);
-    keywords.put("println", PRINTLN);
     keywords.put("return", RETURN);
     keywords.put("super", SUPER);
     keywords.put("this", THIS);
