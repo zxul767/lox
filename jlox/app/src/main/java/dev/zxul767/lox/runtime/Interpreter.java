@@ -123,14 +123,21 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Void visitPrintStmt(Stmt.Print stmt) {
     Object value = evaluate(stmt.expression);
+    // `Stmt.Print` is now only used by the REPL, and we want to ignore `nil`
+    // values in that case
+    if (value == null) {
+      return null;
+    }
+
     if (stmt.unquote) {
       System.out.print(stringify(value));
 
     } else {
       System.out.print(repr(value));
     }
-    if (stmt.includeNewline)
+    if (stmt.includeNewline) {
       System.out.println();
+    }
 
     return null;
   }

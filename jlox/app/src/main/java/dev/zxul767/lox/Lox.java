@@ -200,7 +200,9 @@ public class Lox {
       Expr expression = ((Stmt.Expression)last).expression;
       patched.set(
           n, new Stmt.Print(
-                 expression, /* includeNewline: */ false, /* unquote: */ false
+                 expression, /* includeNewline: */ false,
+                 /* unquote: */ false,
+                 /* ignoreNil */ true
              )
       );
 
