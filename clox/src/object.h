@@ -15,20 +15,33 @@ typedef struct VM VM;
 #define OBJECT_TYPE(value) (AS_OBJECT(value)->type)
 
 #define IS_CLASS(value) is_object_type(value, OBJECT_CLASS)
+
+#define IS_CALLABLE(value)                                                     \
+  (is_object_type(value, OBJECT_CALLABLE) ||                                   \
+   is_object_type(value, OBJECT_FUNCTION) ||                                   \
+   is_object_type(value, OBJECT_NATIVE_FUNCTION) ||                            \
+   is_object_type(value, OBJECT_BOUND_METHOD))
 #define IS_CLOSURE(value) is_object_type(value, OBJECT_CLOSURE)
 #define IS_FUNCTION(value) is_object_type(value, OBJECT_FUNCTION)
 #define IS_BOUND_METHOD(value) is_object_type(value, OBJECT_BOUND_METHOD)
-#define IS_INSTANCE(value) is_object_type(value, OBJECT_INSTANCE)
 #define IS_NATIVE_FUNCTION(value) is_object_type(value, OBJECT_NATIVE_FUNCTION)
+
+#define IS_INSTANCE(value)                                                     \
+  (is_object_type(value, OBJECT_INSTANCE) || is_object_type(value, OBJECT_LIST))
+
 #define IS_STRING(value) is_object_type(value, OBJECT_STRING)
 
 #define AS_CLASS(value) ((ObjectClass*)AS_OBJECT(value))
+
+#define AS_CALLABLE(object) ((ObjectCallable*)object)
+
 #define AS_CLOSURE(value) ((ObjectClosure*)AS_OBJECT(value))
 #define AS_FUNCTION(value) ((ObjectFunction*)AS_OBJECT(value))
 #define AS_BOUND_METHOD(value) ((ObjectBoundMethod*)AS_OBJECT(value))
+#define AS_NATIVE_FUNCTION(value) (((ObjectNativeFunction*)AS_OBJECT(value)))
+
 #define AS_INSTANCE(value) ((ObjectInstance*)AS_OBJECT(value))
-#define AS_NATIVE_FUNCTION(value)                                              \
-  (((ObjectNativeFunction*)AS_OBJECT(value))->function)
+
 #define AS_STRING(value) ((ObjectString*)AS_OBJECT(value))
 #define AS_CSTRING(value) (((ObjectString*)AS_OBJECT(value))->chars)
 
@@ -40,11 +53,13 @@ typedef struct VM VM;
   TYPE(OBJECT_CLASS)                                                           \
   TYPE(OBJECT_CLOSURE)                                                         \
   TYPE(OBJECT_FUNCTION)                                                        \
+  TYPE(OBJECT_CALLABLE)                                                        \
   TYPE(OBJECT_BOUND_METHOD)                                                    \
   TYPE(OBJECT_NATIVE_FUNCTION)                                                 \
   TYPE(OBJECT_INSTANCE)                                                        \
+  TYPE(OBJECT_UPVALUE)                                                         \
   TYPE(OBJECT_STRING)                                                          \
-  TYPE(OBJECT_UPVALUE)
+  TYPE(OBJECT_LIST) // native class
 
 #define GENERATE_ENUM(ENUM) ENUM,
 #define GENERATE_STRING(STRING) #STRING,
@@ -73,20 +88,26 @@ struct Object {
 
 typedef Value (*NativeFunction)(int args_count, Value* args);
 
-typedef struct ObjectNative {
+typedef struct ObjectCallable {
   Object object;
 
+  ObjectString* name;
+  int arity;
+
+} ObjectCallable;
+
+typedef struct ObjectNativeFunction {
+  ObjectCallable callable;
+
   NativeFunction function;
+  bool is_method;
 
 } ObjectNativeFunction;
 
 typedef struct ObjectFunction {
-  Object object;
+  ObjectCallable callable;
 
-  int arity;
-  ObjectString* name;
   Bytecode bytecode;
-
   int upvalues_count;
 
 } ObjectFunction;
@@ -117,11 +138,17 @@ typedef struct ObjectClosure {
 
 } ObjectClosure;
 
+typedef struct ObjectInstance ObjectInstance;
+typedef struct ObjectClass ObjectClass;
+typedef ObjectInstance* (*ClassConstructor)(ObjectClass*, VM* vm);
+
 typedef struct ObjectClass {
   Object object;
 
   ObjectString* name;
   Table methods;
+
+  ClassConstructor new_instance;
 
 } ObjectClass;
 
@@ -137,21 +164,26 @@ typedef struct ObjectBoundMethod {
   Object object;
 
   Value instance;
-  ObjectClosure* method;
-
-  Table fields;
+  // the bound method is wrapped in a value so we can use both
+  // `ObjectClosure` and `ObjectNativeFunction` objects
+  Value method;
 
 } ObjectBoundMethod;
+
+#define ALLOCATE_OBJECT(type, object_type, vm)                                 \
+  (type*)object__allocate(sizeof(type), object_type, vm)
+
+Object* object__allocate(size_t size, ObjectType type, VM* vm);
 
 // all of these functions need to access `vm->objects` so they can track any
 // allocated objects for proper garbage collection
 ObjectInstance* instance__new(ObjectClass* _class, VM* vm);
 ObjectClass* class__new(ObjectString* name, VM* vm);
-ObjectBoundMethod*
-bound_method__new(Value instance, ObjectClosure* method, VM* vm);
+ObjectBoundMethod* bound_method__new(Value instance, Value method, VM* vm);
 ObjectClosure* closure__new(ObjectFunction*, VM* vm);
 ObjectFunction* function__new(VM* vm);
-ObjectNativeFunction* native_function__new(NativeFunction function, VM* vm);
+ObjectNativeFunction* native_function__new(
+    NativeFunction function, ObjectString* name, int arity, VM* vm);
 ObjectUpvalue* upvalue__new(Value* slot, VM* vm);
 
 ObjectString* string__copy(const char* chars, int length, VM* vm);

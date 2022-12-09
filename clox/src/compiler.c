@@ -877,27 +877,32 @@ static void block(Compiler* compiler)
 static ObjectFunction* finish_function_compilation(Compiler* compiler)
 {
   emit_default_return(compiler);
+
   ObjectFunction* function = compiler->current_fn_compiler->function;
+  ObjectCallable* callable = AS_CALLABLE(function);
 
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
     debug__disassemble(
         current_bytecode(compiler),
-        function->name != NULL ? function->name->chars : NULL);
+        callable->name != NULL ? callable->name->chars : NULL);
     putchar('\n');
   }
 #endif
 
   compiler->current_fn_compiler =
       compiler->current_fn_compiler->enclosing_compiler;
+
   return function;
 }
 
 static void function_parameters(Compiler* compiler)
 {
+  ObjectCallable* callable =
+      AS_CALLABLE(compiler->current_fn_compiler->function);
   do {
-    compiler->current_fn_compiler->function->arity++;
-    if (compiler->current_fn_compiler->function->arity > 255) {
+    callable->arity++;
+    if (callable->arity > 255) {
       error_at_current("Can't have more than 255 parameters", compiler->parser);
     }
     uint8_t index = declare_variable("Expected parameters name.", compiler);
@@ -917,7 +922,7 @@ static void start_function_compilation(
   compiler->current_fn_compiler = current_fn_compiler;
 
   if (function_type != TYPE_SCRIPT) {
-    current_fn_compiler->function->name = string__copy(
+    AS_CALLABLE(current_fn_compiler->function)->name = string__copy(
         compiler->parser->previous_token.start,
         compiler->parser->previous_token.length, compiler->vm);
   }

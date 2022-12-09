@@ -98,7 +98,7 @@ include $(wildcard $(DEPS_FILES))
 $(BIN_DIR): ; @mkdir -p $@
 $(DEPS_DIR): ; @mkdir -p $@
 
-.PHONY: repl run clean print-%
+.PHONY: repl run clean print-% watch
 
 # this target is only for debugging purposes; invoke it as: `make print-VAR-NAME`
 print-%  : ; @echo $* = $($*)
@@ -106,6 +106,10 @@ print-%  : ; @echo $* = $($*)
 # run the REPL
 repl: $(MAIN_TARGET)
 	./$<
+
+# continously build every time there's a change in the sources
+watch:
+	@find . -name '*.[h,c]' | entr -c make
 
 # run a program
 run: $(MAIN_TARGET)

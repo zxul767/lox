@@ -2,24 +2,24 @@ var l = list();
 l.append("dexter");
 l.append("debra");
 
-print "l = "; println l;
+print("l = "); println(l);
 
-print "l.at(0) = "; println l[0];
+print("l.at(0) = "); println(l.at(0));
 
-print "l.at(-1) = "; println l[-1];
+print("l.at(-1) = "); println(l.at(-1));
 
-print "l.length() = "; print l.length();
-println " elements";
+print("l.length() = "); print(l.length());
+println(" elements");
 
 l.clear();
-print "after l.clear() list has ";
+print("after l.clear() list has ");
 
-print l.length(); println " elements";
+print(l.length()); println(" elements");
 
 l.append("dexter");
 l.append("lumen");
 
-print "l = "; println l;
+print("l = "); println(l);
 
 l.pop();
-print "after l.pop() list is: "; println l;
+print("after l.pop() list is: "); println(l);

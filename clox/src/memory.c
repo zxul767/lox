@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "compiler.h"
+#include "lox_list.h"
 #include "memory.h"
 #include "object.h"
 #include "vm.h"
@@ -71,8 +72,20 @@ void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
   return result;
 }
 
-static void free_object(Object* object)
+static void dispose_object(Object* object)
 {
+  // if an object contains heap-allocated structures which are not objects
+  // it's important that they get disposed here (e.g., an `ObjectList` must call
+  // `value_array__dispose` on its underlying `array` member, since the memory
+  // for it is not tracked as an object.)
+  //
+  // if an object contains references to other objects, DO NOT dispose of them
+  // here, since that could cause referencing of "freed" memory later when that
+  // objects is disposed (e.g., an `ObjectFunction` contains indirectly an
+  // `ObjectString` thru its `ObjectCallable` instance, but that string is being
+  // tracked in `vm->objects` and will get deleted on another call to this
+  // function.)
+  //
 #ifdef DEBUG_LOG_GC_DETAILED
   fprintf(
       stderr, "%p disposing (%s)\n", (void*)object,
@@ -118,22 +131,39 @@ static void free_object(Object* object)
     FREE(ObjectString, object);
     break;
   }
+  case OBJECT_LIST: {
+    // `ObjectList` is a kind of instance (it "inherits" from `ObjectInstance`)
+    ObjectInstance* instance = (ObjectInstance*)object;
+    table__dispose(&instance->fields);
+
+    ObjectList* list = (ObjectList*)object;
+    value_array__dispose(&list->array);
+    FREE(ObjectList, object);
+    break;
+  }
   case OBJECT_UPVALUE: {
     FREE(ObjectUpvalue, object);
     break;
   }
-  default:
-    assert(false);
+  case OBJECT_CALLABLE:
+    // a callable is never used on its own; it is always a "super-class" of
+    // `ObjectClosure` or `ObjectNativeFunction`, so there is no need to dispose
+    // it directly.
+    break;
   }
 }
 
 size_t memory__free_objects(Object* objects)
 {
+  // Garbage collection always leaves reachable objects (from the roots)
+  // untouched, so this is the last opportunity to dispose of them, via
+  // `memory__free_objects(vm->objects)`
+  //
   size_t count = 0;
   Object* object = objects;
   while (object != NULL) {
     Object* next = object->next;
-    free_object(object);
+    dispose_object(object);
     object = next;
     count++;
   }
@@ -190,7 +220,7 @@ static void mark_roots(VM* vm)
   memory__mark_object_as_alive((Object*)vm->init_string);
 
   // the value stack
-  for (Value* slot = vm->value_stack; slot < vm->value_stack_top; slot++) {
+  for (Value* slot = vm->value_stack; slot < vm->stack_free_slot; slot++) {
     memory__mark_value_as_alive(*slot);
   }
 
@@ -229,7 +259,7 @@ static void mark_object_references(Object* object)
   case OBJECT_BOUND_METHOD: {
     ObjectBoundMethod* bound_method = (ObjectBoundMethod*)object;
     memory__mark_value_as_alive(bound_method->instance);
-    memory__mark_object_as_alive((Object*)bound_method->method);
+    memory__mark_value_as_alive(bound_method->method);
     break;
   }
   case OBJECT_CLASS: {
@@ -248,10 +278,14 @@ static void mark_object_references(Object* object)
   }
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)function->name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
     mark_array_as_alive(&function->bytecode.constants);
     break;
   }
+    // `ObjectList` is a kind of instance (it "inherits" from `ObjectInstance`)
+    // and it doesn't own any "heap-allocated" objects (`array:ValueArray` lives
+    // and dies with `ObjectList`)
+  case OBJECT_LIST:
   case OBJECT_INSTANCE: {
     ObjectInstance* instance = (ObjectInstance*)object;
     memory__mark_object_as_alive((Object*)instance->_class);
@@ -261,8 +295,16 @@ static void mark_object_references(Object* object)
   case OBJECT_UPVALUE:
     memory__mark_value_as_alive(((ObjectUpvalue*)object)->closed);
     break;
-  case OBJECT_NATIVE_FUNCTION:
+  case OBJECT_NATIVE_FUNCTION: {
+    ObjectFunction* function = (ObjectFunction*)object;
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
+  } break;
   case OBJECT_STRING:
+    // a string has no references to other objects which are only reachable
+    // through it
+  case OBJECT_CALLABLE:
+    // a callable is never used on its own; it is always a "super-class" of
+    // `ObjectFunction` or `ObjectNativeFunction`, which are handled above
     break;
   }
 }
@@ -297,7 +339,7 @@ static void sweep(VM* vm)
         vm->objects = object;
       }
 
-      free_object(unreachable);
+      dispose_object(unreachable);
     }
   }
 }
