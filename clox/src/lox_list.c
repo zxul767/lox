@@ -57,7 +57,7 @@ static Value lox_list__append(int args_count, Value* args)
   ObjectList* list = REQUIRE_LIST(args[0]);
   value_array__append(&list->array, args[1]);
 
-  return BOOL_VAL(true);
+  return NIL_VAL;
 }
 
 static int normalize_index(int index, const ObjectList* list)
