@@ -252,7 +252,7 @@ void debug__dump_stacktrace(const VM* vm)
 {
   for (int i = vm->frames_count - 1; i >= 0; i--) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectCallable* function = CALLABLE_CAST(frame->closure->function);
+    ObjectCallable* function = AS_CALLABLE(frame->closure->function);
 
     int line = get_current_source_line_in_frame(frame, vm);
     fprintf(stderr, "[line %d] in ", line);
@@ -270,7 +270,7 @@ void debug__show_callframe_names(const VM* vm)
   fprintf(stderr, "CALL STACK: ");
   for (int i = 0; i < vm->frames_count; i++) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectString* name = CALLABLE_CAST(frame->closure->function)->name;
+    ObjectString* name = AS_CALLABLE(frame->closure->function)->name;
     if (i > 0) {
       fprintf(stderr, " > ");
     }

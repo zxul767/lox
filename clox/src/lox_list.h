@@ -13,6 +13,7 @@ typedef struct ObjectList {
 
 #define IS_LIST(value) is_object_type(value, OBJECT_LIST)
 #define AS_LIST(value) ((ObjectList*)AS_OBJECT(value))
+#define REQUIRE_LIST(value) (assert(IS_LIST(value)), AS_LIST(value))
 
 ObjectClass* lox_list__new_class(const char* name, VM* vm);
 void lox_list__print(const ObjectList*);

@@ -278,7 +278,7 @@ static void mark_object_references(Object* object)
   }
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)CALLABLE_CAST(function)->name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
     mark_array_as_alive(&function->bytecode.constants);
     break;
   }
@@ -297,7 +297,7 @@ static void mark_object_references(Object* object)
     break;
   case OBJECT_NATIVE_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)CALLABLE_CAST(function)->name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
   } break;
   case OBJECT_STRING:
     // a string has no references to other objects which are only reachable

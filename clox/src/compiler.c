@@ -879,7 +879,7 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
   emit_default_return(compiler);
 
   ObjectFunction* function = compiler->current_fn_compiler->function;
-  ObjectCallable* callable = CALLABLE_CAST(function);
+  ObjectCallable* callable = AS_CALLABLE(function);
 
 #ifdef DEBUG_PRINT_CODE
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
@@ -899,7 +899,7 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
 static void function_parameters(Compiler* compiler)
 {
   ObjectCallable* callable =
-      CALLABLE_CAST(compiler->current_fn_compiler->function);
+      AS_CALLABLE(compiler->current_fn_compiler->function);
   do {
     callable->arity++;
     if (callable->arity > 255) {
@@ -922,7 +922,7 @@ static void start_function_compilation(
   compiler->current_fn_compiler = current_fn_compiler;
 
   if (function_type != TYPE_SCRIPT) {
-    CALLABLE_CAST(current_fn_compiler->function)->name = string__copy(
+    AS_CALLABLE(current_fn_compiler->function)->name = string__copy(
         compiler->parser->previous_token.start,
         compiler->parser->previous_token.length, compiler->vm);
   }

@@ -203,7 +203,7 @@ ObjectFunction* function__new(VM* vm)
   ObjectFunction* function =
       ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
 
-  ObjectCallable* callable = CALLABLE_CAST(function);
+  ObjectCallable* callable = AS_CALLABLE(function);
   callable->name = NULL;
   callable->arity = 0;
 
@@ -219,7 +219,7 @@ ObjectNativeFunction* native_function__new(
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
 
-  ObjectCallable* callable = CALLABLE_CAST(native);
+  ObjectCallable* callable = AS_CALLABLE(native);
   callable->name = name;
   callable->arity = arity;
 
@@ -231,7 +231,7 @@ ObjectNativeFunction* native_function__new(
 
 static void print_function(const ObjectFunction* function)
 {
-  ObjectCallable* callable = CALLABLE_CAST(function);
+  ObjectCallable* callable = AS_CALLABLE(function);
   if (callable->name == NULL) {
     fprintf(stderr, "<script>");
     return;

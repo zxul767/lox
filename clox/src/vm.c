@@ -184,7 +184,7 @@ static bool is_valid_call(ObjectCallable* callable, int args_count, VM* vm)
 
 static bool call_closure(ObjectClosure* closure, int args_count, VM* vm)
 {
-  if (!is_valid_call(CALLABLE_CAST(closure->function), args_count, vm))
+  if (!is_valid_call(AS_CALLABLE(closure->function), args_count, vm))
     return false;
 
 #ifdef DEBUG_TRACE_EXECUTION
@@ -201,7 +201,7 @@ static bool call_closure(ObjectClosure* closure, int args_count, VM* vm)
 
 static bool call_native(ObjectNativeFunction* native, int args_count, VM* vm)
 {
-  if (!is_valid_call(CALLABLE_CAST(native), args_count, vm))
+  if (!is_valid_call(AS_CALLABLE(native), args_count, vm))
     return false;
 
   // for regular native function calls:

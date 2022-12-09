@@ -11,6 +11,8 @@ typedef enum {
   VAL_NIL,
   VAL_NUMBER,
   VAL_OBJECT,
+  VAL_ERROR,
+
 } ValueType;
 
 typedef struct {
@@ -20,6 +22,7 @@ typedef struct {
     double number;
     Object* object;
   } as;
+
 } Value;
 
 #define IS_BOOL(value) ((value).type == VAL_BOOL)
@@ -29,10 +32,12 @@ typedef struct {
 
 #define AS_BOOL(value) ((value).as.boolean)
 #define AS_NUMBER(value) ((value).as.number)
+#define AS_INT(value) ((int)(value).as.number)
 #define AS_OBJECT(value) ((value).as.object)
 
 #define BOOL_VAL(value) ((Value){.type = VAL_BOOL, {.boolean = value}})
 #define NIL_VAL ((Value){.type = VAL_NIL, {.number = 0}})
+#define ERROR_VAL ((Value){.type = VAL_ERROR, {.boolean = false}})
 #define NUMBER_VAL(value) ((Value){.type = VAL_NUMBER, {.number = value}})
 #define OBJECT_VAL(value)                                                      \
   ((Value){.type = VAL_OBJECT, {.object = (Object*)value}})

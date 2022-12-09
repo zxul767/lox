@@ -26,7 +26,12 @@ void lox_list__print(const ObjectList* list)
     // don't print lists recursively because in the worst case we can get into
     // cycles, e.g. var l = list() l.append(l) println(l)
     if (IS_LIST(value)) {
-      fprintf(stderr, "[...]");
+      if (AS_LIST(value) == list) {
+        fprintf(stderr, "@");
+
+      } else {
+        fprintf(stderr, "[...]");
+      }
 
     } else {
       value__print_repr(value);
@@ -42,17 +47,14 @@ void lox_list__print(const ObjectList* list)
 // instance)
 static Value lox_list__length(int args_count, Value* args)
 {
-  assert(IS_LIST(args[0]));
+  ObjectList* list = REQUIRE_LIST(args[0]);
 
-  ObjectList* list = AS_LIST(args[0]);
   return NUMBER_VAL(list->array.count);
 }
 
 static Value lox_list__append(int args_count, Value* args)
 {
-  assert(IS_LIST(args[0]));
-
-  ObjectList* list = AS_LIST(args[0]);
+  ObjectList* list = REQUIRE_LIST(args[0]);
   value_array__append(&list->array, args[1]);
 
   return BOOL_VAL(true);
@@ -76,26 +78,24 @@ static int normalize_index(int index, const ObjectList* list)
 
 static Value lox_list__at(int args_count, Value* args)
 {
-  assert(IS_LIST(args[0]));
-  ObjectList* list = AS_LIST(args[0]);
+  ObjectList* list = REQUIRE_LIST(args[0]);
 
   if (list->array.count == 0) {
     fprintf(stderr, "Index Error: Cannot access elements in empty list.\n");
-    return NIL_VAL;
+    return ERROR_VAL;
   }
 
-  int index = (int)AS_NUMBER(args[1]);
+  int index = AS_INT(args[1]);
   index = normalize_index(index, list);
   if (index == -1) {
-    return NIL_VAL;
+    return ERROR_VAL;
   }
   return list->array.values[index];
 }
 
 static Value lox_list__clear(int args_count, Value* args)
 {
-  assert(IS_LIST(args[0]));
-  ObjectList* list = AS_LIST(args[0]);
+  ObjectList* list = REQUIRE_LIST(args[0]);
 
   value_array__dispose(&list->array);
   return NIL_VAL;
@@ -103,9 +103,7 @@ static Value lox_list__clear(int args_count, Value* args)
 
 static Value lox_list__pop(int args_count, Value* args)
 {
-  assert(IS_LIST(args[0]));
-  ObjectList* list = AS_LIST(args[0]);
-
+  ObjectList* list = REQUIRE_LIST(args[0]);
   if (list->array.count == 0) {
     fprintf(stderr, "Error: Cannot remove elements from an empty list.\n");
     return NIL_VAL;
@@ -113,7 +111,7 @@ static Value lox_list__pop(int args_count, Value* args)
   return value_array__pop(&list->array);
 }
 
-static void define_list_method(
+static void define_method(
     ObjectClass* _class, const char* name, int arity, NativeFunction native,
     VM* vm)
 {
@@ -134,17 +132,18 @@ static void define_list_method(
 
 static void define_list_methods(ObjectClass* _class, VM* vm)
 {
-  define_list_method(_class, "length", 0, lox_list__length, vm);
-  define_list_method(_class, "append", 1, lox_list__append, vm);
-  define_list_method(_class, "at", 1, lox_list__at, vm);
-  define_list_method(_class, "clear", 0, lox_list__clear, vm);
-  define_list_method(_class, "pop", 0, lox_list__pop, vm);
+  define_method(_class, "length", 0, lox_list__length, vm);
+  define_method(_class, "append", 1, lox_list__append, vm);
+  define_method(_class, "at", 1, lox_list__at, vm);
+  define_method(_class, "clear", 0, lox_list__clear, vm);
+  define_method(_class, "pop", 0, lox_list__pop, vm);
 }
 
 ObjectClass* lox_list__new_class(const char* name, VM* vm)
 {
   ObjectString* class_name = string__copy(name, strlen(name), vm);
   // TODO: do we need to protect `class_name` with the push/pop pattern?
+  // NOTE: yes we do, but see this: https://github.com/zxul767/lox/issues/19
   ObjectClass* _class = class__new(class_name, vm);
   _class->new_instance = lox_list__new;
 

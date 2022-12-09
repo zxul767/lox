@@ -33,7 +33,7 @@ typedef struct VM VM;
 
 #define AS_CLASS(value) ((ObjectClass*)AS_OBJECT(value))
 
-#define CALLABLE_CAST(object) ((ObjectCallable*)object)
+#define AS_CALLABLE(object) ((ObjectCallable*)object)
 
 #define AS_CLOSURE(value) ((ObjectClosure*)AS_OBJECT(value))
 #define AS_FUNCTION(value) ((ObjectFunction*)AS_OBJECT(value))
