@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "object.h"
 
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -31,9 +32,7 @@ void value_array__append(ValueArray* array, Value value)
 
 Value value_array__pop(ValueArray* array)
 {
-  if (array->count == 0) {
-    return NIL_VAL;
-  }
+  assert(array->count > 0);
   return array->values[--array->count];
 }
 
@@ -75,6 +74,10 @@ void value__print(Value value)
     break;
   case VAL_OBJECT:
     object__print(value);
+    break;
+  case VAL_ERROR:
+    // whenever an error value is returned, the precise error is reported
+    // in the call site where the error originated
     break;
   default:
     fprintf(stderr, "Cannot print value of unknown type: %d", value.type);

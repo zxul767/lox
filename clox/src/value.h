@@ -46,13 +46,13 @@ typedef struct {
   int capacity;
   int count;
   Value* values;
+
 } ValueArray;
 
 void value_array__init(ValueArray* array);
 void value_array__append(ValueArray* array, Value value);
 Value value_array__pop(ValueArray* array);
 void value_array__dispose(ValueArray* array);
-void value_array__clear(ValueArray* array);
 
 bool value__equals(Value a, Value b);
 void value__print(Value value);
