@@ -138,7 +138,7 @@ flowchart LR
     classDef objects fill:#f96;
 ```
 
-where the highlighted nodes `O` and `N` represent `vm->objects` and `vm->object_nursery_end`, respectively.
+where the highlighted nodes `O` and `N` represent the pointers `vm->objects` and `vm->object_nursery_end` (respectively), not actual objects as the rest of the nodes.
 
 During garbage collection, it suffices to traverse this sublist and mark each object as alive. When the nursery closes (via `memory__close_object_nursery`), it suffices to set the corresponding pointer to `NULL` or to the current value of `vm->objects` to indicate the sublist is now empty.
 
