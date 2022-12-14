@@ -3,6 +3,8 @@
 #include <string.h>
 
 #include "lox_list.h"
+#include "memory.h"
+#include "value.h"
 #include "vm.h"
 
 static ObjectInstance* lox_list__new(ObjectClass* _class, VM* vm)
@@ -115,19 +117,15 @@ static void define_method(
     ObjectClass* _class, const char* name, int arity, NativeFunction native,
     VM* vm)
 {
-  ObjectString* method_name = string__copy(name, (int)strlen(name), vm);
-  vm__push(OBJECT_VAL(method_name), vm);
+  WITH_OBJECTS_NURSERY(vm, {
+    ObjectString* method_name = string__copy(name, (int)strlen(name), vm);
 
-  ObjectNativeFunction* native_fn =
-      native_function__new(native, method_name, arity, vm);
-  native_fn->is_method = true;
+    ObjectNativeFunction* native_fn =
+        native_function__new(native, method_name, arity, vm);
+    native_fn->is_method = true;
 
-  vm__push(OBJECT_VAL(native_fn), vm);
-
-  table__set(&_class->methods, AS_STRING(vm__peek(1, vm)), vm__peek(0, vm));
-
-  vm__pop(vm);
-  vm__pop(vm);
+    table__set(&_class->methods, method_name, OBJECT_VAL(native_fn));
+  });
 }
 
 static void define_list_methods(ObjectClass* _class, VM* vm)
@@ -141,13 +139,19 @@ static void define_list_methods(ObjectClass* _class, VM* vm)
 
 ObjectClass* lox_list__new_class(const char* name, VM* vm)
 {
-  ObjectString* class_name = string__copy(name, strlen(name), vm);
-  // TODO: do we need to protect `class_name` with the push/pop pattern?
-  // NOTE: yes we do, but see this: https://github.com/zxul767/lox/issues/19
-  ObjectClass* _class = class__new(class_name, vm);
-  _class->new_instance = lox_list__new;
+  ObjectClass* _class = NULL;
+  WITH_OBJECTS_NURSERY(vm, {
+    ObjectString* class_name = string__copy(name, strlen(name), vm);
+    _class = class__new(class_name, vm);
+    _class->new_instance = lox_list__new;
 
-  define_list_methods(_class, vm);
+    define_list_methods(_class, vm);
+  });
 
   return _class;
+}
+
+void lox_list__mark_as_alive(ObjectList* list)
+{
+  value_array__mark_as_alive(&list->array);
 }

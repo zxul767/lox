@@ -42,6 +42,13 @@ void value_array__dispose(ValueArray* array)
   value_array__init(array);
 }
 
+void value_array__mark_as_alive(ValueArray* array)
+{
+  for (int i = 0; i < array->count; i++) {
+    memory__mark_value_as_alive(array->values[i]);
+  }
+}
+
 bool value__equals(Value a, Value b)
 {
   if (a.type != b.type)

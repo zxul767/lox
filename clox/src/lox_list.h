@@ -18,4 +18,6 @@ typedef struct ObjectList {
 ObjectClass* lox_list__new_class(const char* name, VM* vm);
 void lox_list__print(const ObjectList*);
 
+void lox_list__mark_as_alive(ObjectList*);
+
 #endif // LOX_LIST_H_

@@ -23,3 +23,7 @@ print("l = "); println(l);
 
 l.pop();
 print("after l.pop() list is: "); println(l);
+
+print("l.length() = "); print(l.length());
+println(" elements");
+println(l);

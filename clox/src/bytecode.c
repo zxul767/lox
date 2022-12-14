@@ -41,9 +41,6 @@ void bytecode__append(Bytecode* code, uint8_t byte, int source_line)
 
 int bytecode__store_constant(Bytecode* code, Value value, VM* vm)
 {
-  vm__push(value, vm);
   value_array__append(&code->constants, value);
-  vm__pop(vm);
-
   return code->constants.count - 1;
 }

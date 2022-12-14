@@ -43,15 +43,15 @@ Object* object__allocate(size_t size, ObjectType type, VM* vm)
 static ObjectString*
 string__allocate(char* chars, int length, uint32_t hash, VM* vm)
 {
-  ObjectString* string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING, vm);
-  string->length = length;
-  string->chars = chars;
-  string->hash = hash;
+  ObjectString* string = NULL;
+  WITH_OBJECTS_NURSERY(vm, {
+    string = ALLOCATE_OBJECT(ObjectString, OBJECT_STRING, vm);
+    string->length = length;
+    string->chars = chars;
+    string->hash = hash;
 
-  vm__push(OBJECT_VAL(string), vm);
-  table__set(&vm->interned_strings, string, NIL_VAL);
-  vm__pop(vm);
-
+    table__set(&vm->interned_strings, string, NIL_VAL);
+  });
   return string;
 }
 
