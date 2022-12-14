@@ -104,7 +104,41 @@ WITH_OBJECTS_NURSERY(vm, {
 #### Implementation Details
 On the implementation side, things aren't that simple but they're also not that difficult to get right. The main idea is to set a pointer to the current value of `vm->objects` every time we "open the nursery", thus marking the end of the sublist of objects that will be protected from the garbage collector until they can be attached to "safe" (i.e., "reachable") objects. 
 
-As newly created objects are added, this "intrusive" list (which always starts at `vm->objects` and ends at `vm->object_nursery_start`) grows, as illustrated in the following diagram:
+As newly created objects are added, this "intrusive" list (which always starts at `vm->objects` and ends at `vm->object_nursery_end`) grows, as illustrated in the following diagrams:
+
+*Right after the nursery is opened:*
+```mermaid
+flowchart LR
+    O:::objects --> D
+    N:::objects --> D
+    D --> E
+    E --> ...
+    classDef objects fill:#f96;
+```
+
+*After the nursery is opened and a few new objects are created:*
+```mermaid
+flowchart LR
+    O:::objects --> A
+    A --> B
+    B --> C
+    C --> D
+    N:::objects --> D
+    D --> E
+    E --> ...
+    classDef objects fill:#f96;
+```
+
+*After the nursery is created and a GC run happens right away, removing objects from the front of the list:*
+```mermaid
+flowchart LR
+    O:::objects --> E
+    N:::objects --> E
+    E --> ...
+    classDef objects fill:#f96;
+```
+
+where the highlighted nodes `O` and `N` represent `vm->objects` and `vm->object_nursery_end`, respectively.
 
 During garbage collection, it suffices to traverse this sublist and mark each object as alive. When the nursery closes (via `memory__close_object_nursery`), it suffices to set the corresponding pointer to `NULL` or to the current value of `vm->objects` to indicate the sublist is now empty.
 
