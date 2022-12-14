@@ -40,7 +40,7 @@ To properly implement this feature, it's important to realize that while the pre
 ### The `push/pop` pattern
 Throughout various chapters of [the book](https://craftinginterpreters.com/), a pattern is used consisting of pushing an object (or a value wrapping an object) onto the stack, only to be popped off after some other operation a few instructions later.
 
-As it turns out, this apparently useless pattern is crucial for the correct operation of the garbage collector (GC). Consider the following snippet taken from `clox`:
+As it turns out, this apparently useless pattern is crucial for the correct operation of the garbage collector (GC). Consider the following snippet taken from `clox` (as originally implemented in the book):
 
 ```c
 push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
@@ -63,7 +63,7 @@ Although the pattern seems relatively easy to implement and no longer mysterious
 
 The last two drawbacks alone are sufficient to justify looking for alternatives. This is where the idea of the "object nursery" enters the picture.
 
-### The "object nursery" as a better alternative
+### The "object nursery"[^object-nursery] as a better alternative
 Since all we ever want is for recently created objects to not be reclaimed by the garbage collector before they've had a chance to be put in "safe" locations (i.e., in "roots" seen by the GC), why not just temporarily track recently created objects in the global `vm->objects` list and make them visible as roots during GC runs (e.g., using an "intrusive" sublist)?
 
 Consider how the previous snippet would be written using this idea:
@@ -95,15 +95,14 @@ With this macro, the previous snippet is turned into the more palatable (and muc
 
 ```c
 WITH_OBJECTS_NURSERY(vm, {
-    ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
-    table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
-  });
-} 
+  ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
+  table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
+});
 ```
 
 
 #### Implementation Details
-On the implementation side, things aren't that simple but they're also not that difficult to get right. The main idea is to set a pointer to the current value of `vm->objects` every time we "open the nursery"[^object-nursery], thus marking the end of the sublist of objects that will be protected from the garbage collector until they can be attached to "safe" (i.e., "reachable") objects. 
+On the implementation side, things aren't that simple but they're also not that difficult to get right. The main idea is to set a pointer to the current value of `vm->objects` every time we "open the nursery", thus marking the end of the sublist of objects that will be protected from the garbage collector until they can be attached to "safe" (i.e., "reachable") objects. 
 
 As newly created objects are added, this "intrusive" list (which always starts at `vm->objects` and ends at `vm->object_nursery_start`) grows, as illustrated in the following diagram:
 
