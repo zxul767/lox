@@ -61,7 +61,7 @@ Although the pattern seems relatively easy to implement and no longer mysterious
 2. It makes the code slower by requiring additional pushes and pops on the stack;
 3. It is easy to forget to add all required values onto the stack when the code is non-trivial. 
 
-The last two drawbacks alone are sufficient, to look for alternatives. This is where the idea of the "object nursery" enters the picture.
+The last two drawbacks alone are sufficient to justify looking for alternatives. This is where the idea of the "object nursery" enters the picture.
 
 ### The "object nursery" as a better alternative
 Since all we ever want is for recently created objects to not be reclaimed by the garbage collector before they've had a chance to be put in "safe" locations (i.e., in "roots" seen by the GC), why not just temporarily track recently created objects in the global `vm->objects` list and make them visible as roots during GC runs (e.g., using an "intrusive" sublist)?
@@ -109,7 +109,7 @@ As newly created objects are added, this "intrusive" list (which always starts a
 
 During garbage collection, it suffices to traverse this sublist and mark each object as alive. When the nursery closes (via `memory__close_object_nursery`), it suffices to set the corresponding pointer to `NULL` or to the current value of `vm->objects` to indicate the sublist is now empty.
 
-One important detail to keep in mind is that the `memory_open/close` functions must be implemented to take into account the possibility of nested calls, in which case the semantics described earlier should continue to hold, namely: 1) the nursery should not be opened again if it is already open, and 2) the nursery should close only until the very first close call is made.
+One important detail to keep in mind is that the `memory__open/close` functions must be implemented to take into account the possibility of nested calls, in which case the semantics described earlier should continue to hold, namely: 1) the nursery should not be opened again if it is already open, and 2) the nursery should close only until the very first close call is made.
 
 ## Notes
 [^newline-token]: Collapsing all contiguous whitespace that contains at least one newline into a single newline token is fine for the purposes of this feature.
@@ -118,4 +118,4 @@ One important detail to keep in mind is that the `memory_open/close` functions m
 
 [^ignorable-token]: "Ignorable" tokens are tokens which are not used to drive parsing/compilation, but which may be needed for features such as "optional semicolon". 
 
-[^object-nursery]: It's not hard to infer that the metaphor here is that we're creating a place to protect recently "born" objects from the claws of the evil garbage collector which will take away any objects without parents or ancestors that are reachable from the roots.
+[^object-nursery]: The metaphor here is, of course, that we're creating a place to protect recently "born" objects from the claws of the evil garbage collector (which will kill any objects without parents or ancestors that are reachable from the roots).
