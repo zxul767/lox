@@ -203,10 +203,14 @@ static uint8_t store_constant(Value value, Compiler* compiler)
 
 static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
 {
-  return store_constant(
-      OBJECT_VAL(
-          string__copy(identifier->start, identifier->length, compiler->vm)),
-      compiler);
+  uint8_t index = -1;
+  WITH_OBJECTS_NURSERY(compiler->vm, {
+    index = store_constant(
+        OBJECT_VAL(
+            string__copy(identifier->start, identifier->length, compiler->vm)),
+        compiler);
+  });
+  return index;
 }
 
 static void emit_byte(uint8_t byte, Compiler* compiler)
@@ -1435,12 +1439,12 @@ static void number(Compiler* compiler)
 static void string(Compiler* compiler)
 {
   Parser* parser = compiler->parser;
-
-  ObjectString* _string = string__copy(
-      parser->previous_token.start + 1, parser->previous_token.length - 2,
-      compiler->vm);
-
-  emit_constant(OBJECT_VAL(_string), compiler);
+  WITH_OBJECTS_NURSERY(compiler->vm, {
+    ObjectString* _string = string__copy(
+        parser->previous_token.start + 1, parser->previous_token.length - 2,
+        compiler->vm);
+    emit_constant(OBJECT_VAL(_string), compiler);
+  });
 }
 
 static void literal(Compiler* compiler)

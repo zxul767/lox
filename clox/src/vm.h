@@ -49,12 +49,20 @@ typedef struct VM {
   Value value_stack[STACK_MAX];
   Value* stack_free_slot;
 
+  FunctionCompiler* current_fn_compiler;
+
   // all heap-allocated objects are linked in a list whose head is pointed at by
   // `objects`
   Object* objects;
-  ObjectUpvalue* open_upvalues;
 
-  FunctionCompiler* current_fn_compiler;
+  // see `Object Nursery` in `features_design.md` for details on why we need
+  // this data structure.
+  Object* object_nursery_end;
+  size_t object_nursery_nested_scopes;
+
+  // see https://craftinginterpreters.com/closures.html#upvalues for details on
+  // this data structure.
+  ObjectUpvalue* open_upvalues;
 
   // all strings (including those needed to represent variables), are "interned"
   // (i.e., a single copy is kept and reused when necessary) to minimize memory
@@ -89,6 +97,7 @@ void vm__dispose(VM* vm);
 void vm__push(Value value, VM* vm);
 void vm__pop(VM* vm);
 Value vm__peek(int distance, VM* vm);
+void vm__reset_objects_list_head(VM* vm, Object* new_head);
 
 InterpretResult vm__interpret(const char* source, VM* vm);
 

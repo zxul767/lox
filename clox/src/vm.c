@@ -100,39 +100,43 @@ Value vm__peek(int distance, VM* vm) { return peek_value(distance, vm); }
 
 static void define_native_class(const char* name, ObjectClass* _class, VM* vm)
 {
-  push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
-  push_value(OBJECT_VAL(_class), vm);
-  table__set(
-      &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
-  pop_value(vm);
-  pop_value(vm);
+  WITH_OBJECTS_NURSERY(vm, {
+    ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
+    table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
+  });
 }
 
 static void define_native_function(
     const char* name, int arity, NativeFunction function, VM* vm)
 {
-  // this particular push/push, pop/pop pattern is used to ensure the native
-  // function is reachable to the garbage collector (remember the value stack is
-  // a root for GC), given that a GC cycle could be triggered by `table__set`
-  // (i.e., via a table resizing)
-  //
-  // see https://craftinginterpreters.com/garbage-collection.html for details
-  ObjectString* function_name = string__copy(name, (int)strlen(name), vm);
-  push_value(OBJECT_VAL(function_name), vm);
-  push_value(
-      OBJECT_VAL(native_function__new(function, function_name, arity, vm)), vm);
-  table__set(
-      &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
-  pop_value(vm);
-  pop_value(vm);
+  WITH_OBJECTS_NURSERY(vm, {
+    ObjectString* function_name = string__copy(name, (int)strlen(name), vm);
+    table__set(
+        &vm->global_vars, function_name,
+        OBJECT_VAL(native_function__new(function, function_name, arity, vm)));
+  });
+}
+
+// whenever `vm->objects` is reset (e.g., in `memory.c::sweep`),
+// `vm->object_nursery_end` needs to reset to the same value so as to keep the
+// invariant that the nursery must alway be a prefix of the objects list.
+void vm__reset_objects_list_head(VM* vm, Object* new_head)
+{
+  vm->objects = new_head;
+  vm->object_nursery_end = new_head;
+  // NOTE: `vm->object_nursery_nested_scopes` is not reset because that would
+  // cause trouble when `memory__close_object_nursery` is called to close open
+  // "nursery scopes"
 }
 
 void vm__init(VM* vm)
 {
-  vm->objects = NULL;
   vm->execution_mode = VM_SCRIPT_MODE;
   vm->trace_execution = false;
   vm->show_bytecode = false;
+
+  vm__reset_objects_list_head(vm, /* new_head: */ NULL);
+  vm->object_nursery_nested_scopes = 0;
 
   reset_for_execution(vm);
   table__init(&vm->interned_strings);
@@ -144,11 +148,14 @@ void vm__init(VM* vm)
   vm->init_string = NULL;
   vm->init_string = string__copy("__init__", strlen("__init__"), vm);
 
+  // standard library
   define_native_function("clock", 0, clock_native, vm);
   define_native_function("print", 1, print, vm);
   define_native_function("println", 1, println, vm);
 
-  define_native_class("list", lox_list__new_class("list", vm), vm);
+  WITH_OBJECTS_NURSERY(vm, {
+    define_native_class("list", lox_list__new_class("list", vm), vm);
+  });
 }
 
 void vm__dispose(VM* vm)
@@ -157,6 +164,8 @@ void vm__dispose(VM* vm)
   table__dispose(&vm->global_vars);
   // we don't need to explicitly dispose it, since it's tracked by `vm->objects`
   vm->init_string = NULL;
+  vm->object_nursery_end = NULL;
+  vm->object_nursery_nested_scopes = 0;
 
   size_t count = memory__free_objects(vm->objects);
 
@@ -314,15 +323,15 @@ static void concatenate(VM* vm)
   ObjectString* a = AS_STRING(peek_value(1, vm));
 
   int length = a->length + b->length;
-  char* chars = ALLOCATE(char, length + 1);
-  memcpy(chars, a->chars, a->length);
-  memcpy(chars + a->length, b->chars, b->length);
-  chars[length] = '\0';
-
-  ObjectString* result = string__take_ownership(chars, length, vm);
+  char* result_chars = ALLOCATE(char, length + 1);
+  memcpy(result_chars, a->chars, a->length);
+  memcpy(result_chars + a->length, b->chars, b->length);
+  result_chars[length] = '\0';
 
   pop_value(vm);
   pop_value(vm);
+
+  ObjectString* result = string__take_ownership(result_chars, length, vm);
   push_value(OBJECT_VAL(result), vm);
 }
 

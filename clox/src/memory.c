@@ -240,13 +240,24 @@ static void mark_roots(VM* vm)
        upvalue = upvalue->next) {
     memory__mark_object_as_alive((Object*)upvalue);
   }
+
+  // the object nursery
+  if (vm->object_nursery_end != NULL) {
+    // if the nursery points to non-null, then `vm->objects` should necessarily
+    // be non-null
+    assert(vm->objects != NULL);
+
+    for (Object* object = vm->objects; object != vm->object_nursery_end;
+         object = object->next) {
+      memory__mark_object_as_alive(object);
+    }
+  }
 }
 
-static void mark_array_as_alive(ValueArray* array)
+static void mark_object_instance_as_alive(ObjectInstance* instance)
 {
-  for (int i = 0; i < array->count; i++) {
-    memory__mark_value_as_alive(array->values[i]);
-  }
+  memory__mark_object_as_alive((Object*)instance->_class);
+  table__mark_as_alive(&instance->fields);
 }
 
 static void mark_object_references(Object* object)
@@ -279,17 +290,18 @@ static void mark_object_references(Object* object)
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
     memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
-    mark_array_as_alive(&function->bytecode.constants);
+    value_array__mark_as_alive(&function->bytecode.constants);
     break;
   }
-    // `ObjectList` is a kind of instance (it "inherits" from `ObjectInstance`)
-    // and it doesn't own any "heap-allocated" objects (`array:ValueArray` lives
-    // and dies with `ObjectList`)
-  case OBJECT_LIST:
   case OBJECT_INSTANCE: {
-    ObjectInstance* instance = (ObjectInstance*)object;
-    memory__mark_object_as_alive((Object*)instance->_class);
-    table__mark_as_alive(&instance->fields);
+    mark_object_instance_as_alive((ObjectInstance*)object);
+    break;
+  }
+  case OBJECT_LIST: {
+    mark_object_instance_as_alive((ObjectInstance*)object);
+    // `list` is a native instance class and its contained items aren't tracked
+    // by the `fields` table, so we need to manually mark them.
+    lox_list__mark_as_alive((ObjectList*)object);
     break;
   }
   case OBJECT_UPVALUE:
@@ -335,12 +347,53 @@ static void sweep(VM* vm)
       object = object->next;
       if (previous != NULL) {
         previous->next = object;
-      } else {
-        vm->objects = object;
-      }
 
+      } else {
+        // doing `vm->objects = object` is not enough because we also need to
+        // keep the objects "nursery" in sync.
+        vm__reset_objects_list_head(vm, /* new_head: */ object);
+      }
+#ifdef DEBUG_LOG_GC
+      printf("%p about to be disposed\n", (void*)object);
+#endif
       dispose_object(unreachable);
     }
+  }
+}
+
+void memory__open_object_nursery(VM* vm)
+{
+  assert(vm != NULL);
+
+  if (vm->object_nursery_end == NULL) {
+#ifdef DEBUG_LOG_GC_DETAILED
+    fprintf(stderr, "object nursery just opened\n");
+#endif
+    vm->object_nursery_end = vm->objects;
+  }
+  vm->object_nursery_nested_scopes++;
+}
+
+void memory__close_object_nursery(VM* vm)
+{
+  assert(vm != NULL);
+
+  if (vm->object_nursery_nested_scopes == 0) {
+    fprintf(stderr, "WARNING: trying to close a closed object nursery!\n");
+    assert(vm->object_nursery_end == NULL);
+    return;
+  }
+  // only close the nursery after all nested scopes have been closed
+  if (--(vm->object_nursery_nested_scopes) == 0) {
+#ifdef DEBUG_LOG_GC_DETAILED
+    fprintf(stderr, "object nursery just closed\n");
+#endif
+    vm->object_nursery_end = NULL;
+
+  } else {
+#ifdef DEBUG_LOG_GC_DETAILED
+    fprintf(stderr, "object nursery nested scope closed\n");
+#endif
   }
 }
 

@@ -37,6 +37,13 @@ typedef struct GC {
 #define ALLOCATE(type, count)                                                  \
   (type*)memory__reallocate(NULL, 0, sizeof(type) * (count))
 
+#define WITH_OBJECTS_NURSERY(vm, block)                                        \
+  {                                                                            \
+    memory__open_object_nursery(vm);                                           \
+    block;                                                                     \
+    memory__close_object_nursery(vm);                                          \
+  }
+
 void* memory__reallocate(void* pointer, size_t old_size, size_t new_size);
 size_t memory__free_objects(Object* objects);
 
@@ -47,5 +54,8 @@ void memory__register_for_gc(VM* vm);
 void memory__mark_value_as_alive(Value value);
 void memory__mark_object_as_alive(Object* object);
 void memory__print_gc_stats();
+
+void memory__open_object_nursery(VM* vm);
+void memory__close_object_nursery(VM* vm);
 
 #endif // MEMORY_H_
