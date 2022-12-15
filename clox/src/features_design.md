@@ -53,7 +53,7 @@ pop_value(vm);
 pop_value(vm);
 ```
 
-The reason why the "push/pop" pattern is needed here is because `table__set` may need to allocate more memory (if the table has grown too large and needs resizing), therefore potentially triggering a GC run. If such a GC run were to happen, the new string created by `string__copy` wouldn't be reachable from "the roots" (see [this chapter](https://craftinginterpreters.com/garbage-collection.html) for terminology) with disastrous consequences (i.e., the memory for the newly created string would be reclaimed, and we'd be inserting a corrupted value into the table.) 
+The reason why the "push/pop" pattern is needed here is because `table__set` may need to allocate more memory (if the table has grown too large and needs resizing), therefore potentially triggering a GC run. If this were to happen, the new string created by `string__copy` wouldn't be reachable from "the roots" (see [this chapter](https://craftinginterpreters.com/garbage-collection.html) for terminology) with disastrous consequences (i.e., the memory for the newly created string would be reclaimed, and we'd be inserting a corrupted value into the table.) 
 
 Although the pattern seems relatively easy to implement and no longer mysterious once explained, it does have some serious drawbacks:
 
@@ -64,7 +64,7 @@ Although the pattern seems relatively easy to implement and no longer mysterious
 The last two drawbacks alone are sufficient to justify looking for alternatives. This is where the idea of the "object nursery" enters the picture.
 
 ### The "object nursery"[^object-nursery] as a better alternative
-Since all we ever want is for recently created objects to not be reclaimed by the garbage collector before they've had a chance to be put in "safe" locations (i.e., in "roots" seen by the GC), why not just temporarily track recently created objects in the global `vm->objects` list and make them visible as roots during GC runs (e.g., using an "intrusive" sublist)?
+Since all we ever want is for recently created objects to not be reclaimed by the garbage collector before they've had a chance to be put in "safe" locations (e.g., in "roots" seen by the GC), why not just temporarily track recently created objects in the global `vm->objects` list and make them visible as roots during GC runs (e.g., using an "intrusive" sublist)?
 
 Consider how the previous snippet would be written using this idea:
 
@@ -77,7 +77,7 @@ table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
 memory__close_object_nursery(vm);
 ```
 
-Using this pattern, programmers just need to be aware of when an operation may trigger a GC run, and "wrap" the corresponding operation(s) with `memory__open/close` calls. This couldn't get any simpler, and it removes all the drawbacks of the "push/pop" pattern.
+Using this pattern, programmers just need to be aware of when an operation may trigger a GC run, and "wrap" it with `memory__open/close` calls. This couldn't get any simpler, and it removes all the drawbacks of the "push/pop" pattern.
 
 As a way to simplify even further the usage of this "nursery" pattern, a macro `WITH_OBJECTS_NURSERY` can be used, which is simply defined as:
 
@@ -109,38 +109,38 @@ As newly created objects are added, this "intrusive" list (which always starts a
 *Right after the nursery is opened:*
 ```mermaid
 flowchart LR
-    O:::objects --> D
-    N:::objects --> D
+    O:::pointer --> D
+    N:::pointer --> D
     D --> E
     E --> ...
-    classDef objects fill:#f96;
+    classDef pointer fill:#f96;
 ```
 
 *After the nursery is opened and a few new objects are created:*
 ```mermaid
 flowchart LR
-    O:::objects --> A
+    O:::pointer --> A
     A --> B
     B --> C
     C --> D
-    N:::objects --> D
+    N:::pointer --> D
     D --> E
     E --> ...
-    classDef objects fill:#f96;
+    classDef pointer fill:#f96;
 ```
 
 *After the nursery is created and a GC run happens right away, removing objects from the front of the list:*
 ```mermaid
 flowchart LR
-    O:::objects --> E
-    N:::objects --> E
+    O:::pointer --> E
+    N:::pointer --> E
     E --> ...
-    classDef objects fill:#f96;
+    classDef pointer fill:#f96;
 ```
 
 where the highlighted nodes `O` and `N` represent the pointers `vm->objects` and `vm->object_nursery_end` (respectively), not actual objects as the rest of the nodes.
 
-During garbage collection, it suffices to traverse this sublist and mark each object as alive. When the nursery closes (via `memory__close_object_nursery`), it suffices to set the corresponding pointer to `NULL` or to the current value of `vm->objects` to indicate the sublist is now empty.
+During garbage collection, it suffices to traverse this sublist and mark each object in it as alive. When the nursery closes (via `memory__close_object_nursery`), it suffices to set the corresponding pointer to `NULL` or to the current value of `vm->objects` to indicate the sublist is now empty.
 
 One important detail to keep in mind is that the `memory__open/close` functions must be implemented to take into account the possibility of nested calls, in which case the semantics described earlier should continue to hold, namely: 1) the nursery should not be opened again if it is already open, and 2) the nursery should close only until the very first close call is made.
 
@@ -151,4 +151,4 @@ One important detail to keep in mind is that the `memory__open/close` functions 
 
 [^ignorable-token]: "Ignorable" tokens are tokens which are not used to drive parsing/compilation, but which may be needed for features such as "optional semicolon". 
 
-[^object-nursery]: The metaphor here is, of course, that we're creating a place to protect recently "born" objects from the claws of the evil garbage collector (which will kill any objects without parents or ancestors that are reachable from the roots).
+[^object-nursery]: The metaphor here is, of course, that we're creating a place to protect recently "born" objects from the claws of the "evil garbage collector" (which will kill any objects without parents or ancestors that are reachable from the roots).

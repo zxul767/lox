@@ -57,7 +57,7 @@ typedef struct VM {
 
   // see `Object Nursery` in `features_design.md` for details on why we need
   // this data structure.
-  Object* object_nursery_start;
+  Object* object_nursery_end;
   size_t object_nursery_nested_scopes;
 
   // see https://craftinginterpreters.com/closures.html#upvalues for details on
@@ -97,7 +97,7 @@ void vm__dispose(VM* vm);
 void vm__push(Value value, VM* vm);
 void vm__pop(VM* vm);
 Value vm__peek(int distance, VM* vm);
-void vm__reset_objects_list_head(VM* vm, Object* start);
+void vm__reset_objects_list_head(VM* vm, Object* new_head);
 
 InterpretResult vm__interpret(const char* source, VM* vm);
 

@@ -118,12 +118,12 @@ static void define_native_function(
 }
 
 // whenever `vm->objects` is reset (e.g., in `memory.c::sweep`),
-// `vm->object_nursery_start` needs to reset to the same value so as to keep the
+// `vm->object_nursery_end` needs to reset to the same value so as to keep the
 // invariant that the nursery must alway be a prefix of the objects list.
-void vm__reset_objects_list_head(VM* vm, Object* start)
+void vm__reset_objects_list_head(VM* vm, Object* new_head)
 {
-  vm->objects = start;
-  vm->object_nursery_start = start;
+  vm->objects = new_head;
+  vm->object_nursery_end = new_head;
   // NOTE: `vm->object_nursery_nested_scopes` is not reset because that would
   // cause trouble when `memory__close_object_nursery` is called to close open
   // "nursery scopes"
@@ -135,7 +135,7 @@ void vm__init(VM* vm)
   vm->trace_execution = false;
   vm->show_bytecode = false;
 
-  vm__reset_objects_list_head(vm, NULL);
+  vm__reset_objects_list_head(vm, /* new_head: */ NULL);
   vm->object_nursery_nested_scopes = 0;
 
   reset_for_execution(vm);
@@ -164,7 +164,7 @@ void vm__dispose(VM* vm)
   table__dispose(&vm->global_vars);
   // we don't need to explicitly dispose it, since it's tracked by `vm->objects`
   vm->init_string = NULL;
-  vm->object_nursery_start = NULL;
+  vm->object_nursery_end = NULL;
   vm->object_nursery_nested_scopes = 0;
 
   size_t count = memory__free_objects(vm->objects);
@@ -322,18 +322,17 @@ static void concatenate(VM* vm)
   ObjectString* b = AS_STRING(peek_value(0, vm));
   ObjectString* a = AS_STRING(peek_value(1, vm));
 
-  WITH_OBJECTS_NURSERY(vm, {
-    int length = a->length + b->length;
-    char* result_chars = ALLOCATE(char, length + 1);
-    memcpy(result_chars, a->chars, a->length);
-    memcpy(result_chars + a->length, b->chars, b->length);
-    result_chars[length] = '\0';
+  int length = a->length + b->length;
+  char* result_chars = ALLOCATE(char, length + 1);
+  memcpy(result_chars, a->chars, a->length);
+  memcpy(result_chars + a->length, b->chars, b->length);
+  result_chars[length] = '\0';
 
-    pop_value(vm);
-    pop_value(vm);
-    ObjectString* result = string__take_ownership(result_chars, length, vm);
-    push_value(OBJECT_VAL(result), vm);
-  });
+  pop_value(vm);
+  pop_value(vm);
+
+  ObjectString* result = string__take_ownership(result_chars, length, vm);
+  push_value(OBJECT_VAL(result), vm);
 }
 
 static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
