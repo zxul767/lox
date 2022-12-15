@@ -129,6 +129,18 @@ void vm__reset_objects_list_head(VM* vm, Object* new_head)
   // "nursery scopes"
 }
 
+static void init_stdlib(VM* vm)
+{
+  // standard library
+  define_native_function("clock", 0, clock_native, vm);
+  define_native_function("print", 1, print, vm);
+  define_native_function("println", 1, println, vm);
+
+  WITH_OBJECTS_NURSERY(vm, {
+    define_native_class("list", lox_list__new_class("list", vm), vm);
+  });
+}
+
 void vm__init(VM* vm)
 {
   vm->execution_mode = VM_SCRIPT_MODE;
@@ -148,14 +160,7 @@ void vm__init(VM* vm)
   vm->init_string = NULL;
   vm->init_string = string__copy("__init__", strlen("__init__"), vm);
 
-  // standard library
-  define_native_function("clock", 0, clock_native, vm);
-  define_native_function("print", 1, print, vm);
-  define_native_function("println", 1, println, vm);
-
-  WITH_OBJECTS_NURSERY(vm, {
-    define_native_class("list", lox_list__new_class("list", vm), vm);
-  });
+  init_stdlib(vm);
 }
 
 void vm__dispose(VM* vm)

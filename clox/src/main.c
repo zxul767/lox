@@ -264,9 +264,11 @@ static void repl(VM* vm)
 int main(int args_count, const char* args[])
 {
   VM vm;
+  // NOTE: the order of these initialization steps is important: the garbage
+  // collector just needs to grab a pointer to the VM, but `vm__init` allocates
+  // memory and might trigger a GC run.
+  memory__init_gc(&vm);
   vm__init(&vm);
-  memory__init_gc();
-  memory__register_for_gc(&vm);
 
   if (args_count == 1) {
     repl(&vm);

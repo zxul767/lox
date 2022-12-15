@@ -4,14 +4,11 @@
 #include "common.h"
 #include "value.h"
 
-#define MAX_VMS 32
-
 typedef struct VM VM;
 typedef struct Object Object;
 
 typedef struct GC {
-  VM* vms[MAX_VMS];
-  int vms_count;
+  VM* vm;
 
   int gray_count;
   int gray_capacity;
@@ -50,11 +47,11 @@ size_t memory__free_objects(Object* objects);
 void memory__init_gc();
 void memory__shutdown_gc();
 void memory__run_gc();
-void memory__register_for_gc(VM* vm);
 void memory__mark_value_as_alive(Value value);
 void memory__mark_object_as_alive(Object* object);
 void memory__print_gc_stats();
 
+// see `features_design.md` for details on the objects "nursery"
 void memory__open_object_nursery(VM* vm);
 void memory__close_object_nursery(VM* vm);
 

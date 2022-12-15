@@ -15,6 +15,7 @@
 
 #define GC_HEAP_GROW_FACTOR 2
 
+// the global garbage collector for the interpreter
 GC __gc;
 
 void memory__print_gc_stats()
@@ -26,26 +27,18 @@ void memory__print_gc_stats()
       __gc.next_gc_in_bytes);
 }
 
-void memory__init_gc()
+void memory__init_gc(VM* vm)
 {
-  __gc.vms_count = 0;
-
   __gc.gray_capacity = 0;
   __gc.gray_count = 0;
   __gc.gray_stack = NULL;
+  __gc.vm = vm;
 
   __gc.bytes_allocated = 0;
   __gc.next_gc_in_bytes = 1024 * 1024;
 }
 
 void memory__shutdown_gc() { free(__gc.gray_stack); }
-
-void memory__register_for_gc(VM* vm)
-{
-  assert(__gc.vms_count == 0);
-
-  __gc.vms[__gc.vms_count++] = vm;
-}
 
 void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
 {
@@ -404,18 +397,14 @@ void memory__run_gc()
   size_t before = __gc.bytes_allocated;
 #endif
 
-  // TODO: design a good policy to strike a balance between throughout and
-  // latency
-  for (int i = 0; i < __gc.vms_count; ++i) {
-    assert(__gc.vms[i] != NULL);
+  assert(__gc.vm != NULL);
 
-    mark_roots(__gc.vms[i]);
-    trace_references(&__gc);
-    table__remove_dead_objects(&(__gc.vms[i]->interned_strings));
-    sweep(__gc.vms[i]);
+  mark_roots(__gc.vm);
+  trace_references(&__gc);
+  table__remove_dead_objects(&(__gc.vm->interned_strings));
+  sweep(__gc.vm);
 
-    __gc.next_gc_in_bytes = __gc.bytes_allocated * GC_HEAP_GROW_FACTOR;
-  }
+  __gc.next_gc_in_bytes = __gc.bytes_allocated * GC_HEAP_GROW_FACTOR;
 
 #if defined(DEBUG_LOG_GC) || defined(DEBUG_LOG_GC_DETAILED)
   fprintf(stderr, "-- GC ends\n");
