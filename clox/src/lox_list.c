@@ -74,6 +74,7 @@ static int normalize_index(int index, const ObjectList* list)
         "Index Error: tried to access index %d, but valid range is [0..%d] or "
         "[-%d..-1].\n",
         index, list->array.count - 1, list->array.count);
+    return -1;
   }
   return normed_index;
 }
