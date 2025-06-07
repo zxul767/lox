@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 import dev.zxul767.lox.parsing.*;
+import dev.zxul767.lox.Errors;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -135,5 +136,16 @@ class InterpreterTest {
   void canUseStandardLibraryFunctions() {
     Object result = interpret("sin(3.14159265359);");
     assertEquals(0.0, (double)result, /*delta:*/ 1e-5);
+  }
+
+  @Test
+  void requireIntRejectsNonIntegerValues() {
+    Errors.reset();
+    RuntimeError error = assertThrows(
+        RuntimeError.class,
+        () -> interpret("var s = \"hello\"; s.slice(0, 1.2);")
+    );
+    assertEquals("argument must be an integer", error.getMessage());
+    Errors.reset();
   }
 }
