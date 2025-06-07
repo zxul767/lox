@@ -137,7 +137,11 @@ class LoxNativeClass extends LoxClass {
   }
 
   static int requireInt(Object value, String functionName) {
-    return requireType(value, Double.class, functionName, "int").intValue();
+    double number = requireType(value, Double.class, functionName, "int");
+    if (number != Math.floor(number)) {
+      throwRuntimeError(functionName, "argument must be an integer");
+    }
+    return (int)number;
   }
 
   void define(
