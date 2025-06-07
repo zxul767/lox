@@ -141,10 +141,11 @@ class InterpreterTest {
   @Test
   void requireIntRejectsNonIntegerValues() {
     Errors.reset();
-    assertThrows(
+    RuntimeError error = assertThrows(
         RuntimeError.class,
         () -> interpret("var s = \"hello\"; s.slice(0, 1.2);")
     );
+    assertEquals("argument must be an integer", error.getMessage());
     Errors.reset();
   }
 }
