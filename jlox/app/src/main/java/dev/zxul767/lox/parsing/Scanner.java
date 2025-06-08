@@ -165,7 +165,9 @@ public class Scanner {
         openComments--;
         advance(2);
       } else {
-        advance();
+        char c = advance();
+        if (c == '\n')
+          line++;
       }
       if (openComments == 0)
         break;
