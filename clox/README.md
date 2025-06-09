@@ -12,7 +12,12 @@
    + It's important to ensure that it's GNU make and not some other implementation since we're using specific features from that version. 
 
 # Building and Running Tests
-We don't have tests for `clox` yet :-(
+Unit tests are written using Python's `unittest` framework. Ensure the
+`isocline` submodule is initialized and then run:
+
+```bash
+python3 -m unittest discover -s clox/tests
+```
 
 # Running the REPL
 ![clox-repl](https://user-images.githubusercontent.com/442314/197453260-86f8d97d-0556-4f02-af69-d6103790916c.png)
