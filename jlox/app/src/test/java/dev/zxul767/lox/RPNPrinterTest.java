@@ -14,8 +14,8 @@ class RPNPrinterTest {
     Parser parser = new Parser(tokens);
     List<Stmt> statements = parser.parse();
 
-    assert (statements.size() == 1);
-    assert (statements.get(0) instanceof Stmt.Expression);
+    assertEquals(1, statements.size());
+    assertTrue(statements.get(0) instanceof Stmt.Expression);
 
     Stmt.Expression expr = (Stmt.Expression)statements.get(0);
     return expr.expression;
