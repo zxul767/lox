@@ -252,7 +252,7 @@ public class Parser {
     return expr;
   }
 
-  // logic_or -> logic_nad ( "or" logic_and )*
+  // logic_or -> logic_and ( "or" logic_and )*
   private Expr or() {
     Expr expr = and();
 
