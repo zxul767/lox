@@ -81,7 +81,7 @@ class LoxStringClass extends LoxNativeClass {
     int start = requireInt(startIndex, "slice");
     int end = requireInt(endIndex, "slice");
 
-    // TODO: research why python simply returns empy strings instead of these
+    // TODO: research why python simply returns empty strings instead of these
     // errors. should we do the same?
     if (start < 0 || start >= self.string.length()) {
       throwIndexError(
