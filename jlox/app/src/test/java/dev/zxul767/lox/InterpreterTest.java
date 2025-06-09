@@ -148,4 +148,10 @@ class InterpreterTest {
     assertEquals("argument must be an integer", error.getMessage());
     Errors.reset();
   }
+
+  @Test
+  void sliceAllowsEndAtLength() {
+    Object result = interpret("\"abc\".slice(1, 3);");
+    assertEquals(new LoxString("bc"), result);
+  }
 }

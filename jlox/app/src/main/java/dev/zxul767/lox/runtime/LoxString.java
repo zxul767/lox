@@ -88,7 +88,7 @@ class LoxStringClass extends LoxNativeClass {
           self, String.format("slice(start=%d, ...)", start), start
       );
     }
-    if (end < 0 || end >= self.string.length()) {
+    if (end < 0 || end > self.string.length()) {
       throwIndexError(self, String.format("slice(..., end=%d)", end), end);
     }
     if (start > end) {
