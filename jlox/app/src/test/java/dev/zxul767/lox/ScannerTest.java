@@ -90,6 +90,12 @@ class ScannerTest {
   }
 
   @Test
+  void tokensAfterMultilineCommentsHaveCorrectLineNumber() {
+    List<Token> tokens = scan("/* comment\nstill in comment */ var a = 1;");
+    assertEquals(2, tokens.get(0).line);
+  }
+
+  @Test
   void shouldIncludeEOFTokenByDefault() {
     Scanner scanner = new Scanner("");
     List<Token> tokens = scanner.scanTokens();
