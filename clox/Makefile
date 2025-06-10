@@ -98,7 +98,7 @@ include $(wildcard $(DEPS_FILES))
 $(BIN_DIR): ; @mkdir -p $@
 $(DEPS_DIR): ; @mkdir -p $@
 
-.PHONY: repl run clean print-% watch
+.PHONY: repl run clean print-% watch test check
 
 # this target is only for debugging purposes; invoke it as: `make print-VAR-NAME`
 print-%  : ; @echo $* = $($*)
@@ -114,6 +114,11 @@ watch:
 # run a program
 run: $(MAIN_TARGET)
 	@./$< $(NAME)
+
+test: $(MAIN_TARGET)
+	python3 -m unittest discover -s tests
+
+check: test
 
 clean:
 	rm -f $(MAIN_TARGET) $(OBJ_DIR)/*.o $(DEPS_DIR)/*.d

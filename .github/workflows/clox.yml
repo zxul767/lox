@@ -35,3 +35,6 @@ jobs:
 
     - name: Build clox
       run: (cd clox && make)
+
+    - name: Test clox
+      run: (cd clox && make test)

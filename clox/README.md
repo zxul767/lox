@@ -16,7 +16,7 @@ Unit tests are written using Python's `unittest` framework. Ensure the
 `isocline` submodule is initialized and then run:
 
 ```bash
-python3 -m unittest discover -s clox/tests
+make test  # or `make check`
 ```
 
 # Running the REPL
