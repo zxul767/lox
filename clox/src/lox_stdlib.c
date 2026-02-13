@@ -12,19 +12,19 @@
 // seconds
 Value clock_native(int args_count, Value* args)
 {
-  return NUMBER_VAL((double)clock() / CLOCKS_PER_SEC);
+  return NUMBER_VALUE((double)clock() / CLOCKS_PER_SEC);
 }
 
 Value print(int args_count, Value* args)
 {
   value__print(args[0]);
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 Value println(int args_count, Value* args)
 {
   value__println(args[0]);
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 static void print_signature_parameter(const CallableSignature* signature, int index)
@@ -103,15 +103,15 @@ static ObjectCallable* get_callable_from_value(Value value)
 static const char* type_description(Value value)
 {
   switch (value.type) {
-  case VAL_BOOL:
+  case VALUE_BOOL:
     return "boolean";
-  case VAL_NIL:
+  case VALUE_NIL:
     return "nil";
-  case VAL_NUMBER:
+  case VALUE_NUMBER:
     return "number";
-  case VAL_ERROR:
+  case VALUE_ERROR:
     return "error";
-  case VAL_OBJECT:
+  case VALUE_OBJECT:
     break;
   }
 
@@ -223,7 +223,7 @@ static Value help_class(const Value value)
   ObjectClass* _class = AS_CLASS(value);
   fprintf(stderr, "[class] <class %s>\n", _class->name->chars);
   print_method_signatures(_class);
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 static Value help_instance(const Value value)
@@ -240,7 +240,7 @@ static Value help_instance(const Value value)
       "Use help(%s) to inspect constructor and methods.\n",
       instance->_class->name->chars
   );
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 static bool try_help_callable(const Value value)
@@ -275,7 +275,7 @@ Value help(int args_count, Value* args)
     }
     default: {
       if (try_help_callable(value)) {
-        return NIL_VAL;
+        return NIL_VALUE;
       }
       break;
     }
@@ -285,5 +285,5 @@ Value help(int args_count, Value* args)
   value__print_repr(value);
   fprintf(stderr, " [%s]\n", type_description(value));
 
-  return NIL_VAL;
+  return NIL_VALUE;
 }

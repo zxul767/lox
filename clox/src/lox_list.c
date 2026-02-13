@@ -51,7 +51,7 @@ static Value lox_list__length(int args_count, Value* args)
 {
   ObjectList* list = REQUIRE_LIST(args[0]);
 
-  return NUMBER_VAL(list->array.count);
+  return NUMBER_VALUE(list->array.count);
 }
 
 static Value lox_list__append(int args_count, Value* args)
@@ -59,7 +59,7 @@ static Value lox_list__append(int args_count, Value* args)
   ObjectList* list = REQUIRE_LIST(args[0]);
   value_array__append(&list->array, args[1]);
 
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 static int normalize_index(int index, const ObjectList* list)
@@ -88,13 +88,13 @@ static Value lox_list__at(int args_count, Value* args)
 
   if (list->array.count == 0) {
     fprintf(stderr, "Index Error: Cannot access elements in empty list.\n");
-    return ERROR_VAL;
+    return ERROR_VALUE;
   }
 
   int index = AS_INT(args[1]);
   index = normalize_index(index, list);
   if (index == -1) {
-    return ERROR_VAL;
+    return ERROR_VALUE;
   }
   return list->array.values[index];
 }
@@ -104,7 +104,7 @@ static Value lox_list__clear(int args_count, Value* args)
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   value_array__dispose(&list->array);
-  return NIL_VAL;
+  return NIL_VALUE;
 }
 
 static Value lox_list__pop(int args_count, Value* args)
@@ -112,7 +112,7 @@ static Value lox_list__pop(int args_count, Value* args)
   ObjectList* list = REQUIRE_LIST(args[0]);
   if (list->array.count == 0) {
     fprintf(stderr, "Error: Cannot remove elements from an empty list.\n");
-    return NIL_VAL;
+    return NIL_VALUE;
   }
   return value_array__pop(&list->array);
 }
@@ -133,7 +133,7 @@ static void define_method(
         native_function__new(native, method_name, signature, docstring, vm);
     native_fn->is_method = true;
 
-    table__set(&_class->methods, method_name, OBJECT_VAL(native_fn));
+    table__set(&_class->methods, method_name, OBJECT_VALUE(native_fn));
   });
 }
 

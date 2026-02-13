@@ -33,15 +33,18 @@ Object* object__allocate(size_t size, ObjectType type, VM* vm)
 
 #ifdef DEBUG_LOG_GC_DETAILED
   fprintf(
-      stderr, "%p allocate %zu bytes for %s\n", (void*)object, size,
-      OBJ_TYPE_TO_STRING[type]);
+      stderr,
+      "%p allocate %zu bytes for %s\n",
+      (void*)object,
+      size,
+      OBJ_TYPE_TO_STRING[type]
+  );
 #endif
 
   return object;
 }
 
-static ObjectString*
-string__allocate(char* chars, int length, uint32_t hash, VM* vm)
+static ObjectString* string__allocate(char* chars, int length, uint32_t hash, VM* vm)
 {
   ObjectString* string = NULL;
   WITH_OBJECTS_NURSERY(vm, {
@@ -50,7 +53,7 @@ string__allocate(char* chars, int length, uint32_t hash, VM* vm)
     string->chars = chars;
     string->hash = hash;
 
-    table__set(&vm->interned_strings, string, NIL_VAL);
+    table__set(&vm->interned_strings, string, NIL_VALUE);
   });
   return string;
 }
@@ -111,8 +114,7 @@ copy_with_translated_escapes(char* destination, const char* source, int length)
 ObjectString* string__copy(const char* chars, int length, VM* vm)
 {
   uint32_t hash = cstr__hash(chars, length);
-  ObjectString* interned =
-      table__find_string(&vm->interned_strings, chars, length, hash);
+  ObjectString* interned = table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {
     return interned;
   }
@@ -128,8 +130,7 @@ ObjectString* string__copy(const char* chars, int length, VM* vm)
 ObjectString* string__take_ownership(char* chars, int length, VM* vm)
 {
   uint32_t hash = cstr__hash(chars, length);
-  ObjectString* interned =
-      table__find_string(&vm->interned_strings, chars, length, hash);
+  ObjectString* interned = table__find_string(&vm->interned_strings, chars, length, hash);
   if (interned != NULL) {
     FREE_ARRAY(char, chars, length + 1);
     return interned;
@@ -147,7 +148,7 @@ ObjectUpvalue* upvalue__new(Value* slot, VM* vm)
 {
   ObjectUpvalue* upvalue = ALLOCATE_OBJECT(ObjectUpvalue, OBJECT_UPVALUE, vm);
   upvalue->location = slot;
-  upvalue->closed = NIL_VAL;
+  upvalue->closed = NIL_VALUE;
   upvalue->next = NULL;
 
   return upvalue;
@@ -166,8 +167,7 @@ ObjectClass* class__new(ObjectString* name, VM* vm)
 
 ObjectInstance* instance__new(ObjectClass* _class, VM* vm)
 {
-  ObjectInstance* instance =
-      ALLOCATE_OBJECT(ObjectInstance, OBJECT_INSTANCE, vm);
+  ObjectInstance* instance = ALLOCATE_OBJECT(ObjectInstance, OBJECT_INSTANCE, vm);
   instance->_class = _class;
   table__init(&instance->fields);
 
@@ -176,8 +176,7 @@ ObjectInstance* instance__new(ObjectClass* _class, VM* vm)
 
 ObjectBoundMethod* bound_method__new(Value instance, Value method, VM* vm)
 {
-  ObjectBoundMethod* bound =
-      ALLOCATE_OBJECT(ObjectBoundMethod, OBJECT_BOUND_METHOD, vm);
+  ObjectBoundMethod* bound = ALLOCATE_OBJECT(ObjectBoundMethod, OBJECT_BOUND_METHOD, vm);
   bound->instance = instance;
   bound->method = method;
 
@@ -200,8 +199,7 @@ ObjectClosure* closure__new(ObjectFunction* function, VM* vm)
 
 ObjectFunction* function__new(VM* vm)
 {
-  ObjectFunction* function =
-      ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
+  ObjectFunction* function = ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
 
   ObjectCallable* callable = AS_CALLABLE(function);
   callable->signature.name = NULL;
@@ -217,8 +215,12 @@ ObjectFunction* function__new(VM* vm)
 }
 
 ObjectNativeFunction* native_function__new(
-    NativeFunction primitive, ObjectString* name,
-    const CallableSignature* signature, const char* docstring, VM* vm)
+    NativeFunction primitive,
+    ObjectString* name,
+    const CallableSignature* signature,
+    const char* docstring,
+    VM* vm
+)
 {
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
@@ -226,9 +228,8 @@ ObjectNativeFunction* native_function__new(
   ObjectCallable* callable = AS_CALLABLE(native);
   callable->signature = *signature;
   callable->signature.name = name;
-  callable->docstring = docstring != NULL
-      ? string__copy(docstring, (int)strlen(docstring), vm)
-      : NULL;
+  callable->docstring =
+      docstring != NULL ? string__copy(docstring, (int)strlen(docstring), vm) : NULL;
 
   native->function = primitive;
   native->is_method = false;

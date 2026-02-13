@@ -89,7 +89,7 @@ static Entry* allocate_entries(int capacity)
   Entry* entries = ALLOCATE(Entry, capacity);
   for (int i = 0; i < capacity; i++) {
     entries[i].key = NULL;
-    entries[i].value = NIL_VAL;
+    entries[i].value = NIL_VALUE;
   }
   return entries;
 }
@@ -176,7 +176,7 @@ bool table__delete(Table* table, ObjectString* key)
 
   // place a tombstone in the entry
   entry->key = NULL;
-  entry->value = BOOL_VAL(true);
+  entry->value = BOOL_VALUE(true);
   // notice we don't reduce the count because tombstones are considered
   // full buckets for the purposes of the loading factor (see the OVERVIEW at
   // the top of this file for more details.)

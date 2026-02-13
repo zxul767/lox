@@ -113,7 +113,7 @@ static void define_native_class(const char* name, ObjectClass* _class, VM* vm)
 {
   WITH_OBJECTS_NURSERY(vm, {
     ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
-    table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
+    table__set(&vm->global_vars, class_name, OBJECT_VALUE(_class));
   });
 }
 
@@ -130,7 +130,7 @@ static void define_native_function(
     table__set(
         &vm->global_vars,
         _name,
-        OBJECT_VAL(native_function__new(function, _name, signature, docstring, vm))
+        OBJECT_VALUE(native_function__new(function, _name, signature, docstring, vm))
     );
   });
 }
@@ -331,7 +331,8 @@ static bool call_value(Value callee, int args_count, VM* vm)
     }
     case OBJECT_CLASS: {
       ObjectClass* _class = AS_CLASS(callee);
-      vm->stack_free_slot[-args_count - 1] = OBJECT_VAL(_class->new_instance(_class, vm));
+      vm->stack_free_slot[-args_count - 1] =
+          OBJECT_VALUE(_class->new_instance(_class, vm));
 
       Value initializer;
       if (table__get(&_class->methods, vm->init_string, &initializer)) {
@@ -370,7 +371,7 @@ static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
       vm
   );
   pop_value(vm); // we no longer need the instance around
-  push_value(OBJECT_VAL(bound), vm);
+  push_value(OBJECT_VALUE(bound), vm);
 
   return true;
 }
@@ -400,7 +401,7 @@ static void concatenate(VM* vm)
   pop_value(vm);
 
   ObjectString* result = string__take_ownership(result_chars, length, vm);
-  push_value(OBJECT_VAL(result), vm);
+  push_value(OBJECT_VALUE(result), vm);
 }
 
 static ObjectUpvalue* capture_upvalue(Value* local, VM* vm)
@@ -495,13 +496,13 @@ static InterpretResult run(VM* vm)
       break;
     }
     case OP_NIL:
-      push_value(NIL_VAL, vm);
+      push_value(NIL_VALUE, vm);
       break;
     case OP_TRUE:
-      push_value(BOOL_VAL(true), vm);
+      push_value(BOOL_VALUE(true), vm);
       break;
     case OP_FALSE:
-      push_value(BOOL_VAL(false), vm);
+      push_value(BOOL_VALUE(false), vm);
       break;
     case OP_POP:
       pop_value(vm);
@@ -587,14 +588,14 @@ static InterpretResult run(VM* vm)
     case OP_EQUAL: {
       Value b = pop_value(vm);
       Value a = pop_value(vm);
-      push_value(BOOL_VAL(value__equals(a, b)), vm);
+      push_value(BOOL_VALUE(value__equals(a, b)), vm);
       break;
     }
     case OP_GREATER:
-      BINARY_OP(BOOL_VAL, >);
+      BINARY_OP(BOOL_VALUE, >);
       break;
     case OP_LESS:
-      BINARY_OP(BOOL_VAL, <);
+      BINARY_OP(BOOL_VALUE, <);
       break;
     case OP_ADD: {
       if (IS_STRING(peek_value(0, vm)) && IS_STRING(peek_value(1, vm))) {
@@ -602,7 +603,7 @@ static InterpretResult run(VM* vm)
       } else if (IS_NUMBER(peek_value(0, vm)) && IS_NUMBER(peek_value(1, vm))) {
         double b = AS_NUMBER(pop_value(vm));
         double a = AS_NUMBER(pop_value(vm));
-        push_value(NUMBER_VAL(a + b), vm);
+        push_value(NUMBER_VALUE(a + b), vm);
       } else {
         runtime_error(vm, "Operands must be two numbers or two strings.");
         return INTERPRET_RUNTIME_ERROR;
@@ -610,18 +611,18 @@ static InterpretResult run(VM* vm)
       break;
     }
     case OP_SUBTRACT:
-      BINARY_OP(NUMBER_VAL, -);
+      BINARY_OP(NUMBER_VALUE, -);
       break;
     case OP_MULTIPLY:
-      BINARY_OP(NUMBER_VAL, *);
+      BINARY_OP(NUMBER_VALUE, *);
       break;
     case OP_DIVIDE:
-      BINARY_OP(NUMBER_VAL, /);
+      BINARY_OP(NUMBER_VALUE, /);
       break;
 
       // unary operations
     case OP_NOT:
-      push_value(BOOL_VAL(is_falsey(pop_value(vm))), vm);
+      push_value(BOOL_VALUE(is_falsey(pop_value(vm))), vm);
       break;
 
     case OP_NEGATE: {
@@ -629,7 +630,7 @@ static InterpretResult run(VM* vm)
         runtime_error(vm, "Operand must be a number.");
         return INTERPRET_RUNTIME_ERROR;
       }
-      push_value(NUMBER_VAL(-AS_NUMBER(pop_value(vm))), vm);
+      push_value(NUMBER_VALUE(-AS_NUMBER(pop_value(vm))), vm);
       break;
     }
       // these two instructions are here for the exclusive benefit of the REPL
@@ -683,7 +684,7 @@ static InterpretResult run(VM* vm)
     case OP_NEW_CLOSURE: {
       ObjectFunction* function = AS_FUNCTION(READ_CONSTANT());
       ObjectClosure* closure = closure__new(function, vm);
-      push_value(OBJECT_VAL(closure), vm);
+      push_value(OBJECT_VALUE(closure), vm);
       for (int i = 0; i < closure->upvalues_count; i++) {
         uint8_t is_local = READ_BYTE();
         uint8_t index = READ_BYTE();
@@ -696,7 +697,7 @@ static InterpretResult run(VM* vm)
       break;
     }
     case OP_NEW_CLASS: {
-      push_value(OBJECT_VAL(class__new(READ_STRING(), vm)), vm);
+      push_value(OBJECT_VALUE(class__new(READ_STRING(), vm)), vm);
       break;
     }
     case OP_NEW_METHOD: {
@@ -775,7 +776,7 @@ InterpretResult vm__interpret(const char* source, VM* vm)
   // objects that are in the process of being created? (temporarily pushing
   // them onto the value stack ensures they're reachable)
   //
-  push_value(OBJECT_VAL(top_level_wrapper), vm);
+  push_value(OBJECT_VALUE(top_level_wrapper), vm);
   ObjectClosure* closure = closure__new(top_level_wrapper, vm);
   pop_value(vm);
 
@@ -786,7 +787,7 @@ InterpretResult vm__interpret(const char* source, VM* vm)
   }
 #endif
 
-  push_value(OBJECT_VAL(closure), vm);
+  push_value(OBJECT_VALUE(closure), vm);
   call_closure(closure, 0, vm);
 
   InterpretResult result = run(vm);

@@ -54,13 +54,13 @@ bool value__equals(Value a, Value b)
   if (a.type != b.type)
     return false;
   switch (a.type) {
-  case VAL_BOOL:
+  case VALUE_BOOL:
     return AS_BOOL(a) == AS_BOOL(b);
-  case VAL_NIL:
+  case VALUE_NIL:
     return true;
-  case VAL_NUMBER:
+  case VALUE_NUMBER:
     return AS_NUMBER(a) == AS_NUMBER(b);
-  case VAL_OBJECT:
+  case VALUE_OBJECT:
     return AS_OBJECT(a) == AS_OBJECT(b);
   default:
     return false; // unreachable
@@ -70,19 +70,19 @@ bool value__equals(Value a, Value b)
 void value__print(Value value)
 {
   switch (value.type) {
-  case VAL_BOOL:
+  case VALUE_BOOL:
     fprintf(stderr, AS_BOOL(value) ? "true" : "false");
     break;
-  case VAL_NIL:
+  case VALUE_NIL:
     fprintf(stderr, "nil");
     break;
-  case VAL_NUMBER:
+  case VALUE_NUMBER:
     fprintf(stderr, "%g", AS_NUMBER(value));
     break;
-  case VAL_OBJECT:
+  case VALUE_OBJECT:
     object__print(value);
     break;
-  case VAL_ERROR:
+  case VALUE_ERROR:
     // whenever an error value is returned, the precise error is reported
     // in the call site where the error originated
     break;
@@ -93,7 +93,7 @@ void value__print(Value value)
 
 void value__print_repr(Value value)
 {
-  if (value.type == VAL_OBJECT) {
+  if (value.type == VALUE_OBJECT) {
     object__print_repr(value);
   } else {
     value__print(value);

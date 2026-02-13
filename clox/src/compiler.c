@@ -212,7 +212,7 @@ static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
   uint8_t index = -1;
   WITH_OBJECTS_NURSERY(compiler->vm, {
     index = store_constant(
-        OBJECT_VAL(string__copy(identifier->start, identifier->length, compiler->vm)),
+        OBJECT_VALUE(string__copy(identifier->start, identifier->length, compiler->vm)),
         compiler
     );
   });
@@ -987,7 +987,7 @@ static void function(FunctionType type, Compiler* compiler)
   block(compiler);
 
   ObjectFunction* function = finish_function_compilation(compiler);
-  emit_bytes(OP_NEW_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
+  emit_bytes(OP_NEW_CLOSURE, store_constant(OBJECT_VALUE(function), compiler), compiler);
 
   for (int i = 0; i < function->upvalues_count; i++) {
     emit_byte(fn_compiler.upvalues[i].is_local ? 1 : 0, compiler);
@@ -1457,7 +1457,7 @@ static void number(Compiler* compiler)
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
   double value = strtod(compiler->parser->previous_token.start, /*residue:*/ NULL);
-  emit_constant(NUMBER_VAL(value), compiler);
+  emit_constant(NUMBER_VALUE(value), compiler);
 }
 
 static void string(Compiler* compiler)
@@ -1469,7 +1469,7 @@ static void string(Compiler* compiler)
         parser->previous_token.length - 2,
         compiler->vm
     );
-    emit_constant(OBJECT_VAL(_string), compiler);
+    emit_constant(OBJECT_VALUE(_string), compiler);
   });
 }
 

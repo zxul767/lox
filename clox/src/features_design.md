@@ -43,8 +43,8 @@ Throughout various chapters of [the book](https://craftinginterpreters.com/), a 
 As it turns out, this apparently useless pattern is crucial for the correct operation of the garbage collector (GC). Consider the following snippet taken from `clox` (as originally implemented in the book):
 
 ```c
-push_value(OBJECT_VAL(string__copy(name, (int)strlen(name), vm)), vm);
-push_value(OBJECT_VAL(_class), vm);
+push_value(OBJECT_VALUE(string__copy(name, (int)strlen(name), vm)), vm);
+push_value(OBJECT_VALUE(_class), vm);
 
 table__set(
     &vm->global_vars, AS_STRING(vm->value_stack[0]), vm->value_stack[1]);
@@ -72,7 +72,7 @@ Consider how the previous snippet would be written using this idea:
 memory__open_object_nursery(vm);
 
 ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
-table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
+table__set(&vm->global_vars, class_name, OBJECT_VALUE(_class));
 
 memory__close_object_nursery(vm);
 ```
@@ -96,7 +96,7 @@ With this macro, the previous snippet is turned into the more palatable (and muc
 ```c
 WITH_OBJECTS_NURSERY(vm, {
   ObjectString* class_name = string__copy(name, (int)strlen(name), vm);
-  table__set(&vm->global_vars, class_name, OBJECT_VAL(_class));
+  table__set(&vm->global_vars, class_name, OBJECT_VALUE(_class));
 });
 ```
 
