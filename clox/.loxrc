@@ -1,2 +1,2 @@
 #:enable-tracing
-:show-bytecode
+#:show-bytecode
