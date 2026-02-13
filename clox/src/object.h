@@ -88,11 +88,23 @@ struct Object {
 
 typedef Value (*NativeFunction)(int args_count, Value* args);
 
+typedef struct CallableParameter {
+  const char* name;
+  const char* type;
+} CallableParameter;
+
+typedef struct CallableSignature {
+  ObjectString* name;
+  int arity;
+  const CallableParameter* parameters;
+  const char* return_type;
+} CallableSignature;
+
 typedef struct ObjectCallable {
   Object object;
 
-  ObjectString* name;
-  int arity;
+  CallableSignature signature;
+  ObjectString* docstring;
 
 } ObjectCallable;
 
@@ -183,7 +195,8 @@ ObjectBoundMethod* bound_method__new(Value instance, Value method, VM* vm);
 ObjectClosure* closure__new(ObjectFunction*, VM* vm);
 ObjectFunction* function__new(VM* vm);
 ObjectNativeFunction* native_function__new(
-    NativeFunction function, ObjectString* name, int arity, VM* vm);
+    NativeFunction function, ObjectString* name,
+    const CallableSignature* signature, const char* docstring, VM* vm);
 ObjectUpvalue* upvalue__new(Value* slot, VM* vm);
 
 ObjectString* string__copy(const char* chars, int length, VM* vm);

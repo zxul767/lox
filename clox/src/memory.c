@@ -282,7 +282,8 @@ static void mark_object_references(Object* object)
   }
   case OBJECT_FUNCTION: {
     ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->signature.name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->docstring);
     value_array__mark_as_alive(&function->bytecode.constants);
     break;
   }
@@ -301,8 +302,9 @@ static void mark_object_references(Object* object)
     memory__mark_value_as_alive(((ObjectUpvalue*)object)->closed);
     break;
   case OBJECT_NATIVE_FUNCTION: {
-    ObjectFunction* function = (ObjectFunction*)object;
-    memory__mark_object_as_alive((Object*)AS_CALLABLE(function)->name);
+    ObjectNativeFunction* native = (ObjectNativeFunction*)object;
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(native)->signature.name);
+    memory__mark_object_as_alive((Object*)AS_CALLABLE(native)->docstring);
   } break;
   case OBJECT_STRING:
     // a string has no references to other objects which are only reachable

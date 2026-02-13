@@ -15,8 +15,7 @@
 
 inline int callframe__current_offset(const CallFrame* frame)
 {
-  return frame->instruction_pointer -
-         frame->closure->function->bytecode.instructions;
+  return frame->instruction_pointer - frame->closure->function->bytecode.instructions;
 }
 
 static inline CallFrame* top_frame(VM* vm)
@@ -38,7 +37,10 @@ static void push_new_frame(ObjectClosure* closure, int args_count, VM* vm)
   frame->slots = vm->stack_free_slot - (args_count + 1);
 }
 
-static inline void pop_frame(VM* vm) { vm->frames_count--; }
+static inline void pop_frame(VM* vm)
+{
+  vm->frames_count--;
+}
 
 static inline void discard_frame_window(VM* vm, const CallFrame* frame)
 {
@@ -80,7 +82,10 @@ static inline void push_value(Value value, VM* vm)
   vm->stack_free_slot++;
 }
 
-void vm__push(Value value, VM* vm) { push_value(value, vm); }
+void vm__push(Value value, VM* vm)
+{
+  push_value(value, vm);
+}
 
 static inline Value pop_value(VM* vm)
 {
@@ -88,7 +93,10 @@ static inline Value pop_value(VM* vm)
   return *(vm->stack_free_slot);
 }
 
-void vm__pop(VM* vm) { pop_value(vm); }
+void vm__pop(VM* vm)
+{
+  pop_value(vm);
+}
 
 static inline Value peek_value(int distance, const VM* vm)
 {
@@ -96,7 +104,10 @@ static inline Value peek_value(int distance, const VM* vm)
   return vm->stack_free_slot[-1 - distance];
 }
 
-Value vm__peek(int distance, VM* vm) { return peek_value(distance, vm); }
+Value vm__peek(int distance, VM* vm)
+{
+  return peek_value(distance, vm);
+}
 
 static void define_native_class(const char* name, ObjectClass* _class, VM* vm)
 {
@@ -107,13 +118,20 @@ static void define_native_class(const char* name, ObjectClass* _class, VM* vm)
 }
 
 static void define_native_function(
-    const char* name, int arity, NativeFunction function, VM* vm)
+    const char* name,
+    NativeFunction function,
+    const CallableSignature* signature,
+    const char* docstring,
+    VM* vm
+)
 {
   WITH_OBJECTS_NURSERY(vm, {
-    ObjectString* function_name = string__copy(name, (int)strlen(name), vm);
+    ObjectString* _name = string__copy(name, (int)strlen(name), vm);
     table__set(
-        &vm->global_vars, function_name,
-        OBJECT_VAL(native_function__new(function, function_name, arity, vm)));
+        &vm->global_vars,
+        _name,
+        OBJECT_VAL(native_function__new(function, _name, signature, docstring, vm))
+    );
   });
 }
 
@@ -122,19 +140,57 @@ static void define_native_function(
 // invariant that the nursery must alway be a prefix of the objects list.
 void vm__reset_objects_list_head(VM* vm, Object* new_head)
 {
-  vm->objects = new_head;
-  vm->object_nursery_end = new_head;
   // NOTE: `vm->object_nursery_nested_scopes` is not reset because that would
   // cause trouble when `memory__close_object_nursery` is called to close open
   // "nursery scopes"
+  vm->objects = new_head;
+  vm->object_nursery_end = new_head;
 }
 
 static void init_stdlib(VM* vm)
 {
-  // standard library
-  define_native_function("clock", 0, clock_native, vm);
-  define_native_function("print", 1, print, vm);
-  define_native_function("println", 1, println, vm);
+  // clock() -> number
+  static const CallableSignature clock_signature =
+      {.name = NULL, .arity = 0, .parameters = NULL, .return_type = "number"};
+  define_native_function(
+      "clock",
+      clock_native,
+      &clock_signature,
+      "Returns elapsed process time in seconds.",
+      vm
+  );
+  // print(arg) -> nil
+  static const CallableParameter print_parameters[] = {{"value", "any"}};
+  static const CallableSignature print_signature =
+      {.name = NULL, .arity = 1, .parameters = print_parameters, .return_type = "nil"};
+  define_native_function(
+      "print",
+      print,
+      &print_signature,
+      "Prints a value without a trailing newline.",
+      vm
+  );
+  // println(arg) -> nil
+  static const CallableSignature println_signature =
+      {.name = NULL, .arity = 1, .parameters = print_parameters, .return_type = "nil"};
+  define_native_function(
+      "println",
+      println,
+      &println_signature,
+      "Prints a value followed by a newline.",
+      vm
+  );
+  // help(arg) -> nil
+  static const CallableParameter help_parameters[] = {{"object", "any"}};
+  static const CallableSignature help_signature =
+      {.name = NULL, .arity = 1, .parameters = help_parameters, .return_type = "nil"};
+  define_native_function(
+      "help",
+      help,
+      &help_signature,
+      "Shows details for values, and signature/docs for callables when available.",
+      vm
+  );
 
   WITH_OBJECTS_NURSERY(vm, {
     define_native_class("list", lox_list__new_class("list", vm), vm);
@@ -183,10 +239,15 @@ void vm__dispose(VM* vm)
 
 static bool is_valid_call(ObjectCallable* callable, int args_count, VM* vm)
 {
-  if (args_count != callable->arity) {
+  int arity = callable->signature.arity;
+  if (args_count != arity) {
     runtime_error(
-        vm, "Expected %d argument%s but got %d", callable->arity,
-        callable->arity == 1 ? "" : "s", args_count);
+        vm,
+        "Expected %d argument%s but got %d",
+        arity,
+        arity == 1 ? "" : "s",
+        args_count
+    );
     return false;
   }
   if (vm->frames_count == FRAMES_MAX) {
@@ -247,8 +308,8 @@ static bool call_native(ObjectNativeFunction* native, int args_count, VM* vm)
   // where k = args_count, and `this` is the method's instance
 
   int include_this_arg = native->is_method ? 1 : 0;
-  Value result = native->function(
-      args_count, vm->stack_free_slot - args_count - include_this_arg);
+  Value result =
+      native->function(args_count, vm->stack_free_slot - args_count - include_this_arg);
 
   // +1 to clobber the native function or instance with the call's result
   vm->stack_free_slot -= args_count + 1;
@@ -270,8 +331,7 @@ static bool call_value(Value callee, int args_count, VM* vm)
     }
     case OBJECT_CLASS: {
       ObjectClass* _class = AS_CLASS(callee);
-      vm->stack_free_slot[-args_count - 1] =
-          OBJECT_VAL(_class->new_instance(_class, vm));
+      vm->stack_free_slot[-args_count - 1] = OBJECT_VAL(_class->new_instance(_class, vm));
 
       Value initializer;
       if (table__get(&_class->methods, vm->init_string, &initializer)) {
@@ -305,7 +365,10 @@ static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
     return false;
   }
   ObjectBoundMethod* bound = bound_method__new(
-      /* instance: */ peek_value(0, vm), method, vm);
+      /* instance: */ peek_value(0, vm),
+      method,
+      vm
+  );
   pop_value(vm); // we no longer need the instance around
   push_value(OBJECT_VAL(bound), vm);
 
@@ -393,24 +456,23 @@ static InterpretResult run(VM* vm)
 
 #define READ_BYTE() (*frame->instruction_pointer++)
 
-#define READ_SHORT()                                                           \
-  (frame->instruction_pointer += 2,                                            \
+#define READ_SHORT()                                                                     \
+  (frame->instruction_pointer += 2,                                                      \
    ((frame->instruction_pointer[-2] << 8) | (frame->instruction_pointer[-1])))
 
-#define READ_CONSTANT()                                                        \
-  (frame->closure->function->bytecode.constants.values[READ_BYTE()])
+#define READ_CONSTANT() (frame->closure->function->bytecode.constants.values[READ_BYTE()])
 
 #define READ_STRING() AS_STRING(READ_CONSTANT())
 
-#define BINARY_OP(value_type, op)                                              \
-  do {                                                                         \
-    if (!IS_NUMBER(peek_value(0, vm)) || !IS_NUMBER(peek_value(1, vm))) {      \
-      runtime_error(vm, "Operands must be numbers.");                          \
-      return INTERPRET_RUNTIME_ERROR;                                          \
-    }                                                                          \
-    double b = AS_NUMBER(pop_value(vm));                                       \
-    double a = AS_NUMBER(pop_value(vm));                                       \
-    push_value(value_type(a op b), vm);                                        \
+#define BINARY_OP(value_type, op)                                                        \
+  do {                                                                                   \
+    if (!IS_NUMBER(peek_value(0, vm)) || !IS_NUMBER(peek_value(1, vm))) {                \
+      runtime_error(vm, "Operands must be numbers.");                                    \
+      return INTERPRET_RUNTIME_ERROR;                                                    \
+    }                                                                                    \
+    double b = AS_NUMBER(pop_value(vm));                                                 \
+    double a = AS_NUMBER(pop_value(vm));                                                 \
+    push_value(value_type(a op b), vm);                                                  \
   } while (false)
 
   for (;;) {
@@ -419,7 +481,8 @@ static InterpretResult run(VM* vm)
       debug__dump_value_stack(vm, /* from: */ frame->slots);
       debug__disassemble_instruction(
           &frame->closure->function->bytecode,
-          callframe__current_offset(frame));
+          callframe__current_offset(frame)
+      );
       fprintf(stderr, "\n");
     }
 #endif

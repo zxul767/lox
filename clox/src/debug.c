@@ -257,10 +257,10 @@ void debug__dump_stacktrace(const VM* vm)
     int line = get_current_source_line_in_frame(frame, vm);
     fprintf(stderr, "[line %d] in ", line);
 
-    if (function->name == NULL) {
+    if (function->signature.name == NULL) {
       fprintf(stderr, "script\n");
     } else {
-      fprintf(stderr, "%s()\n", function->name->chars);
+      fprintf(stderr, "%s()\n", function->signature.name->chars);
     }
   }
 }
@@ -270,7 +270,7 @@ void debug__show_callframe_names(const VM* vm)
   fprintf(stderr, "CALL STACK: ");
   for (int i = 0; i < vm->frames_count; i++) {
     const CallFrame* frame = &vm->frames[i];
-    ObjectString* name = AS_CALLABLE(frame->closure->function)->name;
+    ObjectString* name = AS_CALLABLE(frame->closure->function)->signature.name;
     if (i > 0) {
       fprintf(stderr, " > ");
     }

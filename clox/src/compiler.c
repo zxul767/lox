@@ -889,7 +889,8 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
     debug__disassemble(
         current_bytecode(compiler),
-        callable->name != NULL ? callable->name->chars : NULL);
+        callable->signature.name != NULL ? callable->signature.name->chars
+                                         : NULL);
     putchar('\n');
   }
 #endif
@@ -902,17 +903,41 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
 
 static void function_parameters(Compiler* compiler)
 {
-  ObjectCallable* callable =
-      AS_CALLABLE(compiler->current_fn_compiler->function);
+  ObjectCallable* callable = AS_CALLABLE(compiler->current_fn_compiler->function);
   do {
-    callable->arity++;
-    if (callable->arity > 255) {
+    callable->signature.arity++;
+    if (callable->signature.arity > 255) {
       error_at_current("Can't have more than 255 parameters", compiler->parser);
     }
     uint8_t index = declare_variable("Expected parameters name.", compiler);
     define_variable(index, compiler);
 
   } while (match(TOKEN_COMMA, compiler->parser));
+}
+
+// If the first statement in a function body is a standalone string literal,
+// treat it as documentation metadata for `help()`.
+static void maybe_parse_function_docstring(Compiler* compiler)
+{
+  Parser* parser = compiler->parser;
+  if (!check(TOKEN_STRING, parser)) {
+    return;
+  }
+
+  advance(parser);
+  Token docstring_token = parser->previous_token;
+
+  if (!optional_semicolon(parser)) {
+    error_at_current("Expected ';' after function docstring.", parser);
+    return;
+  }
+
+  WITH_OBJECTS_NURSERY(compiler->vm, {
+    AS_CALLABLE(compiler->current_fn_compiler->function)->docstring =
+        string__copy(
+            docstring_token.start + 1, docstring_token.length - 2,
+            compiler->vm);
+  });
 }
 
 static void start_function_compilation(
@@ -926,7 +951,7 @@ static void start_function_compilation(
   compiler->current_fn_compiler = current_fn_compiler;
 
   if (function_type != TYPE_SCRIPT) {
-    AS_CALLABLE(current_fn_compiler->function)->name = string__copy(
+    AS_CALLABLE(current_fn_compiler->function)->signature.name = string__copy(
         compiler->parser->previous_token.start,
         compiler->parser->previous_token.length, compiler->vm);
   }
@@ -953,6 +978,7 @@ static void function(FunctionType type, Compiler* compiler)
   // function body
   consume(
       TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser);
+  maybe_parse_function_docstring(compiler);
   block(compiler);
 
   ObjectFunction* function = finish_function_compilation(compiler);

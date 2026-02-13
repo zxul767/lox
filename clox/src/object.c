@@ -204,8 +204,11 @@ ObjectFunction* function__new(VM* vm)
       ALLOCATE_OBJECT(ObjectFunction, OBJECT_FUNCTION, vm);
 
   ObjectCallable* callable = AS_CALLABLE(function);
-  callable->name = NULL;
-  callable->arity = 0;
+  callable->signature.name = NULL;
+  callable->signature.arity = 0;
+  callable->signature.parameters = NULL;
+  callable->signature.return_type = "any";
+  callable->docstring = NULL;
 
   function->upvalues_count = 0;
   bytecode__init(&function->bytecode);
@@ -214,14 +217,18 @@ ObjectFunction* function__new(VM* vm)
 }
 
 ObjectNativeFunction* native_function__new(
-    NativeFunction primitive, ObjectString* name, int arity, VM* vm)
+    NativeFunction primitive, ObjectString* name,
+    const CallableSignature* signature, const char* docstring, VM* vm)
 {
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
 
   ObjectCallable* callable = AS_CALLABLE(native);
-  callable->name = name;
-  callable->arity = arity;
+  callable->signature = *signature;
+  callable->signature.name = name;
+  callable->docstring = docstring != NULL
+      ? string__copy(docstring, (int)strlen(docstring), vm)
+      : NULL;
 
   native->function = primitive;
   native->is_method = false;
@@ -232,11 +239,11 @@ ObjectNativeFunction* native_function__new(
 static void print_function(const ObjectFunction* function)
 {
   ObjectCallable* callable = AS_CALLABLE(function);
-  if (callable->name == NULL) {
+  if (callable->signature.name == NULL) {
     fprintf(stderr, "<script>");
     return;
   }
-  fprintf(stderr, "<fn %s>", callable->name->chars);
+  fprintf(stderr, "<fn %s>", callable->signature.name->chars);
 }
 
 void object__print(Value value)
