@@ -164,13 +164,20 @@ static void error_at(const Token* token, const char* message, Parser* parser)
   } else if (token->type == TOKEN_ERROR) {
     if (parser->previous_token.type != TOKEN_BOF)
       fprintf(
-          stderr, " after '%.*s'", parser->previous_token.length,
-          parser->previous_token.start);
+          stderr,
+          " after '%.*s'",
+          parser->previous_token.length,
+          parser->previous_token.start
+      );
 
   } else {
     fprintf(
-        stderr, " at '%.*s' [%s]", token->length, token->start,
-        TOKEN_TO_STRING[token->type]);
+        stderr,
+        " at '%.*s' [%s]",
+        token->length,
+        token->start,
+        TOKEN_TO_STRING[token->type]
+    );
   }
   fprintf(stderr, ": %s\n", message);
 }
@@ -192,8 +199,7 @@ static inline Bytecode* current_bytecode(Compiler* compiler)
 
 static uint8_t store_constant(Value value, Compiler* compiler)
 {
-  int index =
-      bytecode__store_constant(current_bytecode(compiler), value, compiler->vm);
+  int index = bytecode__store_constant(current_bytecode(compiler), value, compiler->vm);
   if (index >= UINT8_MAX) {
     error("Too many constants in bytecode block", compiler->parser);
     return UINT8_MAX;
@@ -206,9 +212,9 @@ static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
   uint8_t index = -1;
   WITH_OBJECTS_NURSERY(compiler->vm, {
     index = store_constant(
-        OBJECT_VAL(
-            string__copy(identifier->start, identifier->length, compiler->vm)),
-        compiler);
+        OBJECT_VAL(string__copy(identifier->start, identifier->length, compiler->vm)),
+        compiler
+    );
   });
   return index;
 }
@@ -216,7 +222,10 @@ static uint8_t store_identifier_constant(Token* identifier, Compiler* compiler)
 static void emit_byte(uint8_t byte, Compiler* compiler)
 {
   bytecode__append(
-      current_bytecode(compiler), byte, compiler->parser->previous_token.line);
+      current_bytecode(compiler),
+      byte,
+      compiler->parser->previous_token.line
+  );
 }
 
 static void emit_bytes(uint8_t byte1, uint8_t byte2, Compiler* compiler)
@@ -421,8 +430,7 @@ static void expression(Compiler* compiler)
   parse_only(/*min_precedence:*/ PREC_ASSIGNMENT, compiler);
 }
 
-static void
-pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
+static void pop_all_accessible_locals_in_scope(Compiler* compiler, int scope_depth)
 {
   FunctionCompiler* current = compiler->current_fn_compiler;
   while (current->locals_count > 0) {
@@ -448,9 +456,7 @@ static int resolve_local(Token* name, FunctionCompiler* current)
     if (identifier__equals(name, &local->name)) {
       // -1 means "declared but not initialized yet"
       if (local->scope_depth == -1) {
-        error(
-            "Can't read local variable in its own initializer.",
-            current->parser);
+        error("Can't read local variable in its own initializer.", current->parser);
       }
       return i;
     }
@@ -458,8 +464,7 @@ static int resolve_local(Token* name, FunctionCompiler* current)
   return -1;
 }
 
-static int
-add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
+static int add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
 {
   int upvalues_count = current->function->upvalues_count;
   for (int i = 0; i < upvalues_count; i++) {
@@ -469,8 +474,7 @@ add_or_get_upvalue(FunctionCompiler* current, uint8_t index, bool is_local)
     }
   }
   if (upvalues_count == UINT8_COUNT) {
-    error(
-        "Too many captured (closure) variables in function.", current->parser);
+    error("Too many captured (closure) variables in function.", current->parser);
   }
   current->upvalues[upvalues_count].is_local = is_local;
   current->upvalues[upvalues_count].index = index;
@@ -583,8 +587,7 @@ static void named_variable_or_assignment(Token name, Compiler* compiler)
     get_op = OP_GET_LOCAL;
     set_op = OP_SET_LOCAL;
 
-  } else if (
-      (index = resolve_upvalue(&name, compiler->current_fn_compiler)) != -1) {
+  } else if ((index = resolve_upvalue(&name, compiler->current_fn_compiler)) != -1) {
     get_op = OP_GET_UPVALUE;
     set_op = OP_SET_UPVALUE;
 
@@ -739,8 +742,7 @@ check_duplicate_declaration(const Token* name, const FunctionCompiler* current)
       break;
     }
     if (identifier__equals(name, &local->name)) {
-      error(
-          "Already a variable with this name in this scope.", current->parser);
+      error("Already a variable with this name in this scope.", current->parser);
     }
   }
 }
@@ -783,12 +785,11 @@ static uint8_t declare_variable(const char* error_message, Compiler* compiler)
 
 static bool has_implicit_semicolon(Parser* parser)
 {
-  bool result =
-      parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
-      parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT ||
-      // handles non-empty "returns": `{ ... last_statement }`
-      parser->current_token.type == TOKEN_RIGHT_BRACE ||
-      parser->current_token.type == TOKEN_EOF;
+  bool result = parser->immediately_prior_newline.type == TOKEN_NEWLINE ||
+                parser->immediately_prior_newline.type == TOKEN_MULTILINE_COMMENT ||
+                // handles non-empty "returns": `{ ... last_statement }`
+                parser->current_token.type == TOKEN_RIGHT_BRACE ||
+                parser->current_token.type == TOKEN_EOF;
 
   return result;
 }
@@ -817,8 +818,7 @@ static void var_declaration(Compiler* compiler)
     emit_byte(OP_NIL, compiler);
   }
   if (!optional_semicolon(compiler->parser)) {
-    error_at_current(
-        "Expected ';' after variable's declaration", compiler->parser);
+    error_at_current("Expected ';' after variable's declaration", compiler->parser);
   }
   define_variable(index, compiler);
 }
@@ -841,8 +841,12 @@ reserve_local_for_callee(FunctionCompiler* compiler, FunctionType function_type)
 }
 
 static void function_compiler__init(
-    FunctionCompiler* fn_compiler, FunctionType function_type,
-    FunctionCompiler* enclosing_compiler, Parser* parser, VM* vm)
+    FunctionCompiler* fn_compiler,
+    FunctionType function_type,
+    FunctionCompiler* enclosing_compiler,
+    Parser* parser,
+    VM* vm
+)
 {
   fn_compiler->enclosing_compiler = enclosing_compiler;
   fn_compiler->function_type = function_type;
@@ -865,13 +869,15 @@ static void begin_scope(Compiler* compiler)
 static void end_scope(Compiler* compiler)
 {
   pop_all_accessible_locals_in_scope(
-      compiler, compiler->current_fn_compiler->scope_depth);
+      compiler,
+      compiler->current_fn_compiler->scope_depth
+  );
   compiler->current_fn_compiler->scope_depth--;
 }
 
 static void block(Compiler* compiler)
 {
-  while (!check(TOKEN_RIGHT_BRACE, compiler->parser) &
+  while (!check(TOKEN_RIGHT_BRACE, compiler->parser) &&
          !check(TOKEN_EOF, compiler->parser)) {
     declaration(compiler);
   }
@@ -889,14 +895,13 @@ static ObjectFunction* finish_function_compilation(Compiler* compiler)
   if (!compiler->parser->had_error && compiler->vm->show_bytecode) {
     debug__disassemble(
         current_bytecode(compiler),
-        callable->signature.name != NULL ? callable->signature.name->chars
-                                         : NULL);
+        callable->signature.name != NULL ? callable->signature.name->chars : NULL
+    );
     putchar('\n');
   }
 #endif
 
-  compiler->current_fn_compiler =
-      compiler->current_fn_compiler->enclosing_compiler;
+  compiler->current_fn_compiler = compiler->current_fn_compiler->enclosing_compiler;
 
   return function;
 }
@@ -934,26 +939,29 @@ static void maybe_parse_function_docstring(Compiler* compiler)
 
   WITH_OBJECTS_NURSERY(compiler->vm, {
     AS_CALLABLE(compiler->current_fn_compiler->function)->docstring =
-        string__copy(
-            docstring_token.start + 1, docstring_token.length - 2,
-            compiler->vm);
+        string__copy(docstring_token.start + 1, docstring_token.length - 2, compiler->vm);
   });
 }
 
 static void start_function_compilation(
-    Compiler* compiler, FunctionCompiler* current_fn_compiler,
-    FunctionType function_type)
+    Compiler* compiler, FunctionCompiler* current_fn_compiler, FunctionType function_type
+)
 {
   function_compiler__init(
-      current_fn_compiler, function_type,
-      /* enclosing_compiler: */ compiler->current_fn_compiler, compiler->parser,
-      compiler->vm);
+      current_fn_compiler,
+      function_type,
+      /* enclosing_compiler: */ compiler->current_fn_compiler,
+      compiler->parser,
+      compiler->vm
+  );
   compiler->current_fn_compiler = current_fn_compiler;
 
   if (function_type != TYPE_SCRIPT) {
     AS_CALLABLE(current_fn_compiler->function)->signature.name = string__copy(
         compiler->parser->previous_token.start,
-        compiler->parser->previous_token.length, compiler->vm);
+        compiler->parser->previous_token.length,
+        compiler->vm
+    );
   }
 }
 
@@ -967,23 +975,19 @@ static void function(FunctionType type, Compiler* compiler)
   begin_scope(compiler);
 
   // function parameters
-  consume(
-      TOKEN_LEFT_PAREN, "Expected '(' after function name.", compiler->parser);
+  consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.", compiler->parser);
   if (!check(TOKEN_RIGHT_PAREN, compiler->parser)) {
     function_parameters(compiler);
   }
-  consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after parameters.", compiler->parser);
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameters.", compiler->parser);
 
   // function body
-  consume(
-      TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser);
+  consume(TOKEN_LEFT_BRACE, "Expected '{' before function body.", compiler->parser);
   maybe_parse_function_docstring(compiler);
   block(compiler);
 
   ObjectFunction* function = finish_function_compilation(compiler);
-  emit_bytes(
-      OP_NEW_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
+  emit_bytes(OP_NEW_CLOSURE, store_constant(OBJECT_VAL(function), compiler), compiler);
 
   for (int i = 0; i < function->upvalues_count; i++) {
     emit_byte(fn_compiler.upvalues[i].is_local ? 1 : 0, compiler);
@@ -998,7 +1002,9 @@ static void method(Compiler* compiler)
   FunctionType type = TYPE_METHOD;
   // the `__init__` method
   if (string__equals_token(
-          compiler->vm->init_string, &compiler->parser->previous_token)) {
+          compiler->vm->init_string,
+          &compiler->parser->previous_token
+      )) {
     type = TYPE_INITIALIZER;
   }
   function(type, compiler);
@@ -1032,8 +1038,7 @@ static void class_declaration(Compiler* compiler)
   // we no longer need the class on the stack
   emit_byte(OP_POP, compiler);
 
-  compiler->current_class_compiler =
-      compiler->current_class_compiler->enclosing_compiler;
+  compiler->current_class_compiler = compiler->current_class_compiler->enclosing_compiler;
 }
 
 static void fun_declaration(Compiler* compiler)
@@ -1143,8 +1148,7 @@ static void expression_statement(Compiler* compiler)
 
   // for the benefit of the REPL, we will automatically print the value of the
   // last expression (which would be otherwise lost)
-  if (check(TOKEN_EOF, parser) &&
-      compiler->vm->execution_mode == VM_REPL_MODE) {
+  if (check(TOKEN_EOF, parser) && compiler->vm->execution_mode == VM_REPL_MODE) {
     emit_byte(OP_PRINTLN, compiler);
 
   } else {
@@ -1192,9 +1196,7 @@ static void for_statement(Compiler* compiler)
   int exit_jump_offset = -1;
   if (!match(TOKEN_SEMICOLON, compiler->parser)) {
     expression(compiler);
-    consume(
-        TOKEN_SEMICOLON, "Expected ';' after loop condition.",
-        compiler->parser);
+    consume(TOKEN_SEMICOLON, "Expected ';' after loop condition.", compiler->parser);
     // jump out of the loop if the condition is false
     exit_jump_offset = emit_placeholder_jump(OP_JUMP_IF_FALSE, compiler);
     emit_byte(OP_POP, compiler); // pop condition before executing body
@@ -1214,9 +1216,7 @@ static void for_statement(Compiler* compiler)
     // compile increment expression
     expression(compiler);
     emit_byte(OP_POP, compiler); // discard increment expression
-    consume(
-        TOKEN_RIGHT_PAREN, "Expected ')' after 'for' clauses",
-        compiler->parser);
+    consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' clauses", compiler->parser);
 
     // go back to the start of the loop (the condition clause)
     emit_loop(loop_start_offset, compiler);
@@ -1385,7 +1385,9 @@ static void binary(Compiler* compiler)
   // see https://craftinginterpreters.com/compiling-expressions.html for more
   // details
   parse_only(
-      /*min_precedence:*/ (Precedence)(rule->precedence + 1), compiler);
+      /*min_precedence:*/ (Precedence)(rule->precedence + 1),
+      compiler
+  );
 
   switch (operator_type) {
   case TOKEN_BANG_EQUAL:
@@ -1431,11 +1433,9 @@ static void call(Compiler* compiler)
 
 static void dot(Compiler* compiler)
 {
-  consume(
-      TOKEN_IDENTIFIER, "Expected property name after '.'.", compiler->parser);
+  consume(TOKEN_IDENTIFIER, "Expected property name after '.'.", compiler->parser);
 
-  uint8_t index =
-      store_identifier_constant(&compiler->parser->previous_token, compiler);
+  uint8_t index = store_identifier_constant(&compiler->parser->previous_token, compiler);
 
   if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
     expression(compiler);
@@ -1449,16 +1449,14 @@ static void dot(Compiler* compiler)
 static void grouping(Compiler* compiler)
 {
   expression(compiler);
-  consume(
-      TOKEN_RIGHT_PAREN, "Expected ')' after expression.", compiler->parser);
+  consume(TOKEN_RIGHT_PAREN, "Expected ')' after expression.", compiler->parser);
 }
 
 static void number(Compiler* compiler)
 {
   // if `residue: char**` is non-null, `strtod` sets it to point to the rest
   // of the string which couldn't be parsed as a double.
-  double value =
-      strtod(compiler->parser->previous_token.start, /*residue:*/ NULL);
+  double value = strtod(compiler->parser->previous_token.start, /*residue:*/ NULL);
   emit_constant(NUMBER_VAL(value), compiler);
 }
 
@@ -1467,8 +1465,10 @@ static void string(Compiler* compiler)
   Parser* parser = compiler->parser;
   WITH_OBJECTS_NURSERY(compiler->vm, {
     ObjectString* _string = string__copy(
-        parser->previous_token.start + 1, parser->previous_token.length - 2,
-        compiler->vm);
+        parser->previous_token.start + 1,
+        parser->previous_token.length - 2,
+        compiler->vm
+    );
     emit_constant(OBJECT_VAL(_string), compiler);
   });
 }
@@ -1500,8 +1500,8 @@ static void parser__init(Parser* parser, const char* source_code)
 }
 
 static void compiler__init(
-    Compiler* compiler, Parser* parser, FunctionCompiler* current_fn_compiler,
-    VM* vm)
+    Compiler* compiler, Parser* parser, FunctionCompiler* current_fn_compiler, VM* vm
+)
 {
   compiler->vm = vm;
   compiler->parser = parser;
@@ -1519,8 +1519,12 @@ ObjectFunction* compiler__compile(const char* source_code, VM* vm)
 
   FunctionCompiler current_fn_compiler;
   function_compiler__init(
-      &current_fn_compiler, TYPE_SCRIPT, /* enclosing_compiler: */ NULL,
-      &parser, vm);
+      &current_fn_compiler,
+      TYPE_SCRIPT,
+      /* enclosing_compiler: */ NULL,
+      &parser,
+      vm
+  );
 
   Compiler compiler;
   compiler__init(&compiler, &parser, &current_fn_compiler, vm);
@@ -1583,7 +1587,10 @@ ParseRule rules[] = {
 };
 /* clang-format on */
 
-static ParseRule* get_parse_rule(TokenType type) { return &rules[type]; }
+static ParseRule* get_parse_rule(TokenType type)
+{
+  return &rules[type];
+}
 
 void compiler__mark_roots(FunctionCompiler* current)
 {
