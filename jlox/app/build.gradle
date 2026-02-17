@@ -8,6 +8,8 @@
 import dev.zxul767.parsing.astgen.GenerateAst
 
 plugins {
+   id 'java'
+   id 'com.diffplug.spotless' version '8.2.1'
     // Build self-contained applications as "fat" jars
    id 'com.github.johnrengelman.shadow' version '7.1.2'
     // Apply the application plugin to add support for building a CLI application in Java.
@@ -28,6 +30,19 @@ dependencies {
     // Provide shell-like capabilities (editing, command history search, etc.) for a more
     // powerful REPL experience
     implementation 'org.jline:jline:3.17.0'
+}
+
+spotless {
+  java {
+    // auto-generated code in the `build` folder does not need to comply
+    targetExclude 'build/**'
+
+    googleJavaFormat()
+    importOrder()
+    removeUnusedImports()
+    trimTrailingWhitespace()
+    endWithNewline()
+  }
 }
 
 application {

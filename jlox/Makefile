@@ -26,5 +26,8 @@ watch:
 repl: main
 	@java -jar $(MAIN_TARGET)
 
+format:
+	@./gradlew spotlessApply
+
 clean:
 	@./gradlew clean
