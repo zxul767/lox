@@ -19,7 +19,7 @@ import java.util.Stack;
 // We also piggyback error reporting for simple situations such as illegal
 // variable shadowing, redeclaration of local variables, or `return`
 // statements outside function bodies. This is not the best in terms
-// of separation of concerns, but traversing the AST is costly so we
+// of separation of concerns, but traversing the AST is expensive so we
 // try to avoid multiple passes.
 //
 // That said, if we ever add something more complicated (or if this
@@ -28,9 +28,23 @@ import java.util.Stack;
 // an additional traversal.
 //
 public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
-  private enum VarResolution { DECLARED, DEFINED }
-  private enum FunctionType { NONE, FUNCTION, INITIALIZER, METHOD }
-  private enum ClassType { NONE, CLASS, SUBCLASS }
+  private enum VarResolution {
+    DECLARED,
+    DEFINED
+  }
+
+  private enum FunctionType {
+    NONE,
+    FUNCTION,
+    INITIALIZER,
+    METHOD
+  }
+
+  private enum ClassType {
+    NONE,
+    CLASS,
+    SUBCLASS
+  }
 
   // We need the interpreter to communicate to it information about the
   // declaring scopes for each variable reference in the AST.
@@ -51,15 +65,23 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   // resolver to detect invalid uses as well.
   private ClassType currentClass = ClassType.NONE;
 
-  public Resolver(Interpreter interpreter) { this.interpreter = interpreter; }
+  public Resolver(Interpreter interpreter) {
+    this.interpreter = interpreter;
+  }
 
   public void resolve(List<Stmt> statements) {
     for (Stmt statement : statements) {
       resolve(statement);
     }
   }
-  private void resolve(Stmt stmt) { stmt.accept(this); }
-  private void resolve(Expr expr) { expr.accept(this); }
+
+  private void resolve(Stmt stmt) {
+    stmt.accept(this);
+  }
+
+  private void resolve(Expr expr) {
+    expr.accept(this);
+  }
 
   // This is the only function that actually "resolves" things
   // all other "resolve" functions simply traverse the AST or
@@ -75,8 +97,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     }
   }
 
-  private void
-  resolveFunction(Stmt.Function function, FunctionType functionType) {
+  private void resolveFunction(Stmt.Function function, FunctionType functionType) {
     FunctionType enclosingFunction = currentFunction;
     currentFunction = functionType;
 
@@ -94,11 +115,12 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     scopes.push(new HashMap<String, VarResolution>());
   }
 
-  private void endScope() { scopes.pop(); }
+  private void endScope() {
+    scopes.pop();
+  }
 
   private void declare(Token name) {
-    if (scopes.isEmpty())
-      return;
+    if (scopes.isEmpty()) return;
     Map<String, VarResolution> scope = scopes.peek();
     if (scope.containsKey(name.lexeme)) {
       Errors.error(name, "Already a variable with this name in this scope.");
@@ -107,8 +129,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   }
 
   private void define(Token name) {
-    if (scopes.isEmpty())
-      return;
+    if (scopes.isEmpty()) return;
     scopes.peek().put(name.lexeme, VarResolution.DEFINED);
   }
 
@@ -127,11 +148,9 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitClassStmt(Stmt.Class statement) {
-    if (statement.superclass != null &&
-        statement.name.lexeme.equals(statement.superclass.name.lexeme)) {
-      Errors.error(
-          statement.superclass.name, "A class can't inherit from itself."
-      );
+    if (statement.superclass != null
+        && statement.name.lexeme.equals(statement.superclass.name.lexeme)) {
+      Errors.error(statement.superclass.name, "A class can't inherit from itself.");
     }
 
     ClassType enclosingClass = currentClass;
@@ -324,9 +343,7 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
     if (currentClass == ClassType.NONE) {
       Errors.error(expr.keyword, "Can't use 'super' outside of class.");
     } else if (currentClass != ClassType.SUBCLASS) {
-      Errors.error(
-          expr.keyword, "Can't use 'super' in a class with no superclass."
-      );
+      Errors.error(expr.keyword, "Can't use 'super' in a class with no superclass.");
     }
     resolveLocal(expr, expr.keyword);
     return null;
@@ -351,16 +368,13 @@ public class Resolver implements Expr.Visitor<Void>, Stmt.Visitor<Void> {
   @Override
   public Void visitVariableExpr(Expr.Variable expr) {
     if (isDeclaredButUninitialized(expr)) {
-      Errors.error(
-          expr.name, "Can't read local variable in its own initializer."
-      );
+      Errors.error(expr.name, "Can't read local variable in its own initializer.");
     }
     resolveLocal(expr, expr.name);
     return null;
   }
 
   private boolean isDeclaredButUninitialized(Expr.Variable expr) {
-    return !scopes.isEmpty() &&
-        scopes.peek().get(expr.name.lexeme) == VarResolution.DECLARED;
+    return !scopes.isEmpty() && scopes.peek().get(expr.name.lexeme) == VarResolution.DECLARED;
   }
 }
