@@ -4,16 +4,30 @@ import dev.zxul767.lox.parsing.Token;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * An evaluation environment with a (possibly null) enclosing environment. An environment is
+ * conceptually a list of name/value pairs used to evaluate expressions containing variables.
+ */
 class Environment {
   final Environment enclosing;
   private final Map<String, Object> values = new HashMap<>();
 
-  Environment() { enclosing = null; }
+  Environment() {
+    enclosing = null;
+  }
 
-  Environment(Environment enclosing) { this.enclosing = enclosing; }
+  Environment(Environment enclosing) {
+    this.enclosing = enclosing;
+  }
 
-  void define(String name, Object value) { values.put(name, value); }
+  void define(String name, Object value) {
+    values.put(name, value);
+  }
 
+  /**
+   * Return the enclosing environment found at `distance` hops from this one, or null if there is no
+   * such environment.
+   */
   Environment ancestor(int distance) {
     Environment environment = this;
     for (int i = 0; i < distance; i++) {
@@ -22,10 +36,14 @@ class Environment {
     return environment;
   }
 
+  /**
+   * Gets the value for the variable `name` found at `distance` hops from the current environment.
+   */
   Object getAt(int distance, String name) {
     return ancestor(distance).values.get(name);
   }
 
+  // FIXME: do we actually need to pass `Token`? why can't use just use `String` instead?
   void assignAt(int distance, Token name, Object value) {
     ancestor(distance).values.put(name.lexeme, value);
   }
@@ -34,11 +52,10 @@ class Environment {
     if (values.containsKey(name.lexeme)) {
       return values.get(name.lexeme);
     }
-    if (enclosing != null)
+    if (enclosing != null) {
       return enclosing.get(name);
-
-    throw new RuntimeError(
-        name, String.format("Undefined variable '%s'.", name.lexeme));
+    }
+    throw new RuntimeError(name, String.format("Undefined variable '%s'.", name.lexeme));
   }
 
   void assign(Token name, Object value) {
@@ -50,7 +67,6 @@ class Environment {
       enclosing.assign(name, value);
       return;
     }
-    throw new RuntimeError(
-        name, String.format("Undefined variable '%s'.", name.lexeme));
+    throw new RuntimeError(name, String.format("Undefined variable '%s'.", name.lexeme));
   }
 }
