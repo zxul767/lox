@@ -1,50 +1,53 @@
 package dev.zxul767.lox.runtime;
 
-import dev.zxul767.lox.parsing.Token;
-import dev.zxul767.lox.parsing.TokenType;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 class LoxListClass extends LoxNativeClass {
   static final Map<String, CallableSignature> signatures;
+  static final Map<String, String> docstrings;
+
   static {
-    signatures = createSignatures(
-        /* clang-format off */
-        "__init__    ()                 -> list",
-        "length      ()                 -> int",
-        "append      (value)            -> nil",
-        "at          (index:int)        -> any",
-        "set         (index:int, value) -> any",
-        "__getitem__ (index:int)        -> any",
-        "__setitem__ (index:int, value) -> any",
-        "clear       ()                 -> nil",
-        "pop         ()                 -> any"
-        /* clang-format on */
-    );
+    signatures =
+        createSignatures(
+            "__init__    ()                 -> list",
+            "length      ()                 -> int",
+            "append      (value)            -> nil",
+            "at          (index:int)        -> any",
+            "set         (index:int, value) -> any",
+            "__getitem__ (index:int)        -> any",
+            "__setitem__ (index:int, value) -> any",
+            "clear       ()                 -> nil",
+            "pop         ()                 -> any");
+
+    docstrings = new HashMap<>();
+    docstrings.put("length", "Returns the number of elements in the list.");
+    docstrings.put("append", "Appends a value to the end of the list.");
+    docstrings.put("at", "Returns the element at index (negative indexes are supported).");
+    docstrings.put("set", "Sets the element at index and returns the old value.");
+    docstrings.put("__getitem__", "Alias of at(index).");
+    docstrings.put("__setitem__", "Chainable alias of set(index, value).");
+    docstrings.put("clear", "Removes all elements from the list.");
+    docstrings.put("pop", "Removes and returns the last element.");
   }
 
   LoxListClass() {
-    super(
-        "list",
-        /*methods:*/ createDunderMethods(signatures)
-    );
+    super("list", /*methods:*/ createDunderMethods(signatures));
 
-    define("length", (self, args) -> length(self), signatures);
-    define("append", (self, args) -> add(self, args[0]), signatures);
-    define("at", (self, args) -> at(self, args[0]), signatures);
-    define("set", (self, args) -> set(self, args[0], args[1]), signatures);
-    define("clear", (self, args) -> clear(self), signatures);
-    define("pop", (self, args) -> pop(self), signatures);
-    define("__getitem__", (self, args) -> at(self, args[0]), signatures);
+    define("length", (self, args) -> length(self), signatures, docstrings);
+    define("append", (self, args) -> add(self, args[0]), signatures, docstrings);
+    define("at", (self, args) -> at(self, args[0]), signatures, docstrings);
+    define("set", (self, args) -> set(self, args[0], args[1]), signatures, docstrings);
+    define("clear", (self, args) -> clear(self), signatures, docstrings);
+    define("pop", (self, args) -> pop(self), signatures, docstrings);
+    define("__getitem__", (self, args) -> at(self, args[0]), signatures, docstrings);
     define(
         "__setitem__",
-        (self, args) -> chainable_set(self, args[0], args[1]), signatures
-    );
+        (self, args) -> chainable_set(self, args[0], args[1]),
+        signatures,
+        docstrings);
   }
 
   // constructor call; this is equivalent to `__new__` in Python, in that it
@@ -56,7 +59,7 @@ class LoxListClass extends LoxNativeClass {
 
   static Object length(LoxInstance instance) {
     LoxList self = assertList(instance);
-    return (double)self.list.size();
+    return (double) self.list.size();
   }
 
   static Object add(LoxInstance instance, Object value) {
@@ -85,8 +88,7 @@ class LoxListClass extends LoxNativeClass {
   //
   // `list[index] = 1` needs then to desugar to `list.chainable_set(index, 1)`
   //
-  static Object
-  chainable_set(LoxInstance instance, Object index, Object expression) {
+  static Object chainable_set(LoxInstance instance, Object index, Object expression) {
     LoxList self = assertList(instance);
 
     int normedIndex = normalizeIndex(index, self, "set");
@@ -137,10 +139,10 @@ class LoxListClass extends LoxNativeClass {
   }
 
   static void throwIndexError(LoxList self, String token, int index) {
-    String message = String.format(
-        "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
-        index, self.list.size() - 1, self.list.size()
-    );
+    String message =
+        String.format(
+            "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
+            index, self.list.size() - 1, self.list.size());
     if (self.list.size() == 0) {
       message = "cannot access elements in empty list";
     }
@@ -151,7 +153,9 @@ class LoxListClass extends LoxNativeClass {
 class LoxList extends LoxInstance {
   public ArrayList<Object> list = new ArrayList<>();
 
-  LoxList() { super(StandardLibrary.list); }
+  LoxList() {
+    super(StandardLibrary.list);
+  }
 
   @Override
   public String toString() {
@@ -179,7 +183,7 @@ class LoxList extends LoxInstance {
     if (!(other instanceof LoxList)) {
       return false;
     }
-    var instance = (LoxList)other;
+    var instance = (LoxList) other;
     return this.list.equals(instance.list);
   }
 }

@@ -1,6 +1,5 @@
 package dev.zxul767.lox.runtime;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -8,18 +7,26 @@ import java.util.stream.Collectors;
 
 interface LoxCallable {
   CallableSignature signature();
+
   Object call(Interpreter interpreter, List<Object> args);
+
   LoxCallable bind(LoxInstance instance);
+
+  default String docstring() {
+    return null;
+  }
 }
 
-class Parameter {
+class CallableParameter {
   public final String name;
   public final String type;
 
-  public Parameter(String name) { this(name, "any"); }
+  public CallableParameter(String name) {
+    this(name, "any");
+  }
 
-  public Parameter(String name, String type) {
-    assert name != null : "name is mandatory in Parameter";
+  public CallableParameter(String name, String type) {
+    assert name != null : "name is mandatory in CallableParameter";
     this.name = name;
     this.type = type != null ? type : "any";
   }
@@ -32,36 +39,38 @@ class Parameter {
 
 class CallableSignature {
   public final String name;
-  public final List<Parameter> parameters;
+  public final List<CallableParameter> parameters;
   public final String returnType;
 
-  CallableSignature(String name) { this(name, Collections.emptyList()); }
+  CallableSignature(String name) {
+    this(name, Collections.emptyList());
+  }
 
   CallableSignature(String name, String returnType) {
     this(name, Collections.emptyList(), returnType);
   }
 
-  CallableSignature(String name, Parameter parameter) {
+  CallableSignature(String name, CallableParameter parameter) {
     this(name, Arrays.asList(parameter));
   }
 
-  CallableSignature(String name, List<Parameter> parameters) {
+  CallableSignature(String name, List<CallableParameter> parameters) {
     this(name, parameters, "any");
   }
 
-  CallableSignature(String name, Parameter parameter, String returnType) {
+  CallableSignature(String name, CallableParameter parameter, String returnType) {
     this(name, Arrays.asList(parameter), returnType);
   }
 
-  CallableSignature(
-      String name, List<Parameter> parameters, String returnType
-  ) {
+  CallableSignature(String name, List<CallableParameter> parameters, String returnType) {
     this.name = name;
     this.parameters = parameters;
     this.returnType = returnType;
   }
 
-  public int arity() { return this.parameters.size(); }
+  public int arity() {
+    return this.parameters.size();
+  }
 
   CallableSignature withName(String name) {
     return new CallableSignature(name, this.parameters, this.returnType);
@@ -69,11 +78,9 @@ class CallableSignature {
 
   @Override
   public String toString() {
-    String params = String.join(
-        ", ", this.parameters.stream()
-                  .map(p -> p.toString())
-                  .collect(Collectors.toList())
-    );
+    String params =
+        String.join(
+            ", ", this.parameters.stream().map(p -> p.toString()).collect(Collectors.toList()));
     return String.format("%s(%s) -> %s", this.name, params, this.returnType);
   }
 }

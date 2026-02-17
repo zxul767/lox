@@ -1,42 +1,39 @@
 package dev.zxul767.lox.runtime;
 
-import dev.zxul767.lox.parsing.Token;
-import dev.zxul767.lox.parsing.TokenType;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 class LoxStringClass extends LoxNativeClass {
   static final Map<String, CallableSignature> signatures;
+  static final Map<String, String> docstrings;
+
   static {
-    signatures = createSignatures(
-        /* clang-format off */
-        "__init__    (value:any)          -> str",
-        "length      ()                   -> int",
-        "starts_with (prefix:str)         -> bool",
-        "ends_with   (suffix:str)         -> bool",
-        "index_of    (target:str)         -> int",
-        "slice       (start:int, end:int) -> str"
-        /* clang-format on */
-    );
+    signatures =
+        createSignatures(
+            "__init__    (value:any)          -> str",
+            "length      ()                   -> int",
+            "starts_with (prefix:str)         -> bool",
+            "ends_with   (suffix:str)         -> bool",
+            "index_of    (target:str)         -> int",
+            "slice       (start:int, end:int) -> str");
+
+    docstrings = new HashMap<>();
+    docstrings.put("length", "Returns the string length.");
+    docstrings.put("starts_with", "Returns true if string starts with prefix.");
+    docstrings.put("ends_with", "Returns true if string ends with suffix.");
+    docstrings.put("index_of", "Returns first index of target, or -1.");
+    docstrings.put("slice", "Returns substring in [start, end).");
   }
 
   LoxStringClass() {
-    super(
-        "str",
-        /* methods: */ createDunderMethods(signatures)
-    );
+    super("str", /* methods: */ createDunderMethods(signatures));
 
-    define("length", (self, args) -> length(self), signatures);
-    define(
-        "starts_with", (self, args) -> starts_with(self, args[0]), signatures
-    );
-    define("ends_with", (self, args) -> ends_with(self, args[0]), signatures);
-    define("index_of", (self, args) -> index_of(self, args[0]), signatures);
-    define("slice", (self, args) -> slice(self, args[0], args[1]), signatures);
+    define("length", (self, args) -> length(self), signatures, docstrings);
+    define("starts_with", (self, args) -> starts_with(self, args[0]), signatures, docstrings);
+    define("ends_with", (self, args) -> ends_with(self, args[0]), signatures, docstrings);
+    define("index_of", (self, args) -> index_of(self, args[0]), signatures, docstrings);
+    define("slice", (self, args) -> slice(self, args[0], args[1]), signatures, docstrings);
   }
 
   // constructor call
@@ -44,14 +41,14 @@ class LoxStringClass extends LoxNativeClass {
   public Object call(Interpreter interpreter, List<Object> args) {
     Object arg = args.get(0);
     if (arg instanceof LoxString) {
-      return new LoxString(((LoxString)arg).string);
+      return new LoxString(((LoxString) arg).string);
     }
     return new LoxString(Interpreter.stringify(args.get(0)));
   }
 
   static Object length(LoxInstance instance) {
     LoxString self = assertString(instance);
-    return (double)self.string.length();
+    return (double) self.string.length();
   }
 
   static Object starts_with(LoxInstance instance, Object value) {
@@ -72,11 +69,10 @@ class LoxStringClass extends LoxNativeClass {
     LoxString self = assertString(instance);
     LoxString target = requireString(value, "index_of");
 
-    return (double)self.string.indexOf(target.string);
+    return (double) self.string.indexOf(target.string);
   }
 
-  static Object
-  slice(LoxInstance instance, Object startIndex, Object endIndex) {
+  static Object slice(LoxInstance instance, Object startIndex, Object endIndex) {
     LoxString self = assertString(instance);
     int start = requireInt(startIndex, "slice");
     int end = requireInt(endIndex, "slice");
@@ -84,9 +80,7 @@ class LoxStringClass extends LoxNativeClass {
     // TODO: research why python simply returns empty strings instead of these
     // errors. should we do the same?
     if (start < 0 || start >= self.string.length()) {
-      throwIndexError(
-          self, String.format("slice(start=%d, ...)", start), start
-      );
+      throwIndexError(self, String.format("slice(start=%d, ...)", start), start);
     }
     if (end < 0 || end > self.string.length()) {
       throwIndexError(self, String.format("slice(..., end=%d)", end), end);
@@ -98,13 +92,13 @@ class LoxStringClass extends LoxNativeClass {
   }
 
   static void throwIndexError(LoxString self, String lexeme, int index) {
-    var message = String.format(
-        "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
-        index, self.string.length() - 1, self.string.length()
-    );
-    if (self.string.length() == 0)
+    var message =
+        String.format(
+            "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
+            index, self.string.length() - 1, self.string.length());
+    if (self.string.length() == 0) {
       message = "cannot access elements in empty list";
-
+    }
     throwRuntimeError(lexeme, message);
   }
 }
@@ -134,7 +128,7 @@ class LoxString extends LoxInstance {
     if (!(other instanceof LoxString)) {
       return false;
     }
-    var instance = (LoxString)other;
+    var instance = (LoxString) other;
     return this.string.equals(instance.string);
   }
 }
