@@ -168,7 +168,7 @@ public class Lox {
     // provide completions (triggered via TAB) for all keywords
     Completer completer =
         new AggregateCompleter(
-            new StringsCompleter(List.of("quit", "exit")),
+            new StringsCompleter(List.of(QUIT, EXIT)),
             new StringsCompleter(StandardLibrary.members.keySet()),
             new StringsCompleter(Scanner.keywords.keySet()));
 
