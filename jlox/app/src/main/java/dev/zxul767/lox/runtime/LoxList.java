@@ -39,11 +39,11 @@ class LoxListClass extends LoxNativeClass {
         nativeMethod(
             "__getitem__ (index:int)        -> any",
             "Alias of at(index).",
-            (interpreter, self, args) -> at(self, args.get(0))),
+            (interpreter, self, args) -> getItem(self, args.get(0))),
         nativeMethod(
             "__setitem__ (index:int, value) -> any",
-            "Chainable alias of set(index, value).",
-            (interpreter, self, args) -> chainable_set(self, args.get(0), args.get(1))));
+            "Chainable alias of set(index, value) that returns the object instance.",
+            (interpreter, self, args) -> setItem(self, args.get(0), args.get(1))));
   }
 
   // constructor call; this is equivalent to `__new__` in Python, in that it
@@ -70,40 +70,34 @@ class LoxListClass extends LoxNativeClass {
     return null;
   }
 
-  // we need a special method `chainable_set` because `set` returns the previous
-  // value at `instance[index]` and that would produce counterintuitive
-  // (apparently non-deterministic) behavior in programs like:
-  //
-  // >>> var l = list()
-  // >>> l.append(list())
-  // >>> (l[0] = 1).length()
-  // 0
-  // >>> (l[0] = 1).length()
-  // RuntimeError: Only instances have properties
-  // [line 1]
-  //
-  // `list[index] = 1` needs then to desugar to `list.chainable_set(index, 1)`
-  //
-  static Object chainable_set(LoxInstance instance, Object index, Object expression) {
-    LoxList self = assertList(instance);
+  static Object set(LoxInstance instance, Object index, Object expression) {
+    return setItemAt(instance, index, expression, "set");
+  }
 
-    int normedIndex = normalizeIndex(index, self, "set");
-    self.list.set(normedIndex, expression);
-
+  static Object setItem(LoxInstance instance, Object index, Object expression) {
+    setItemAt(instance, index, expression, "[");
     return expression;
   }
 
-  static Object set(LoxInstance instance, Object index, Object expression) {
+  static Object at(LoxInstance instance, Object index) {
+    return getAt(instance, index, "at");
+  }
+
+  static Object setItemAt(LoxInstance instance, Object index, Object expression, String accessor) {
     LoxList self = assertList(instance);
 
-    int normedIndex = normalizeIndex(index, self, "set");
+    int normedIndex = normalizeIndex(index, self, accessor);
     return self.list.set(normedIndex, expression);
   }
 
-  static Object at(LoxInstance instance, Object index) {
+  static Object getItem(LoxInstance instance, Object index) {
+    return getAt(instance, index, "[");
+  }
+
+  static Object getAt(LoxInstance instance, Object index, String accessor) {
     LoxList self = assertList(instance);
 
-    int normedIndex = normalizeIndex(index, self, "at");
+    int normedIndex = normalizeIndex(index, self, accessor);
     return self.list.get(normedIndex);
   }
 
