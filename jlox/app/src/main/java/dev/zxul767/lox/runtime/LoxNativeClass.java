@@ -2,14 +2,14 @@ package dev.zxul767.lox.runtime;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 class LoxNativeClass extends LoxClass {
-  private static final String loxTypes = "(int|bool|list|str|any|nil)";
+  private static final String loxTypes = "(int|number|bool|list|str|any|nil)";
 
   private static final String signatureRegex =
       String.join(
@@ -34,35 +34,61 @@ class LoxNativeClass extends LoxClass {
     super(name, /*superclass:*/ null, methods);
   }
 
-  static Map<String, LoxCallable> createDunderMethods(Map<String, CallableSignature> signatures) {
-    // `Map.of` provides nice "literal" syntax but always returns immutable
-    // maps; hence why we copy it into a mutable one.
-    return new HashMap<>(
-        Map.of(
-            LoxClass.INIT,
-            new NativeBoundMethod(signatures.get(LoxClass.INIT), (self, args) -> self)));
+  static final class NativeCallableSpec {
+    final CallableSignature signature;
+    final String docstring;
+    final NativeCallable nativeCallable;
+
+    private NativeCallableSpec(
+        CallableSignature signature, String docstring, NativeCallable nativeCallable) {
+      this.signature = signature;
+      this.docstring = docstring;
+      this.nativeCallable = nativeCallable;
+    }
+
+    static NativeCallableSpec create(
+        CallableSignature signature, String docstring, NativeCallable nativeMethod) {
+      return new NativeCallableSpec(signature, docstring, nativeMethod);
+    }
   }
 
-  static Map<String, CallableSignature> createSignatures(String... args) {
-    List<CallableSignature> members = parseSignatures(args);
-
-    var signatures = new HashMap<String, CallableSignature>();
-    for (CallableSignature signature : members) {
-      signatures.put(signature.name, signature);
+  static NativeCallableSpec nativeMethod(
+      String signatureText, String docstring, NativeCallable nativeMethod) {
+    CallableSignature signature = parseSignature(signatureText);
+    String resolvedDocstring = docstring;
+    if (resolvedDocstring == null && signature.name.equals(LoxClass.INIT)) {
+      resolvedDocstring = String.format("Creates an instance of class %s.", signature.returnType);
     }
-    return signatures;
+    return NativeCallableSpec.create(signature, resolvedDocstring, nativeMethod);
+  }
+
+  static NativeCallableSpec nativeFunction(
+      String signatureText, String docstring, NativeCallable nativeFunction) {
+    return NativeCallableSpec.create(parseSignature(signatureText), docstring, nativeFunction);
+  }
+
+  static Map<String, LoxCallable> bindMethods(List<NativeCallableSpec> specs) {
+    var methods = new LinkedHashMap<String, LoxCallable>();
+    for (NativeCallableSpec spec : specs) {
+      methods.put(
+          spec.signature.name,
+          new NativeBoundMethod(spec.signature, spec.nativeCallable, spec.docstring));
+    }
+    return methods;
+  }
+
+  static Map<String, LoxCallable> bindFunctions(List<NativeCallableSpec> specs) {
+    var functions = new LinkedHashMap<String, LoxCallable>();
+    for (NativeCallableSpec spec : specs) {
+      functions.put(
+          spec.signature.name,
+          new NativeFunction(spec.signature, spec.nativeCallable, spec.docstring));
+    }
+    return functions;
   }
 
   static void throwRuntimeError(String token, String message) {
     throw new RuntimeError(token, message);
-  }
-
-  private static List<CallableSignature> parseSignatures(String... texts) {
-    var signatures = new ArrayList<CallableSignature>();
-    for (String text : texts) {
-      signatures.add(parseSignature(text));
-    }
-    return signatures;
   }
 
   private static CallableSignature parseSignature(String text) {
@@ -134,18 +160,6 @@ class LoxNativeClass extends LoxClass {
       throwRuntimeError(functionName, "argument must be an integer");
     }
     return (int) number;
-  }
-
-  void define(
-      String name,
-      NativeMethod<Object, Object> nativeMethod,
-      Map<String, CallableSignature> signatures,
-      Map<String, String> docstrings) {
-    CallableSignature signature = signatures.getOrDefault(name, null);
-    assert signature != null : String.format("Failed to define method: %s::%s", this.name, name);
-
-    String docstring = docstrings.getOrDefault(name, null);
-    this.methods.put(signature.name, new NativeBoundMethod(signature, nativeMethod, docstring));
   }
 
   @Override

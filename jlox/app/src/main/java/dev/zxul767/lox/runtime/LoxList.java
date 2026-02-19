@@ -1,53 +1,49 @@
 package dev.zxul767.lox.runtime;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 class LoxListClass extends LoxNativeClass {
-  static final Map<String, CallableSignature> signatures;
-  static final Map<String, String> docstrings;
-
-  static {
-    signatures =
-        createSignatures(
-            "__init__    ()                 -> list",
-            "length      ()                 -> int",
-            "append      (value)            -> nil",
-            "at          (index:int)        -> any",
-            "set         (index:int, value) -> any",
-            "__getitem__ (index:int)        -> any",
-            "__setitem__ (index:int, value) -> any",
-            "clear       ()                 -> nil",
-            "pop         ()                 -> any");
-
-    docstrings = new HashMap<>();
-    docstrings.put("length", "Returns the number of elements in the list.");
-    docstrings.put("append", "Appends a value to the end of the list.");
-    docstrings.put("at", "Returns the element at index (negative indexes are supported).");
-    docstrings.put("set", "Sets the element at index and returns the old value.");
-    docstrings.put("__getitem__", "Alias of at(index).");
-    docstrings.put("__setitem__", "Chainable alias of set(index, value).");
-    docstrings.put("clear", "Removes all elements from the list.");
-    docstrings.put("pop", "Removes and returns the last element.");
+  LoxListClass() {
+    super("list", /*methods:*/ bindMethods(createNativeMethods()));
   }
 
-  LoxListClass() {
-    super("list", /*methods:*/ createDunderMethods(signatures));
-
-    define("length", (self, args) -> length(self), signatures, docstrings);
-    define("append", (self, args) -> add(self, args[0]), signatures, docstrings);
-    define("at", (self, args) -> at(self, args[0]), signatures, docstrings);
-    define("set", (self, args) -> set(self, args[0], args[1]), signatures, docstrings);
-    define("clear", (self, args) -> clear(self), signatures, docstrings);
-    define("pop", (self, args) -> pop(self), signatures, docstrings);
-    define("__getitem__", (self, args) -> at(self, args[0]), signatures, docstrings);
-    define(
-        "__setitem__",
-        (self, args) -> chainable_set(self, args[0], args[1]),
-        signatures,
-        docstrings);
+  private static List<NativeCallableSpec> createNativeMethods() {
+    return List.of(
+        nativeMethod(
+            "__init__    ()                 -> list", null, (interpreter, self, args) -> self),
+        nativeMethod(
+            "length      ()                 -> int",
+            "Returns the number of elements in the list.",
+            (interpreter, self, args) -> length(self)),
+        nativeMethod(
+            "append      (value)            -> nil",
+            "Appends a value to the end of the list.",
+            (interpreter, self, args) -> add(self, args.get(0))),
+        nativeMethod(
+            "at          (index:int)        -> any",
+            "Returns the element at index (negative indexes are supported).",
+            (interpreter, self, args) -> at(self, args.get(0))),
+        nativeMethod(
+            "set         (index:int, value) -> any",
+            "Sets the element at index and returns the old value.",
+            (interpreter, self, args) -> set(self, args.get(0), args.get(1))),
+        nativeMethod(
+            "clear       ()                 -> nil",
+            "Removes all elements from the list.",
+            (interpreter, self, args) -> clear(self)),
+        nativeMethod(
+            "pop         ()                 -> any",
+            "Removes and returns the last element.",
+            (interpreter, self, args) -> pop(self)),
+        nativeMethod(
+            "__getitem__ (index:int)        -> any",
+            "Alias of at(index).",
+            (interpreter, self, args) -> at(self, args.get(0))),
+        nativeMethod(
+            "__setitem__ (index:int, value) -> any",
+            "Chainable alias of set(index, value).",
+            (interpreter, self, args) -> chainable_set(self, args.get(0), args.get(1))));
   }
 
   // constructor call; this is equivalent to `__new__` in Python, in that it
@@ -151,10 +147,10 @@ class LoxListClass extends LoxNativeClass {
 }
 
 class LoxList extends LoxInstance {
-  public ArrayList<Object> list = new ArrayList<>();
+  ArrayList<Object> list = new ArrayList<>();
 
   LoxList() {
-    super(StandardLibrary.list);
+    super(/* _class: */ StandardLibrary.list);
   }
 
   @Override
@@ -177,13 +173,6 @@ class LoxList extends LoxInstance {
 
   @Override
   public boolean equals(Object other) {
-    if (other == this) {
-      return true;
-    }
-    if (!(other instanceof LoxList)) {
-      return false;
-    }
-    var instance = (LoxList) other;
-    return this.list.equals(instance.list);
+    return equalsByClassAndKey(other, LoxList.class, l -> l.list);
   }
 }

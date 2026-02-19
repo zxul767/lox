@@ -1,39 +1,36 @@
 package dev.zxul767.lox.runtime;
 
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 class LoxStringClass extends LoxNativeClass {
-  static final Map<String, CallableSignature> signatures;
-  static final Map<String, String> docstrings;
-
-  static {
-    signatures =
-        createSignatures(
-            "__init__    (value:any)          -> str",
-            "length      ()                   -> int",
-            "starts_with (prefix:str)         -> bool",
-            "ends_with   (suffix:str)         -> bool",
-            "index_of    (target:str)         -> int",
-            "slice       (start:int, end:int) -> str");
-
-    docstrings = new HashMap<>();
-    docstrings.put("length", "Returns the string length.");
-    docstrings.put("starts_with", "Returns true if string starts with prefix.");
-    docstrings.put("ends_with", "Returns true if string ends with suffix.");
-    docstrings.put("index_of", "Returns first index of target, or -1.");
-    docstrings.put("slice", "Returns substring in [start, end).");
+  LoxStringClass() {
+    super("str", /* methods: */ bindMethods(createNativeMethods()));
   }
 
-  LoxStringClass() {
-    super("str", /* methods: */ createDunderMethods(signatures));
-
-    define("length", (self, args) -> length(self), signatures, docstrings);
-    define("starts_with", (self, args) -> starts_with(self, args[0]), signatures, docstrings);
-    define("ends_with", (self, args) -> ends_with(self, args[0]), signatures, docstrings);
-    define("index_of", (self, args) -> index_of(self, args[0]), signatures, docstrings);
-    define("slice", (self, args) -> slice(self, args[0], args[1]), signatures, docstrings);
+  private static List<NativeCallableSpec> createNativeMethods() {
+    return List.of(
+        nativeMethod(
+            "__init__    (value:any)          -> str", null, (interpreter, self, args) -> self),
+        nativeMethod(
+            "length      ()                   -> int",
+            "Returns the string length.",
+            (interpreter, self, args) -> length(self)),
+        nativeMethod(
+            "starts_with (prefix:str)         -> bool",
+            "Returns true if string starts with prefix.",
+            (interpreter, self, args) -> starts_with(self, args.get(0))),
+        nativeMethod(
+            "ends_with   (suffix:str)         -> bool",
+            "Returns true if string ends with suffix.",
+            (interpreter, self, args) -> ends_with(self, args.get(0))),
+        nativeMethod(
+            "index_of    (target:str)         -> int",
+            "Returns first index of target, or -1 if not found.",
+            (interpreter, self, args) -> index_of(self, args.get(0))),
+        nativeMethod(
+            "slice       (start:int, end:int) -> str",
+            "Returns substring in [start, end).",
+            (interpreter, self, args) -> slice(self, args.get(0), args.get(1))));
   }
 
   // constructor call
@@ -43,7 +40,7 @@ class LoxStringClass extends LoxNativeClass {
     if (arg instanceof LoxString) {
       return new LoxString(((LoxString) arg).string);
     }
-    return new LoxString(Interpreter.stringify(args.get(0)));
+    return new LoxString(Interpreter.stringify(arg));
   }
 
   static Object length(LoxInstance instance) {
@@ -104,10 +101,10 @@ class LoxStringClass extends LoxNativeClass {
 }
 
 class LoxString extends LoxInstance {
-  public String string;
+  String string;
 
   LoxString(String string) {
-    super(StandardLibrary.string);
+    super(/* _class: */ StandardLibrary.string);
     this.string = string;
   }
 
@@ -122,13 +119,6 @@ class LoxString extends LoxInstance {
 
   @Override
   public boolean equals(Object other) {
-    if (other == this) {
-      return true;
-    }
-    if (!(other instanceof LoxString)) {
-      return false;
-    }
-    var instance = (LoxString) other;
-    return this.string.equals(instance.string);
+    return equalsByClassAndKey(other, LoxString.class, s -> s.string);
   }
 }
