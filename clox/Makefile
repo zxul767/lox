@@ -117,7 +117,7 @@ run: $(MAIN_TARGET)
 
 # run a formatter on the source code
 format:
-	git clang-format -- '*.c' '*.h'
+	git clang-format --staged -- '*.c' '*.h'
 
 clean:
 	rm -f $(MAIN_TARGET) $(OBJ_DIR)/*.o $(DEPS_DIR)/*.d
