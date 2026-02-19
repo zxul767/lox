@@ -176,6 +176,9 @@ public class Lox {
 
     LineReader reader =
         LineReaderBuilder.builder().terminal(terminal).parser(parser).completer(completer).build();
+    // Disable shell-style history expansion (e.g. `!foo`), since `!` is a valid unary operator in
+    // Lox and should be evaluated literally.
+    reader.setOpt(LineReader.Option.DISABLE_EVENT_EXPANSION);
     return reader;
   }
 
