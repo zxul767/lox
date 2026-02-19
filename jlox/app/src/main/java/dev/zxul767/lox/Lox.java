@@ -8,19 +8,15 @@ import dev.zxul767.lox.parsing.Token;
 import dev.zxul767.lox.runtime.Interpreter;
 import dev.zxul767.lox.runtime.Resolver;
 import dev.zxul767.lox.runtime.StandardLibrary;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
-import org.jline.builtins.Styles;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
 import org.jline.reader.LineReader;
-import org.jline.reader.LineReader.Option;
 import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.UserInterruptException;
 import org.jline.reader.impl.DefaultParser;
@@ -48,10 +44,8 @@ public class Lox {
   private static void runFile(String path) throws IOException {
     byte[] bytes = Files.readAllBytes(Paths.get(path));
     run(new String(bytes, Charset.defaultCharset()), /* in_repl_mode: */ false);
-    if (Errors.hadError)
-      System.exit(65);
-    if (Errors.hadRuntimeError)
-      System.exit(70);
+    if (Errors.hadError) System.exit(65);
+    if (Errors.hadRuntimeError) System.exit(70);
   }
 
   private static void runPrompt() throws IOException {
@@ -84,11 +78,9 @@ public class Lox {
     while (true) {
       try {
         String line = reader.readLine(">>> ").trim();
-        if (line == null || line.equals("quit"))
-          break;
+        if (line == null || line.equals("quit")) break;
 
-        if (line.trim().isEmpty())
-          continue;
+        if (line.trim().isEmpty()) continue;
 
         // FIXME: implement the "optional semicolon" feature properly;
         // this is a brittle kludge to make working with the REPL a little
@@ -119,34 +111,31 @@ public class Lox {
     List<Stmt> statements = parser.parse();
 
     // stop if there was a syntax error
-    if (Errors.hadError)
-      return;
+    if (Errors.hadError) return;
 
     Resolver resolver = new Resolver(interpreter);
     resolver.resolve(statements);
 
     // stop if there was a resolution error
-    if (Errors.hadError)
-      return;
+    if (Errors.hadError) return;
 
-    if (in_repl_mode)
+    if (in_repl_mode) {
       statements = ensureLastExpressionIsPrinted(statements);
+    }
 
     interpreter.interpret(statements);
   }
 
   private static void showBannerAndHelp(Terminal terminal) {
-    /* clang-format off */
     // source: https://manytools.org/hacker-tools/ascii-banner/
     String banner =
-          ""
-          + "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗" + "\n"
-          + "██║     ██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔══██╗██║" + "\n"
-          + "██║     ██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██████╔╝██║" + "\n"
-          + "██║     ██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██╔═══╝ ██║" + "\n"
-          + "███████╗╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗██║     ███████╗" + "\n"
-          + "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝" + "\n";
-    /* clang-format on */
+        ""
+            + "██╗      ██████╗ ██╗  ██╗    ██████╗ ███████╗██████╗ ██╗\n"
+            + "██║     ██╔═══██╗╚██╗██╔╝    ██╔══██╗██╔════╝██╔══██╗██║\n"
+            + "██║     ██║   ██║ ╚███╔╝     ██████╔╝█████╗  ██████╔╝██║\n"
+            + "██║     ██║   ██║ ██╔██╗     ██╔══██╗██╔══╝  ██╔═══╝ ██║\n"
+            + "███████╗╚██████╔╝██╔╝ ██╗    ██║  ██║███████╗██║     ███████╗\n"
+            + "╚══════╝ ╚═════╝ ╚═╝  ╚═╝    ╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝\n";
     String logo =
         new AttributedStringBuilder()
             .style(AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW))
@@ -157,7 +146,8 @@ public class Lox {
             .toAnsi();
     terminal.writer().println(logo);
 
-    terminal.writer().println("- Type \"quit\" to quit. (or use «ctrl-d»)");
+    terminal.writer().println("- Type `quit` to quit. (or use «ctrl-d»)");
+    terminal.writer().println("- Type `help(<symbol>)` to inspect values or functions/methods");
     // TODO: figure out how to do multiline editing (if you copy and paste it
     // works, but how do we manually type multiple lines?)
     //
@@ -172,22 +162,18 @@ public class Lox {
     terminal.writer().flush();
   }
 
-  private static LineReader createReplReader(Terminal terminal)
-      throws IOException {
+  private static LineReader createReplReader(Terminal terminal) throws IOException {
     // provide completions (triggered via TAB) for all keywords
-    Completer completer = new AggregateCompleter(
-        new StringsCompleter("quit"),
-        new StringsCompleter(StandardLibrary.members.keySet()),
-        new StringsCompleter(Scanner.keywords.keySet())
-    );
+    Completer completer =
+        new AggregateCompleter(
+            new StringsCompleter("quit"),
+            new StringsCompleter(StandardLibrary.members.keySet()),
+            new StringsCompleter(Scanner.keywords.keySet()));
 
     DefaultParser parser = new DefaultParser();
 
-    LineReader reader = LineReaderBuilder.builder()
-                            .terminal(terminal)
-                            .parser(parser)
-                            .completer(completer)
-                            .build();
+    LineReader reader =
+        LineReaderBuilder.builder().terminal(terminal).parser(parser).completer(completer).build();
     return reader;
   }
 
@@ -197,14 +183,11 @@ public class Lox {
 
     if (last instanceof Stmt.Expression) {
       ArrayList<Stmt> patched = new ArrayList<>(statements);
-      Expr expression = ((Stmt.Expression)last).expression;
+      Expr expression = ((Stmt.Expression) last).expression;
       patched.set(
-          n, new Stmt.Print(
-                 expression, /* includeNewline: */ false,
-                 /* unquote: */ false,
-                 /* ignoreNil */ true
-             )
-      );
+          n,
+          new Stmt.Print(
+              expression, /* includeNewline: */ false, /* unquote: */ false, /* ignoreNil */ true));
 
       return patched;
     }

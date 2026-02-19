@@ -115,6 +115,10 @@ watch:
 run: $(MAIN_TARGET)
 	@./$< $(NAME)
 
+# run a formatter on the source code
+format:
+	git clang-format -- '*.c' '*.h'
+
 clean:
 	rm -f $(MAIN_TARGET) $(OBJ_DIR)/*.o $(DEPS_DIR)/*.d
 	rm -rf $(BUILD_DIR)

@@ -27,6 +27,17 @@ If you want to test single-line commands in Lox, you can run its [REPL](https://
 
 When you're done with it, you can press `Ctrl-D` or type `quit` to exit.
 
+The REPL also includes a built-in `help(value)` function to inspect available
+details for any value:
+
+```
+>>> help(sin)
+[native function] sin(x:number) -> number | Returns the value of the sine function for x.
+
+>>> help("hello".starts_with)
+[bound method] starts_with(prefix:str) -> bool | Returns true if string starts with prefix.
+```
+
 # Running Individual Scripts
 Note that the REPL only supports single-line strings, so if you want to test something larger, your best bet is to put it in a script and run it as follows:
 

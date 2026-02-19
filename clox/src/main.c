@@ -26,11 +26,10 @@ static char* const QUIT = "quit";
 static char* const EXIT = "exit";
 
 static const char* COMMANDS[] = {
-    TOGGLE_BYTECODE, TOGGLE_TRACING, LOAD_FILE, GC_RUN,
-    GC_STATS,        QUIT,           EXIT,      NULL};
+    TOGGLE_BYTECODE, TOGGLE_TRACING, LOAD_FILE, GC_RUN, GC_STATS, QUIT, EXIT, NULL
+};
 
-static void
-word_completer(ic_completion_env_t* input_until_cursor, const char* word)
+static void word_completer(ic_completion_env_t* input_until_cursor, const char* word)
 {
   ic_add_completions(input_until_cursor, word, COMMANDS);
   ic_add_completions(input_until_cursor, word, KEYWORDS);
@@ -38,11 +37,12 @@ word_completer(ic_completion_env_t* input_until_cursor, const char* word)
 
 // We use `ic_complete_word` to only consider the final token on the input.
 // (almost all user defined completers should use this)
-static void
-completer(ic_completion_env_t* input_until_cursor, const char* input)
+static void completer(ic_completion_env_t* input_until_cursor, const char* input)
 {
   ic_complete_word(
-      input_until_cursor, input, &word_completer,
+      input_until_cursor,
+      input,
+      &word_completer,
       NULL /* from default word boundary; whitespace or separator */
   );
 }
@@ -56,12 +56,12 @@ static void setup_line_reader()
 
   ic_enable_hint(false);
 
-  ic_printf(
-      "- Type 'quit' to exit. (or use [kbd]ctrl-d[/]).\n"
-      "- Use [kbd]shift-tab[/] for multiline input. (or [kbd]ctrl-enter[/], or "
-      "[kbd]ctrl-j[/])\n"
-      "- Use [kbd]tab[/]  for word completion.\n"
-      "- Use [kbd]ctrl-r[/] to search the history.\n\n");
+  ic_printf("- Type `quit` to exit. (or use [kbd]ctrl-d[/]).\n"
+            "- Type `help(value)` to inspect values and functions/methods.\n"
+            "- Use [kbd]shift-tab[/] for multiline input "
+            "(or [kbd]ctrl-enter[/]/[kbd]ctrl-j[/])\n"
+            "- Use [kbd]tab[/] for word completion.\n"
+            "- Use [kbd]ctrl-r[/] to search the history.\n\n");
 
   // enable completion with a default completion function
   ic_set_default_completer(&completer, NULL);
@@ -92,8 +92,7 @@ static void read_configuration(const char* file_path, VM* vm)
 
     if (!strcmp(":enable-tracing", line)) {
       vm->trace_execution = true;
-      ic_printf(
-          "-> execution tracing: %s\n", vm->trace_execution ? "on" : "off");
+      ic_printf("-> execution tracing: %s\n", vm->trace_execution ? "on" : "off");
 
     } else if (!strcmp(":show-bytecode", line)) {
       vm->show_bytecode = true;
@@ -103,8 +102,7 @@ static void read_configuration(const char* file_path, VM* vm)
   fclose(file);
 }
 
-static FILE*
-try_open_file(const char* path, int die_status, bool die_on_failure)
+static FILE* try_open_file(const char* path, int die_status, bool die_on_failure)
 {
   char resolved_path[PATH_MAX];
   realpath(path, resolved_path);
@@ -118,8 +116,7 @@ try_open_file(const char* path, int die_status, bool die_on_failure)
   return file;
 }
 
-static void*
-try_allocate_or_die(size_t size, int die_status, bool die_on_failure)
+static void* try_allocate_or_die(size_t size, int die_status, bool die_on_failure)
 {
   void* buffer = malloc(size);
   if (buffer == NULL) {
@@ -139,12 +136,12 @@ static size_t file_size(FILE* file)
   return size;
 }
 
-static char* try_read_stream(
-    FILE* file, const char* path, int die_status, bool die_on_failure)
+static char*
+try_read_stream(FILE* file, const char* path, int die_status, bool die_on_failure)
 {
   size_t size = file_size(file);
-  char* buffer = (char*)try_allocate_or_die(
-      size + 1, die_status, /*die_on_failure:*/ true);
+  char* buffer =
+      (char*)try_allocate_or_die(size + 1, die_status, /*die_on_failure:*/ true);
 
   size_t bytes_read = fread(buffer, sizeof(char), size, file);
   if (bytes_read < size) {
@@ -164,8 +161,7 @@ static char* try_read_file(const char* path, bool die_on_failure)
   FILE* file = try_open_file(path, /*die_status:*/ EX_IOERR, die_on_failure);
   char* buffer = NULL;
   if (file) {
-    buffer =
-        try_read_stream(file, path, /*die_status:*/ EX_IOERR, die_on_failure);
+    buffer = try_read_stream(file, path, /*die_status:*/ EX_IOERR, die_on_failure);
     fclose(file);
   }
   return buffer;
@@ -225,8 +221,10 @@ static void repl(VM* vm)
 
     if (cstr__startswith(LOAD_FILE, line)) {
       load_file(
-          cstr__trim_leading_whitespace(cstr__trim_prefix(LOAD_FILE, line)), vm,
-          /*die_on_failure:*/ false);
+          cstr__trim_leading_whitespace(cstr__trim_prefix(LOAD_FILE, line)),
+          vm,
+          /*die_on_failure:*/ false
+      );
 
       goto next;
     }

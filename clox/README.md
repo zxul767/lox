@@ -23,6 +23,17 @@ If you want to test single-line commands in `clox`, you can run its [REPL](https
 
 When you're done with it, you can type `quit` to exit the REPL.
 
+The REPL also includes a built-in `help(value)` function to inspect available
+details for any value:
+
+```
+>> help(sin)
+[native function] sin(x:number) -> number | Returns the value of the sine function for x.
+
+>> help("hello".starts_with)
+[bound method] starts_with(prefix:str) -> bool | Returns true if string starts with prefix.
+```
+
 ## Debugging
 The REPL also supports a few directives to ease debugging of code:
 
