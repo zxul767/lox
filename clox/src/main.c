@@ -56,12 +56,16 @@ static void setup_line_reader()
 
   ic_enable_hint(false);
 
-  ic_printf("- Type `quit` to exit. (or use [kbd]ctrl-d[/]).\n"
-            "- Type `help(value)` to inspect values and functions/methods.\n"
-            "- Use [kbd]shift-tab[/] for multiline input "
-            "(or [kbd]ctrl-enter[/]/[kbd]ctrl-j[/])\n"
-            "- Use [kbd]tab[/] for word completion.\n"
-            "- Use [kbd]ctrl-r[/] to search the history.\n\n");
+  ic_printf(
+      "- Type `%s` or `%s` to exit. (or use [kbd]ctrl-d[/]).\n"
+      "- Type `help(value)` to inspect values and functions/methods.\n"
+      "- Use [kbd]shift-tab[/] for multiline input "
+      "(or [kbd]ctrl-enter[/]/[kbd]ctrl-j[/])\n"
+      "- Use [kbd]tab[/] for word completion.\n"
+      "- Use [kbd]ctrl-r[/] to search the history.\n\n",
+      QUIT,
+      EXIT
+  );
 
   // enable completion with a default completion function
   ic_set_default_completer(&completer, NULL);

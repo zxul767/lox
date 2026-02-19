@@ -28,6 +28,8 @@ import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
 public class Lox {
+  private static final String QUIT = "quit";
+  private static final String EXIT = "exit";
   private static final Interpreter interpreter = new Interpreter();
 
   public static void main(String[] args) throws IOException {
@@ -78,7 +80,7 @@ public class Lox {
     while (true) {
       try {
         String line = reader.readLine(">>> ").trim();
-        if (line == null || line.equals("quit")) break;
+        if (line == null || line.equals(QUIT) || line.equals(EXIT)) break;
 
         if (line.trim().isEmpty()) continue;
 
@@ -146,7 +148,7 @@ public class Lox {
             .toAnsi();
     terminal.writer().println(logo);
 
-    terminal.writer().println("- Type `quit` to quit. (or use «ctrl-d»)");
+    terminal.writer().printf("- Type `%s` or `%s` to quit. (or use «ctrl-d»)\n", QUIT, EXIT);
     terminal.writer().println("- Type `help(<symbol>)` to inspect values or functions/methods");
     // TODO: figure out how to do multiline editing (if you copy and paste it
     // works, but how do we manually type multiple lines?)
@@ -166,7 +168,7 @@ public class Lox {
     // provide completions (triggered via TAB) for all keywords
     Completer completer =
         new AggregateCompleter(
-            new StringsCompleter("quit"),
+            new StringsCompleter(List.of("quit", "exit")),
             new StringsCompleter(StandardLibrary.members.keySet()),
             new StringsCompleter(Scanner.keywords.keySet()));
 
