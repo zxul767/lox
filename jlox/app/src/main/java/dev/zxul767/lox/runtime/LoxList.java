@@ -11,7 +11,7 @@ class LoxListClass extends LoxNativeClass {
   private static List<NativeCallableSpec> createNativeMethods() {
     return List.of(
         nativeMethod(
-            "__init__    ()                 -> list", null, (interpreter, self, args) -> self),
+            "__init__    ()                 -> list", "", (interpreter, self, args) -> self),
         nativeMethod(
             "length      ()                 -> int",
             "Returns the number of elements in the list.",
@@ -26,7 +26,7 @@ class LoxListClass extends LoxNativeClass {
             (interpreter, self, args) -> at(self, args.get(0))),
         nativeMethod(
             "set         (index:int, value) -> any",
-            "Sets the element at index and returns the old value.",
+            "Sets the element at index and returns the assigned value.",
             (interpreter, self, args) -> set(self, args.get(0), args.get(1))),
         nativeMethod(
             "clear       ()                 -> nil",
@@ -42,7 +42,7 @@ class LoxListClass extends LoxNativeClass {
             (interpreter, self, args) -> getItem(self, args.get(0))),
         nativeMethod(
             "__setitem__ (index:int, value) -> any",
-            "Chainable alias of set(index, value) that returns the object instance.",
+            "Chainable alias of index assignment.",
             (interpreter, self, args) -> setItem(self, args.get(0), args.get(1))));
   }
 
@@ -71,7 +71,8 @@ class LoxListClass extends LoxNativeClass {
   }
 
   static Object set(LoxInstance instance, Object index, Object expression) {
-    return setItemAt(instance, index, expression, "set");
+    setItemAt(instance, index, expression, "set");
+    return expression;
   }
 
   static Object setItem(LoxInstance instance, Object index, Object expression) {

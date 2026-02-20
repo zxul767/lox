@@ -87,6 +87,8 @@ static int normalize_index(int index, const ObjectList* list)
 static Value lox_list__at(int args_count, Value* args, VM* vm)
 {
   (void)vm;
+  (void)args_count;
+
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   if (list->array.count == 0) {
@@ -102,9 +104,33 @@ static Value lox_list__at(int args_count, Value* args, VM* vm)
   return list->array.values[index];
 }
 
+static Value lox_list__set(int args_count, Value* args, VM* vm)
+{
+  (void)vm;
+  (void)args_count;
+
+  ObjectList* list = REQUIRE_LIST(args[0]);
+
+  if (list->array.count == 0) {
+    fprintf(stderr, "Index Error: Cannot access elements in empty list.\n");
+    return ERROR_VALUE;
+  }
+
+  int index = AS_INT(args[1]);
+  index = normalize_index(index, list);
+  if (index == -1) {
+    return ERROR_VALUE;
+  }
+
+  list->array.values[index] = args[2];
+  return args[2];
+}
+
 static Value lox_list__clear(int args_count, Value* args, VM* vm)
 {
   (void)vm;
+  (void)args_count;
+
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   value_array__dispose(&list->array);
@@ -114,6 +140,8 @@ static Value lox_list__clear(int args_count, Value* args, VM* vm)
 static Value lox_list__pop(int args_count, Value* args, VM* vm)
 {
   (void)vm;
+  (void)args_count;
+
   ObjectList* list = REQUIRE_LIST(args[0]);
   if (list->array.count == 0) {
     fprintf(stderr, "Error: Cannot remove elements from an empty list.\n");
@@ -169,8 +197,8 @@ static void define_list_methods(ObjectClass* _class, VM* vm)
       vm
   );
 
-  // self.at(index:number) -> any
-  static const CallableParameter at_parameters[] = {{"index", "number"}};
+  // self.at(index:int) -> any
+  static const CallableParameter at_parameters[] = {{"index", "int"}};
   static const CallableSignature at_signature =
       {.name = NULL, .arity = 1, .parameters = at_parameters, .return_type = "any"};
   define_method(
@@ -179,6 +207,19 @@ static void define_list_methods(ObjectClass* _class, VM* vm)
       lox_list__at,
       &at_signature,
       "Returns the element at index (negative indexes are supported).",
+      vm
+  );
+
+  // self.set(index:int, value:any) -> any
+  static const CallableParameter set_parameters[] = {{"index", "int"}, {"value", "any"}};
+  static const CallableSignature set_signature =
+      {.name = NULL, .arity = 2, .parameters = set_parameters, .return_type = "any"};
+  define_method(
+      _class,
+      "set",
+      lox_list__set,
+      &set_signature,
+      "Sets the element at index and returns the assigned value.",
       vm
   );
 

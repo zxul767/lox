@@ -5,6 +5,10 @@ import java.util.List;
 final class LoxHelp {
   private LoxHelp() {}
 
+  private static boolean isPublicMethod(String methodName) {
+    return !methodName.equals(LoxClass.INIT) && !methodName.startsWith("__");
+  }
+
   static void print(Object value) {
     if (value instanceof LoxClass) {
       printClassHelp((LoxClass) value);
@@ -55,7 +59,7 @@ final class LoxHelp {
   private static int countNonInitializerMethods(LoxClass _class) {
     int count = 0;
     for (String name : _class.methods.keySet()) {
-      if (!name.equals(LoxClass.INIT)) {
+      if (isPublicMethod(name)) {
         count++;
       }
     }
@@ -72,7 +76,7 @@ final class LoxHelp {
     System.out.println("methods: " + countNonInitializerMethods(_class));
     var names = _class.methods.keySet().stream().sorted().toList();
     for (String name : names) {
-      if (name.equals(LoxClass.INIT)) {
+      if (!isPublicMethod(name)) {
         continue;
       }
       printMethodEntry(_class.methods.get(name));
