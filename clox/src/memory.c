@@ -22,9 +22,7 @@ void memory__print_gc_stats()
 {
   // TODO: format numeric output with thousands separators
   fprintf(stderr, "bytes allocated: %zu.\n", __gc.bytes_allocated);
-  fprintf(
-      stderr, "next gc run after %zu bytes allocated.\n",
-      __gc.next_gc_in_bytes);
+  fprintf(stderr, "next gc run after %zu bytes allocated.\n", __gc.next_gc_in_bytes);
 }
 
 void memory__init_gc(VM* vm)
@@ -38,7 +36,10 @@ void memory__init_gc(VM* vm)
   __gc.next_gc_in_bytes = 1024 * 1024;
 }
 
-void memory__shutdown_gc() { free(__gc.gray_stack); }
+void memory__shutdown_gc()
+{
+  free(__gc.gray_stack);
+}
 
 void* memory__reallocate(void* pointer, size_t old_size, size_t new_size)
 {
@@ -80,9 +81,7 @@ static void dispose_object(Object* object)
   // function.)
   //
 #ifdef DEBUG_LOG_GC_DETAILED
-  fprintf(
-      stderr, "%p disposing (%s)\n", (void*)object,
-      OBJ_TYPE_TO_STRING[object->type]);
+  fprintf(stderr, "%p disposing (%s)\n", (void*)object, OBJ_TYPE_TO_STRING[object->type]);
 #endif
 
   switch (object->type) {
@@ -166,8 +165,7 @@ size_t memory__free_objects(Object* objects)
 static void grow_gray_capacity(GC* gc)
 {
   gc->gray_capacity = GROW_CAPACITY(gc->gray_capacity);
-  gc->gray_stack =
-      (Object**)realloc(gc->gray_stack, sizeof(Object*) * gc->gray_capacity);
+  gc->gray_stack = (Object**)realloc(gc->gray_stack, sizeof(Object*) * gc->gray_capacity);
 
   if (gc->gray_stack == NULL) {
     fprintf(stderr, "Critical failure: cannot allocate gray list during GC.\n");
@@ -211,6 +209,7 @@ static void mark_roots(VM* vm)
 {
   // VM constants
   memory__mark_object_as_alive((Object*)vm->init_string);
+  memory__mark_object_as_alive((Object*)vm->string_class);
 
   // the value stack
   for (Value* slot = vm->value_stack; slot < vm->stack_free_slot; slot++) {
@@ -412,8 +411,12 @@ void memory__run_gc()
   fprintf(stderr, "-- GC ends\n");
 
   fprintf(
-      stderr, "\tcollected %zu bytes (from %zu to %zu).\n",
-      before - __gc.bytes_allocated, before, __gc.bytes_allocated);
+      stderr,
+      "\tcollected %zu bytes (from %zu to %zu).\n",
+      before - __gc.bytes_allocated,
+      before,
+      __gc.bytes_allocated
+  );
 
   fprintf(stderr, "\tnext collection at %zu bytes\n", __gc.next_gc_in_bytes);
 #endif

@@ -1,28 +1,42 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #include "lox_stdlib.h"
+#include "memory.h"
 #include "object.h"
 #include "table.h"
-
-// TODO: check function arity against arguments passed in every function
+#include "vm.h"
 
 // returns the elapsed time since the program started running, in fractional
 // seconds
-Value clock_native(int args_count, Value* args)
+Value clock_native(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
+  (void)args_count;
+  (void)args;
+
+  // FIXME: `jlox` uses `System.currentTimeMillis()` for `clock`, which is not equivalent
+  // to `clock` here; we should decide on the semantics of `clock` so we can pick the
+  // proper implementation
   return NUMBER_VALUE((double)clock() / CLOCKS_PER_SEC);
 }
 
-Value print(int args_count, Value* args)
+Value print(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
+  (void)args_count;
+
   value__print(args[0]);
   return NIL_VALUE;
 }
 
-Value println(int args_count, Value* args)
+Value println(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
+  (void)args_count;
+
   value__println(args[0]);
   return NIL_VALUE;
 }
@@ -205,24 +219,75 @@ static void print_method_entry(const Entry* entry)
   fprintf(stderr, "\n");
 }
 
-static void print_method_signatures(const ObjectClass* _class)
+static int compare_entry_keys(const void* left, const void* right)
 {
-  print_constructor_help(_class);
-  fprintf(stderr, "methods: %d\n", count_non_initializer_methods(_class));
+  const Entry* a = *(const Entry* const*)left;
+  const Entry* b = *(const Entry* const*)right;
+  return strcmp(a->key->chars, b->key->chars);
+}
+
+static int
+collect_sorted_method_entries(const ObjectClass* _class, const Entry*** entries)
+{
+  int count = count_non_initializer_methods(_class);
+  if (count == 0) {
+    *entries = NULL;
+    return 0;
+  }
+
+  const Entry** result = ALLOCATE(const Entry*, count);
+  if (result == NULL) {
+    *entries = NULL;
+    return 0;
+  }
+
+  int index = 0;
   for (int i = 0; i < _class->methods.capacity; i++) {
     const Entry* entry = &_class->methods.entries[i];
     if (entry->key == NULL || is_initializer_name(entry->key)) {
       continue;
     }
-    print_method_entry(entry);
+    result[index++] = entry;
   }
+
+  qsort(result, (size_t)count, sizeof(*result), compare_entry_keys);
+  *entries = result;
+  return count;
+}
+
+static void print_signatures(const ObjectClass* _class, bool include_constructor)
+{
+  const Entry** entries = NULL;
+  int count = collect_sorted_method_entries(_class, &entries);
+
+  if (include_constructor) {
+    print_constructor_help(_class);
+  }
+  fprintf(stderr, "methods: %d\n", count);
+  for (int i = 0; i < count; i++) {
+    print_method_entry(entries[i]);
+  }
+
+  if (entries != NULL) {
+    FREE_ARRAY(const Entry*, entries, count);
+  }
+}
+
+static void print_all_signatures(const ObjectClass* _class)
+{
+  print_signatures(_class, /* include_constructor: */ true);
+}
+
+static void print_method_signatures_only(const ObjectClass* _class)
+{
+  print_signatures(_class, /* include_constructor: */ false);
 }
 
 static Value help_class(const Value value)
 {
   ObjectClass* _class = AS_CLASS(value);
   fprintf(stderr, "[class] <class %s>\n", _class->name->chars);
-  print_method_signatures(_class);
+  print_all_signatures(_class);
   return NIL_VALUE;
 }
 
@@ -243,20 +308,30 @@ static Value help_instance(const Value value)
   return NIL_VALUE;
 }
 
+static Value help_string_instance(const Value value)
+{
+  ObjectString* string = AS_STRING(value);
+  fprintf(stderr, "[string] <string instance>");
+  fprintf(stderr, "\n");
+  fprintf(stderr, "length: %d\n", string->length);
+  return NIL_VALUE;
+}
+
 static bool try_help_callable(const Value value)
 {
   ObjectCallable* callable = get_callable_from_value(value);
   if (callable == NULL || callable->signature.name == NULL) {
     return false;
   }
-
   fprintf(stderr, "[%s] ", type_description(value));
   print_callable_details(callable, callable->signature.name->chars);
   fprintf(stderr, "\n");
   return true;
 }
 
-Value help(int args_count, Value* args)
+// FIXME: this function should always return `nil` value, but it looks as though
+// it might be returning other values in some cases
+Value help(int args_count, Value* args, VM* vm)
 {
   // `help` always takes exactly one argument; we keep this to satisfy the
   // shared native-function signature and avoid unused-parameter warnings.
@@ -272,6 +347,11 @@ Value help(int args_count, Value* args)
     case OBJECT_INSTANCE:
     case OBJECT_LIST: {
       return help_instance(value);
+    }
+    case OBJECT_STRING: {
+      Value result = help_string_instance(value);
+      print_method_signatures_only(vm->string_class);
+      return result;
     }
     default: {
       if (try_help_callable(value)) {

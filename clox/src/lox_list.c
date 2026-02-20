@@ -47,15 +47,17 @@ void lox_list__print(const ObjectList* list)
 
 // in all native methods, the first argument is always `this` (i.e., the
 // instance)
-static Value lox_list__length(int args_count, Value* args)
+static Value lox_list__length(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   return NUMBER_VALUE(list->array.count);
 }
 
-static Value lox_list__append(int args_count, Value* args)
+static Value lox_list__append(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
   ObjectList* list = REQUIRE_LIST(args[0]);
   value_array__append(&list->array, args[1]);
 
@@ -82,8 +84,9 @@ static int normalize_index(int index, const ObjectList* list)
   return normed_index;
 }
 
-static Value lox_list__at(int args_count, Value* args)
+static Value lox_list__at(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   if (list->array.count == 0) {
@@ -99,16 +102,18 @@ static Value lox_list__at(int args_count, Value* args)
   return list->array.values[index];
 }
 
-static Value lox_list__clear(int args_count, Value* args)
+static Value lox_list__clear(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   value_array__dispose(&list->array);
   return NIL_VALUE;
 }
 
-static Value lox_list__pop(int args_count, Value* args)
+static Value lox_list__pop(int args_count, Value* args, VM* vm)
 {
+  (void)vm;
   ObjectList* list = REQUIRE_LIST(args[0]);
   if (list->array.count == 0) {
     fprintf(stderr, "Error: Cannot remove elements from an empty list.\n");
@@ -139,9 +144,9 @@ static void define_method(
 
 static void define_list_methods(ObjectClass* _class, VM* vm)
 {
-  // self.length() -> number
+  // self.length() -> int
   static const CallableSignature length_signature =
-      {.name = NULL, .arity = 0, .parameters = NULL, .return_type = "number"};
+      {.name = NULL, .arity = 0, .parameters = NULL, .return_type = "int"};
   define_method(
       _class,
       "length",

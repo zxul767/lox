@@ -9,6 +9,7 @@
 #include "debug.h"
 #include "lox_list.h"
 #include "lox_stdlib.h"
+#include "lox_string.h"
 #include "memory.h"
 #include "object.h"
 #include "vm.h"
@@ -194,6 +195,7 @@ static void init_stdlib(VM* vm)
 
   WITH_OBJECTS_NURSERY(vm, {
     define_native_class("list", lox_list__new_class("list", vm), vm);
+    vm->string_class = lox_string__new_class("str", vm);
   });
 }
 
@@ -215,6 +217,7 @@ void vm__init(VM* vm)
   // have a value on it
   vm->init_string = NULL;
   vm->init_string = string__copy("__init__", strlen("__init__"), vm);
+  vm->string_class = NULL;
 
   init_stdlib(vm);
 }
@@ -223,8 +226,11 @@ void vm__dispose(VM* vm)
 {
   table__dispose(&vm->interned_strings);
   table__dispose(&vm->global_vars);
-  // we don't need to explicitly dispose it, since it's tracked by `vm->objects`
+  // we don't need to explicitly dispose them, since it's tracked by `vm->objects`
+  // and will be freed in the call to `memory__free_objects` below
   vm->init_string = NULL;
+  vm->string_class = NULL;
+
   vm->object_nursery_end = NULL;
   vm->object_nursery_nested_scopes = 0;
 
@@ -308,8 +314,11 @@ static bool call_native(ObjectNativeFunction* native, int args_count, VM* vm)
   // where k = args_count, and `this` is the method's instance
 
   int include_this_arg = native->is_method ? 1 : 0;
-  Value result =
-      native->function(args_count, vm->stack_free_slot - args_count - include_this_arg);
+  Value result = native->function(
+      args_count,
+      vm->stack_free_slot - args_count - include_this_arg,
+      vm
+  );
 
   // +1 to clobber the native function or instance with the call's result
   vm->stack_free_slot -= args_count + 1;
@@ -555,12 +564,23 @@ static InterpretResult run(VM* vm)
       break;
     }
     case OP_GET_PROPERTY: {
-      if (!IS_INSTANCE(peek_value(0, vm))) {
-        runtime_error(vm, "Only instances have properties");
+      ObjectString* name = READ_STRING();
+      Value receiver = peek_value(0, vm);
+
+      // strings are not proper objects (implementation-wise), so they're handled
+      // separately
+      if (IS_STRING(receiver)) {
+        if (!bind_method(vm->string_class, name, vm)) {
+          return INTERPRET_RUNTIME_ERROR;
+        }
+        break;
+      }
+
+      if (!IS_INSTANCE(receiver)) {
+        runtime_error(vm, "Only instances and strings have properties");
         return INTERPRET_RUNTIME_ERROR;
       }
-      ObjectInstance* instance = AS_INSTANCE(peek_value(0, vm));
-      ObjectString* name = READ_STRING();
+      ObjectInstance* instance = AS_INSTANCE(receiver);
 
       Value value;
       if (table__get(&instance->fields, name, &value)) {

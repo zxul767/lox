@@ -6,6 +6,7 @@
 
 typedef struct Bytecode Bytecode;
 typedef struct ObjectClosure ObjectClosure;
+typedef struct ObjectClass ObjectClass;
 typedef struct ObjectUpvalue ObjectUpvalue;
 typedef struct FunctionCompiler FunctionCompiler;
 
@@ -79,6 +80,7 @@ typedef struct VM {
   // are very commonly referenced, so we want them to be interned for better
   // performance
   ObjectString* init_string;
+  ObjectClass* string_class;
 
 } VM;
 

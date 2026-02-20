@@ -10,6 +10,10 @@ final class LoxHelp {
       printClassHelp((LoxClass) value);
       return;
     }
+    if (value instanceof LoxString) {
+      printStringHelp((LoxString) value);
+      return;
+    }
     if (value instanceof LoxInstance) {
       printInstanceHelp((LoxInstance) value);
       return;
@@ -64,6 +68,17 @@ final class LoxHelp {
     System.out.println();
   }
 
+  private static void printMethodsOnly(LoxClass _class) {
+    System.out.println("methods: " + countNonInitializerMethods(_class));
+    var names = _class.methods.keySet().stream().sorted().toList();
+    for (String name : names) {
+      if (name.equals(LoxClass.INIT)) {
+        continue;
+      }
+      printMethodEntry(_class.methods.get(name));
+    }
+  }
+
   private static void printClassHelp(LoxClass _class) {
     System.out.println("[class] <class " + _class.name + ">");
 
@@ -76,19 +91,18 @@ final class LoxHelp {
     printDocstring(initializer != null ? initializer.docstring() : null);
     System.out.println();
 
-    System.out.println("methods: " + countNonInitializerMethods(_class));
-    for (var entry : _class.methods.entrySet()) {
-      String name = entry.getKey();
-      if (name.equals(LoxClass.INIT)) {
-        continue;
-      }
-      printMethodEntry(entry.getValue());
-    }
+    printMethodsOnly(_class);
+  }
+
+  private static void printStringHelp(LoxString value) {
+    System.out.println("[string] <string instance>");
+    System.out.println("length: " + value.string.length());
+    printMethodsOnly(StandardLibrary.string);
   }
 
   private static void printInstanceHelp(LoxInstance instance) {
     String className = instance._class.name;
-    System.out.println("[" + className + "] <instance>");
+    System.out.println("[" + className + "] <" + className + " instance>");
     System.out.println("Use help(" + className + ") to inspect constructor and methods.");
   }
 

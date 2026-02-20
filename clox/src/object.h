@@ -16,17 +16,16 @@ typedef struct VM VM;
 
 #define IS_CLASS(value) is_object_type(value, OBJECT_CLASS)
 
-#define IS_CALLABLE(value)                                                     \
-  (is_object_type(value, OBJECT_CALLABLE) ||                                   \
-   is_object_type(value, OBJECT_FUNCTION) ||                                   \
-   is_object_type(value, OBJECT_NATIVE_FUNCTION) ||                            \
+#define IS_CALLABLE(value)                                                               \
+  (is_object_type(value, OBJECT_CALLABLE) || is_object_type(value, OBJECT_FUNCTION) ||   \
+   is_object_type(value, OBJECT_NATIVE_FUNCTION) ||                                      \
    is_object_type(value, OBJECT_BOUND_METHOD))
 #define IS_CLOSURE(value) is_object_type(value, OBJECT_CLOSURE)
 #define IS_FUNCTION(value) is_object_type(value, OBJECT_FUNCTION)
 #define IS_BOUND_METHOD(value) is_object_type(value, OBJECT_BOUND_METHOD)
 #define IS_NATIVE_FUNCTION(value) is_object_type(value, OBJECT_NATIVE_FUNCTION)
 
-#define IS_INSTANCE(value)                                                     \
+#define IS_INSTANCE(value)                                                               \
   (is_object_type(value, OBJECT_INSTANCE) || is_object_type(value, OBJECT_LIST))
 
 #define IS_STRING(value) is_object_type(value, OBJECT_STRING)
@@ -49,16 +48,16 @@ typedef struct VM VM;
 // without redundancy, see:
 //
 // https://stackoverflow.com/questions/9907160/how-to-convert-enum-names-to-string-in-c
-#define FOREACH_OBJ_TYPE(TYPE)                                                 \
-  TYPE(OBJECT_CLASS)                                                           \
-  TYPE(OBJECT_CLOSURE)                                                         \
-  TYPE(OBJECT_FUNCTION)                                                        \
-  TYPE(OBJECT_CALLABLE)                                                        \
-  TYPE(OBJECT_BOUND_METHOD)                                                    \
-  TYPE(OBJECT_NATIVE_FUNCTION)                                                 \
-  TYPE(OBJECT_INSTANCE)                                                        \
-  TYPE(OBJECT_UPVALUE)                                                         \
-  TYPE(OBJECT_STRING)                                                          \
+#define FOREACH_OBJ_TYPE(TYPE)                                                           \
+  TYPE(OBJECT_CLASS)                                                                     \
+  TYPE(OBJECT_CLOSURE)                                                                   \
+  TYPE(OBJECT_FUNCTION)                                                                  \
+  TYPE(OBJECT_CALLABLE)                                                                  \
+  TYPE(OBJECT_BOUND_METHOD)                                                              \
+  TYPE(OBJECT_NATIVE_FUNCTION)                                                           \
+  TYPE(OBJECT_INSTANCE)                                                                  \
+  TYPE(OBJECT_UPVALUE)                                                                   \
+  TYPE(OBJECT_STRING)                                                                    \
   TYPE(OBJECT_LIST) // native class
 
 #define GENERATE_ENUM(ENUM) ENUM,
@@ -86,7 +85,7 @@ struct Object {
   bool is_alive;
 };
 
-typedef Value (*NativeFunction)(int args_count, Value* args);
+typedef Value (*NativeFunction)(int args_count, Value* args, VM* vm);
 
 typedef struct CallableParameter {
   const char* name;
@@ -182,7 +181,7 @@ typedef struct ObjectBoundMethod {
 
 } ObjectBoundMethod;
 
-#define ALLOCATE_OBJECT(type, object_type, vm)                                 \
+#define ALLOCATE_OBJECT(type, object_type, vm)                                           \
   (type*)object__allocate(sizeof(type), object_type, vm)
 
 Object* object__allocate(size_t size, ObjectType type, VM* vm);
@@ -195,8 +194,12 @@ ObjectBoundMethod* bound_method__new(Value instance, Value method, VM* vm);
 ObjectClosure* closure__new(ObjectFunction*, VM* vm);
 ObjectFunction* function__new(VM* vm);
 ObjectNativeFunction* native_function__new(
-    NativeFunction function, ObjectString* name,
-    const CallableSignature* signature, const char* docstring, VM* vm);
+    NativeFunction function,
+    ObjectString* name,
+    const CallableSignature* signature,
+    const char* docstring,
+    VM* vm
+);
 ObjectUpvalue* upvalue__new(Value* slot, VM* vm);
 
 ObjectString* string__copy(const char* chars, int length, VM* vm);
