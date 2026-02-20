@@ -79,6 +79,8 @@ typedef enum {
   OP_NEW_CLASS, // [opcode, class_constant_location]
   OP_GET_PROPERTY,
   OP_SET_PROPERTY,
+  OP_GET_INDEX,
+  OP_SET_INDEX,
 
   // pop result value off of the stack, pop last call frame (including value
   // stack args), and push result back onto the stack (for the caller to use)

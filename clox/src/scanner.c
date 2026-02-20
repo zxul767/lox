@@ -10,21 +10,35 @@
 const char* TOKEN_TO_STRING[] = {FOREACH_TOKEN(GENERATE_STRING)};
 
 // TODO: is it possible to elegantly generate the strings from TOKEN_TO_STRING?
-const char* KEYWORDS[] = {"and",  "class", "else",  "false",  "for",   "fun",
-                          "if",   "nil",   "or",    "return", "super", "this",
-                          "true", "var",   "while", NULL};
+const char* KEYWORDS[] = {
+    "and",
+    "class",
+    "else",
+    "false",
+    "for",
+    "fun",
+    "if",
+    "nil",
+    "or",
+    "return",
+    "super",
+    "this",
+    "true",
+    "var",
+    "while",
+    NULL
+};
 
 // sentinel tokens
-const Token BOF_TOKEN = {
-    .type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
+const Token BOF_TOKEN = {.type = TOKEN_BOF, .start = "", .length = 0, .line = 0};
 
 // we don't need positional information for newlines (for the time being)
-const Token NEWLINE_TOKEN = {
-    .type = TOKEN_NEWLINE, .start = "", .length = 0, .line = 0};
+const Token NEWLINE_TOKEN = {.type = TOKEN_NEWLINE, .start = "", .length = 0, .line = 0};
 
 // we don't need positional information for ignorables (for the time being)
 const Token IGNORABLE_TOKEN = {
-    .type = TOKEN_IGNORABLE, .start = "", .length = 0, .line = 0};
+    .type = TOKEN_IGNORABLE, .start = "", .length = 0, .line = 0
+};
 
 void scanner__init(Scanner* scanner, const char* source_code)
 {
@@ -33,7 +47,10 @@ void scanner__init(Scanner* scanner, const char* source_code)
   scanner->current_line = 1;
 }
 
-static bool is_digit(char c) { return c >= '0' && c <= '9'; }
+static bool is_digit(char c)
+{
+  return c >= '0' && c <= '9';
+}
 
 static bool is_alpha(char c)
 {
@@ -79,7 +96,10 @@ static char advance(Scanner* scanner)
   return scanner->current[-1];
 }
 
-static char peek(Scanner* scanner) { return *(scanner->current); }
+static char peek(Scanner* scanner)
+{
+  return *(scanner->current);
+}
 
 static char peek_next(Scanner* scanner)
 {
@@ -172,8 +192,8 @@ static Token collapse_whitespace(Scanner* scanner)
   return IGNORABLE_TOKEN;
 }
 
-static TokenType check_keyword(
-    const char* keyword, TokenType type, const Scanner* scanner, int skip)
+static TokenType
+check_keyword(const char* keyword, TokenType type, const Scanner* scanner, int skip)
 {
   // `skip` is the size of the prefix we've already verified for equality
   if (cstr__equals(scanner->start + skip, scanner->current, keyword + skip)) {
@@ -276,8 +296,8 @@ static bool try_match_escape_sequence(Scanner* scanner, Token* error)
 {
   // TODO: should store more intermediate errors and not bail out early?
   if (!is_valid_escape_sequence(scanner)) {
-    *error = error_token(
-        scanner, "Invalid escape sequence \"\\%c\".", peek_next(scanner));
+    *error =
+        error_token(scanner, "Invalid escape sequence \"\\%c\".", peek_next(scanner));
     return false;
   }
   advance(scanner);
@@ -332,6 +352,10 @@ Token scanner__next_token(Scanner* scanner)
     return make_token(TOKEN_LEFT_PAREN, scanner);
   case ')':
     return make_token(TOKEN_RIGHT_PAREN, scanner);
+  case '[':
+    return make_token(TOKEN_LEFT_BRACKET, scanner);
+  case ']':
+    return make_token(TOKEN_RIGHT_BRACKET, scanner);
   case '{':
     return make_token(TOKEN_LEFT_BRACE, scanner);
   case '}':
@@ -359,17 +383,13 @@ Token scanner__next_token(Scanner* scanner)
   case '*':
     return make_token(TOKEN_STAR, scanner);
   case '!':
-    return make_token(
-        match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG, scanner);
+    return make_token(match('=', scanner) ? TOKEN_BANG_EQUAL : TOKEN_BANG, scanner);
   case '=':
-    return make_token(
-        match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL, scanner);
+    return make_token(match('=', scanner) ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL, scanner);
   case '<':
-    return make_token(
-        match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS, scanner);
+    return make_token(match('=', scanner) ? TOKEN_LESS_EQUAL : TOKEN_LESS, scanner);
   case '>':
-    return make_token(
-        match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER, scanner);
+    return make_token(match('=', scanner) ? TOKEN_GREATER_EQUAL : TOKEN_GREATER, scanner);
   case '"':
     return string(scanner);
   }

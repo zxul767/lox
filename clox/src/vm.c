@@ -385,6 +385,74 @@ static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
   return true;
 }
 
+static bool validate_integer_index(Value index, VM* vm, int* result)
+{
+  if (!IS_NUMBER(index)) {
+    runtime_error(vm, "List index must be an integer.");
+    return false;
+  }
+
+  double raw = AS_NUMBER(index);
+  int integer = (int)raw;
+  if (raw != (double)integer) {
+    runtime_error(vm, "List index must be an integer.");
+    return false;
+  }
+
+  *result = integer;
+  return true;
+}
+
+static bool normalize_list_index(int index, const ObjectList* list, VM* vm, int* result)
+{
+  if (list->array.count == 0) {
+    runtime_error(vm, "Cannot access elements in empty list.");
+    return false;
+  }
+
+  int normalized = index < 0 ? list->array.count + index : index;
+  if (normalized < 0 || normalized >= list->array.count) {
+    runtime_error(
+        vm,
+        "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
+        index,
+        list->array.count - 1,
+        list->array.count
+    );
+    return false;
+  }
+
+  *result = normalized;
+  return true;
+}
+
+static bool resolve_list_index(
+    Value receiver,
+    Value index_value,
+    const char* receiver_error,
+    VM* vm,
+    ObjectList** list,
+    int* normalized_index
+)
+{
+  if (!IS_LIST(receiver)) {
+    runtime_error(vm, receiver_error);
+    return false;
+  }
+
+  int index = 0;
+  if (!validate_integer_index(index_value, vm, &index)) {
+    return false;
+  }
+
+  *list = AS_LIST(receiver);
+  if (!normalize_list_index(index, *list, vm, normalized_index)) {
+    return false;
+  }
+
+  return true;
+}
+
 // Lox follows Ruby in that `nil` and `false` are falsey and every other
 // value behaves like `true` (this may throw off users from other languages
 // who may be used to having `0` behave like `false`, e.g., C/C++ users)
@@ -602,6 +670,48 @@ static InterpretResult run(VM* vm)
       pop_value(vm);               // pop the instance
       // push the assigned value because assignments are expressions
       push_value(value, vm);
+      break;
+    }
+    case OP_GET_INDEX: {
+      Value index = pop_value(vm);
+      Value receiver = pop_value(vm);
+
+      ObjectList* list = NULL;
+      int normed_index = 0;
+      if (!resolve_list_index(
+              receiver,
+              index,
+              "Only lists support index access.",
+              vm,
+              // output parameters
+              &list,
+              &normed_index
+          )) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      push_value(list->array.values[normed_index], vm);
+      break;
+    }
+    case OP_SET_INDEX: {
+      Value value = pop_value(vm);
+      Value index = pop_value(vm);
+      Value receiver = pop_value(vm);
+
+      ObjectList* list = NULL;
+      int normed_index = 0;
+      if (!resolve_list_index(
+              receiver,
+              index,
+              "Only lists support index assignment.",
+              vm,
+              // output parameters
+              &list,
+              &normed_index
+          )) {
+        return INTERPRET_RUNTIME_ERROR;
+      }
+      // assignments are expressions; result is the assigned value
+      push_value(list->array.values[normed_index] = value, vm);
       break;
     }
     // binary operations

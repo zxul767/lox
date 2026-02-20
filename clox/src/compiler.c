@@ -564,8 +564,7 @@ static int resolve_upvalue(Token* name, FunctionCompiler* current)
   if (current->enclosing_compiler == NULL)
     return -1;
 
-  int index;
-  index = resolve_local(name, current->enclosing_compiler);
+  int index = resolve_local(name, current->enclosing_compiler);
   if (index != -1) {
     current->enclosing_compiler->locals[index].is_captured = true;
     return add_or_get_upvalue(current, (uint8_t)index, /*is_local:*/ true);
@@ -1431,6 +1430,24 @@ static void call(Compiler* compiler)
   emit_bytes(OP_CALL, args_count, compiler);
 }
 
+static void index_(Compiler* compiler)
+{
+  expression(compiler);
+  consume(
+      TOKEN_RIGHT_BRACKET,
+      "Expected ']' after indexing expression.",
+      compiler->parser
+  );
+
+  if (compiler->can_assign && match(TOKEN_EQUAL, compiler->parser)) {
+    expression(compiler);
+    emit_byte(OP_SET_INDEX, compiler);
+
+  } else {
+    emit_byte(OP_GET_INDEX, compiler);
+  }
+}
+
 static void dot(Compiler* compiler)
 {
   consume(TOKEN_IDENTIFIER, "Expected property name after '.'.", compiler->parser);
@@ -1544,6 +1561,8 @@ ParseRule rules[] = {
   // TOKEN                    PREFIX     INFIX   PRECEDENCE
   [TOKEN_LEFT_PAREN]        = {grouping, call,   PREC_CALL},
   [TOKEN_RIGHT_PAREN]       = {NULL,     NULL,   PREC_NONE},
+  [TOKEN_LEFT_BRACKET]      = {NULL,     index_, PREC_CALL},
+  [TOKEN_RIGHT_BRACKET]     = {NULL,     NULL,   PREC_NONE},
   [TOKEN_LEFT_BRACE]        = {NULL,     NULL,   PREC_NONE},
   [TOKEN_RIGHT_BRACE]       = {NULL,     NULL,   PREC_NONE},
   [TOKEN_COMMA]             = {NULL,     NULL,   PREC_NONE},

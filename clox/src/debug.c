@@ -27,8 +27,11 @@ void debug__print_callframe_divider()
 void debug__disassemble(const Bytecode* code, const char* name)
 {
   fprintf(
-      stderr, "BYTECODE for '%s' %s\n", name != NULL ? name : "<script>",
-      name != NULL ? "function" : "");
+      stderr,
+      "BYTECODE for '%s' %s\n",
+      name != NULL ? name : "<script>",
+      name != NULL ? "function" : ""
+  );
   debug__print_section_divider();
   for (int offset = 0; offset < code->count;) {
     offset = debug__disassemble_instruction(code, offset);
@@ -48,7 +51,8 @@ static int simple_instruction(const char* name, int offset)
 }
 
 static int byte_instruction(
-    const char* name, const Bytecode* code, int offset, const char* value_name)
+    const char* name, const Bytecode* code, int offset, const char* value_name
+)
 {
   // byte instructions are encoded as:
   // [OP_CODE][value]...
@@ -60,8 +64,8 @@ static int byte_instruction(
   return offset + 2;
 }
 
-static int jump_instruction(
-    const char* name, int direction, const Bytecode* code, int offset)
+static int
+jump_instruction(const char* name, int direction, const Bytecode* code, int offset)
 {
   // jump instructions are encoded as:
   // [JUMP_OP_CODE][jump_length_high_bits][jump_length_low_bits]...
@@ -69,15 +73,12 @@ static int jump_instruction(
   //     offset
   uint16_t jump_length = (uint16_t)(code->instructions[offset + 1] << 8);
   jump_length |= code->instructions[offset + 2];
-  fprintf(
-      stderr, "%-20s -> offset:%04d\n", name,
-      offset + 3 + direction * jump_length);
+  fprintf(stderr, "%-20s -> offset:%04d\n", name, offset + 3 + direction * jump_length);
 
   return offset + 3;
 }
 
-static int
-constant_instruction(const char* name, const Bytecode* code, int offset)
+static int constant_instruction(const char* name, const Bytecode* code, int offset)
 {
   // constant instructions are encoded as:
   // [OP_CODE][index]...
@@ -123,8 +124,13 @@ int closure_instruction(const Bytecode* code, int offset)
     int is_local = code->instructions[offset++];
     int index = code->instructions[offset++];
     fprintf(
-        stderr, "%04d    |    %-20supvalue:(index:%d,%s)\n", offset - 2, "",
-        index, is_local ? "parent" : "ancestor");
+        stderr,
+        "%04d    |    %-20supvalue:(index:%d,%s)\n",
+        offset - 2,
+        "",
+        index,
+        is_local ? "parent" : "ancestor"
+    );
   }
   return offset;
 }
@@ -133,8 +139,7 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
 {
   fprintf(stderr, "%04d ", offset);
 
-  if (offset > 0 &&
-      code->to_source_line[offset] == code->to_source_line[offset - 1]) {
+  if (offset > 0 && code->to_source_line[offset] == code->to_source_line[offset - 1]) {
     // reduce visual clutter by not printing repeated source line numbers
     // but still add an indicator to let the user know source line number is the
     // same as the previous instruction
@@ -196,8 +201,7 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
   case OP_JUMP:
     return jump_instruction("OP_JUMP", /*direction:*/ +1, code, offset);
   case OP_JUMP_IF_FALSE:
-    return jump_instruction(
-        "OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
+    return jump_instruction("OP_JUMP_IF_FALSE", /*direction:*/ +1, code, offset);
   case OP_CALL:
     return byte_instruction("OP_CALL", code, offset, "#args");
   case OP_NEW_CLASS:
@@ -208,6 +212,10 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
     return constant_instruction("OP_GET_PROPERTY", code, offset);
   case OP_SET_PROPERTY:
     return constant_instruction("OP_SET_PROPERTY", code, offset);
+  case OP_GET_INDEX:
+    return simple_instruction("OP_GET_INDEX", offset);
+  case OP_SET_INDEX:
+    return simple_instruction("OP_SET_INDEX", offset);
   case OP_NEW_CLOSURE:
     return closure_instruction(code, offset);
   case OP_RETURN:
@@ -227,8 +235,8 @@ int debug__disassemble_instruction(const Bytecode* code, int offset)
 void debug__dump_value_stack(const VM* vm, const Value* from)
 {
   fprintf(stderr, "            stack: ");
-  for (const Value* value = from ? from : vm->value_stack;
-       value < vm->stack_free_slot; value++) {
+  const Value* value = from ? from : vm->value_stack;
+  for (; value < vm->stack_free_slot; value++) {
     fprintf(stderr, "[");
     // `value__print` would print the string `"true"` in the same way as the
     // literal `true` but during debugging we want to distinguish between the
@@ -239,8 +247,7 @@ void debug__dump_value_stack(const VM* vm, const Value* from)
   fprintf(stderr, "\n");
 }
 
-static int
-get_current_source_line_in_frame(const CallFrame* frame, const VM* vm)
+static int get_current_source_line_in_frame(const CallFrame* frame, const VM* vm)
 {
   const Bytecode* bytecode = &(frame->closure->function->bytecode);
   int offset = callframe__current_offset(frame);
