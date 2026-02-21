@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -214,6 +215,25 @@ ObjectFunction* function__new(VM* vm)
   return function;
 }
 
+static void assert_defaults_are_trailing(const CallableSignature* signature)
+{
+  assert(signature != NULL && "signature cannot be NULL");
+  assert(
+      signature->arity == 0 ||
+      (signature->parameters != NULL && "parameters cannot be NULL when arity > 0")
+  );
+
+  bool seen_default = false;
+  for (int i = 0; i < signature->arity; i++) {
+    bool has_default = signature->parameters[i].default_value_repr != NULL;
+    if (has_default) {
+      seen_default = true;
+    } else {
+      assert(!seen_default && "parameters with default values must be trailing");
+    }
+  }
+}
+
 ObjectNativeFunction* native_function__new(
     NativeFunction primitive,
     ObjectString* name,
@@ -222,6 +242,8 @@ ObjectNativeFunction* native_function__new(
     VM* vm
 )
 {
+  assert_defaults_are_trailing(signature);
+
   ObjectNativeFunction* native =
       ALLOCATE_OBJECT(ObjectNativeFunction, OBJECT_NATIVE_FUNCTION, vm);
 

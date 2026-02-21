@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "indexing.h"
 #include "lox_string.h"
 #include "memory.h"
 
@@ -76,43 +77,27 @@ static Value lox_string__slice(int args_count, Value* args, VM* vm)
 
   ObjectString* self = REQUIRE_STRING(args[0]);
   int start = AS_INT(args[1]);
-  int end = AS_INT(args[2]);
+  int end = self->length;
+  if (args_count == 2 && !IS_NIL(args[2])) {
+    end = AS_INT(args[2]);
+  }
 
-  if (self->length == 0) {
-    fprintf(stderr, "Index Error: Cannot slice an empty string.\n");
-    return ERROR_VALUE;
-  }
-  if (start < 0 || start >= self->length) {
-    fprintf(
-        stderr,
-        "Index Error: start index %d is out of range [0..%d].\n",
-        start,
-        self->length - 1
-    );
-    return ERROR_VALUE;
-  }
-  if (end < 0 || end > self->length) {
-    fprintf(
-        stderr,
-        "Index Error: end index %d is out of range [0..%d].\n",
-        end,
-        self->length
-    );
-    return ERROR_VALUE;
-  }
-  if (start > end) {
-    fprintf(
-        stderr,
-        "Index Error: start index %d cannot be greater than end index %d.\n",
-        start,
-        end
-    );
+  int normed_start = 0;
+  int normed_end = 0;
+  if (!index__normalize_slice_bounds(
+          start,
+          end,
+          self->length,
+          "string",
+          &normed_start,
+          &normed_end
+      )) {
     return ERROR_VALUE;
   }
 
-  int length = end - start;
+  int length = normed_end - normed_start;
   char* chars = ALLOCATE(char, length + 1);
-  memcpy(chars, self->chars + start, length);
+  memcpy(chars, self->chars + normed_start, length);
   chars[length] = '\0';
 
   return OBJECT_VALUE(string__take_ownership(chars, length, vm));
@@ -196,8 +181,11 @@ static void define_string_methods(ObjectClass* _class, VM* vm)
       vm
   );
 
-  // self.slice(start:int, end:int) -> str
-  static const CallableParameter slice_parameters[] = {{"start", "int"}, {"end", "int"}};
+  // self.slice(start:int, end:int=nil) -> str
+  static const CallableParameter slice_parameters[] = {
+      {"start", "int"},
+      {"end", "int", "nil"}
+  };
   static const CallableSignature slice_signature =
       {.name = NULL, .arity = 2, .parameters = slice_parameters, .return_type = "str"};
   define_method(

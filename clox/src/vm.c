@@ -243,19 +243,43 @@ void vm__dispose(VM* vm)
 #endif
 }
 
+static int compute_min_arity(ObjectCallable* callable)
+{
+  int min_arity = callable->signature.arity;
+  const CallableParameter* parameters = callable->signature.parameters;
+  if (parameters != NULL) {
+    while (min_arity > 0 && parameters[min_arity - 1].default_value_repr != NULL) {
+      min_arity--;
+    }
+  }
+  return min_arity;
+}
+
 static bool is_valid_call(ObjectCallable* callable, int args_count, VM* vm)
 {
   int arity = callable->signature.arity;
-  if (args_count != arity) {
-    runtime_error(
-        vm,
-        "Expected %d argument%s but got %d",
-        arity,
-        arity == 1 ? "" : "s",
-        args_count
-    );
+  int min_arity = compute_min_arity(callable);
+  if (args_count < min_arity || args_count > arity) {
+    if (min_arity == arity) {
+      runtime_error(
+          vm,
+          "Expected %d argument%s but got %d",
+          arity,
+          arity == 1 ? "" : "s",
+          args_count
+      );
+    } else {
+      runtime_error(
+          vm,
+          "Expected between %d and %d arguments but got %d",
+          min_arity,
+          arity,
+          args_count
+      );
+    }
     return false;
   }
+
   if (vm->frames_count == FRAMES_MAX) {
     runtime_error(vm, "Stack overflow!");
     return false;

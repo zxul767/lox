@@ -29,9 +29,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       Errors.runtimeError(error);
     }
   }
-  public Object evaluate(Expr expression) { return expression.accept(this); }
 
-  void execute(Stmt stmt) { stmt.accept(this); }
+  public Object evaluate(Expr expression) {
+    return expression.accept(this);
+  }
+
+  void execute(Stmt stmt) {
+    stmt.accept(this);
+  }
 
   void executeBlock(List<Stmt> statements, Environment environment) {
     Environment previous = this.environment;
@@ -48,7 +53,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   // Track how many environment hops (from the active environment) are
   // necessary to make to reach the environment were the variable contained
   // in `expr` was declared.
-  void resolve(Expr expr, int hops) { locals.put(expr, hops); }
+  void resolve(Expr expr, int hops) {
+    locals.put(expr, hops);
+  }
 
   @Override
   public Void visitBlockStmt(Stmt.Block stmt) {
@@ -62,9 +69,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     if (stmt.superclass != null) {
       superclass = evaluate(stmt.superclass);
       if (!(superclass instanceof LoxClass)) {
-        throw new RuntimeError(
-            stmt.superclass.name, "Superclass must be a class."
-        );
+        throw new RuntimeError(stmt.superclass.name, "Superclass must be a class.");
       }
     }
     environment.define(stmt.name.lexeme, null);
@@ -76,14 +81,12 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
     Map<String, LoxCallable> methods = new HashMap<>();
     for (Stmt.Function method : stmt.methods) {
-      LoxFunction function = new LoxFunction(
-          method, environment,
-          /* isInitializer: */ method.name.lexeme.equals(LoxClass.INIT)
-      );
+      LoxFunction function =
+          new LoxFunction(
+              method, environment, /* isInitializer: */ method.name.lexeme.equals(LoxClass.INIT));
       methods.put(method.name.lexeme, function);
     }
-    LoxClass _class =
-        new LoxClass(stmt.name.lexeme, (LoxClass)superclass, methods);
+    LoxClass _class = new LoxClass(stmt.name.lexeme, (LoxClass) superclass, methods);
 
     // The enviroment defined for "super" was transient and only needed
     // while defining the methods in the class (so their closures can
@@ -104,8 +107,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   @Override
   public Void visitFunctionStmt(Stmt.Function stmt) {
-    LoxFunction function =
-        new LoxFunction(stmt, environment, /* isInitializer: */ false);
+    LoxFunction function = new LoxFunction(stmt, environment, /* isInitializer: */ false);
     environment.define(stmt.name.lexeme, function);
     return null;
   }
@@ -145,8 +147,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   @Override
   public Void visitReturnStmt(Stmt.Return stmt) {
     Object value = null;
-    if (stmt.value != null)
-      value = evaluate(stmt.value);
+    if (stmt.value != null) value = evaluate(stmt.value);
     throw new Return(value);
   }
 
@@ -186,7 +187,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     if (expr.value instanceof String) {
       // we do this to support methods on literal strings (i.e.,
       // `"hello".starts_with("hell")`)
-      return new LoxString((String)expr.value);
+      return new LoxString((String) expr.value);
     }
     return expr.value;
   }
@@ -195,11 +196,9 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   public Object visitLogicalExpr(Expr.Logical expr) {
     Object left = evaluate(expr.left);
     if (expr.operator.type == TokenType.OR) {
-      if (isTruthy(left))
-        return left;
+      if (isTruthy(left)) return left;
     } else /* TokenType.AND */ {
-      if (!isTruthy(left))
-        return left;
+      if (!isTruthy(left)) return left;
     }
     return evaluate(expr.right);
   }
@@ -212,22 +211,20 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     }
 
     Object value = evaluate(expr.value);
-    ((LoxInstance)object).set(expr.name, value);
+    ((LoxInstance) object).set(expr.name, value);
     return value;
   }
 
   @Override
   public Object visitSuperExpr(Expr.Super expr) {
     int distance = locals.get(expr);
-    LoxClass superclass = (LoxClass)environment.getAt(distance, "super");
-    LoxInstance object = (LoxInstance)environment.getAt(distance - 1, "this");
+    LoxClass superclass = (LoxClass) environment.getAt(distance, "super");
+    LoxInstance object = (LoxInstance) environment.getAt(distance - 1, "this");
     LoxCallable method = superclass.findMethod(expr.method.lexeme);
 
     if (method == null) {
       throw new RuntimeError(
-          expr.method,
-          String.format("Undefined property '%s'.", expr.method.lexeme)
-      );
+          expr.method, String.format("Undefined property '%s'.", expr.method.lexeme));
     }
     return method.bind(object);
   }
@@ -241,11 +238,11 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   public Object visitUnaryExpr(Expr.Unary expr) {
     Object right = evaluate(expr.right);
     switch (expr.operator.type) {
-    case BANG:
-      return !isTruthy(right);
-    case MINUS:
-      checkNumberOperand(expr.operator, right);
-      return -(double)right;
+      case BANG:
+        return !isTruthy(right);
+      case MINUS:
+        checkNumberOperand(expr.operator, right);
+        return -(double) right;
     }
     // unreachable
     return null;
@@ -276,41 +273,39 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     Object right = evaluate(expr.right);
 
     switch (expr.operator.type) {
-    case GREATER:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left > (double)right;
-    case GREATER_EQUAL:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left >= (double)right;
-    case LESS:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left < (double)right;
-    case LESS_EQUAL:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left <= (double)right;
-    case MINUS:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left - (double)right;
-    case PLUS:
-      if (left instanceof Double && right instanceof Double) {
-        return (double)left + (double)right;
-      }
-      if (left instanceof LoxString && right instanceof LoxString) {
-        return ((LoxString)left).concatenate((LoxString)right);
-      }
-      throw new RuntimeError(
-          expr.operator, "Operands must be two numbers or two strings"
-      );
-    case SLASH:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left / (double)right;
-    case STAR:
-      checkNumberOperands(expr.operator, left, right);
-      return (double)left * (double)right;
-    case BANG_EQUAL:
-      return !isEqual(left, right);
-    case EQUAL_EQUAL:
-      return isEqual(left, right);
+      case GREATER:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left > (double) right;
+      case GREATER_EQUAL:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left >= (double) right;
+      case LESS:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left < (double) right;
+      case LESS_EQUAL:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left <= (double) right;
+      case MINUS:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left - (double) right;
+      case PLUS:
+        if (left instanceof Double && right instanceof Double) {
+          return (double) left + (double) right;
+        }
+        if (left instanceof LoxString && right instanceof LoxString) {
+          return ((LoxString) left).concatenate((LoxString) right);
+        }
+        throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings");
+      case SLASH:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left / (double) right;
+      case STAR:
+        checkNumberOperands(expr.operator, left, right);
+        return (double) left * (double) right;
+      case BANG_EQUAL:
+        return !isEqual(left, right);
+      case EQUAL_EQUAL:
+        return isEqual(left, right);
     }
     // unreachable
     return null;
@@ -324,18 +319,18 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
       args.add(evaluate(arg));
     }
     if (!(callee instanceof LoxCallable)) {
-      throw new RuntimeError(
-          expr.paren, "Can only call functions and classes."
-      );
+      throw new RuntimeError(expr.paren, "Can only call functions and classes.");
     }
-    LoxCallable function = (LoxCallable)callee;
-    if (args.size() != function.signature().arity()) {
+    LoxCallable function = (LoxCallable) callee;
+    int minArity = function.signature().minArity();
+    int maxArity = function.signature().arity();
+    if (args.size() < minArity || args.size() > maxArity) {
+      String expected =
+          minArity == maxArity
+              ? String.valueOf(maxArity)
+              : String.format("between %d and %d", minArity, maxArity);
       throw new RuntimeError(
-          expr.paren, String.format(
-                          "Expected %d arguments but got %d.",
-                          function.signature().arity(), args.size()
-                      )
-      );
+          expr.paren, String.format("Expected %s arguments but got %d.", expected, args.size()));
     }
     return function.call(this, args);
   }
@@ -344,42 +339,35 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   public Object visitGetExpr(Expr.Get expr) {
     Object object = evaluate(expr.object);
     if (object instanceof LoxInstance) {
-      return ((LoxInstance)object).get(expr.name);
+      return ((LoxInstance) object).get(expr.name);
     }
     throw new RuntimeError(expr.name, "Only instances have properties.");
   }
 
   private void checkNumberOperand(Token operator, Object operand) {
-    if (operand instanceof Double)
-      return;
+    if (operand instanceof Double) return;
     throw new RuntimeError(operator, "Operand must be a number.");
   }
 
   private void checkNumberOperands(Token operator, Object left, Object right) {
-    if (left instanceof Double && right instanceof Double)
-      return;
+    if (left instanceof Double && right instanceof Double) return;
     throw new RuntimeError(operator, "Operands must be numbers");
   }
 
   private boolean isTruthy(Object object) {
-    if (object == null)
-      return false;
-    if (object instanceof Boolean)
-      return (boolean)object;
+    if (object == null) return false;
+    if (object instanceof Boolean) return (boolean) object;
     return true;
   }
 
   private boolean isEqual(Object a, Object b) {
-    if (a == null && b == null)
-      return true;
-    if (a == null)
-      return false;
+    if (a == null && b == null) return true;
+    if (a == null) return false;
     return a.equals(b);
   }
 
   public static String stringify(Object object) {
-    if (object == null)
-      return "nil";
+    if (object == null) return "nil";
 
     if (object instanceof Double) {
       String text = object.toString();

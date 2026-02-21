@@ -29,6 +29,11 @@ class LoxListClass extends LoxNativeClass {
             "Sets the element at index and returns the assigned value.",
             (interpreter, self, args) -> set(self, args.get(0), args.get(1))),
         nativeMethod(
+            "slice       (start:int, end:int=nil) -> list",
+            "Returns sublist in [start, end).",
+            (interpreter, self, args) ->
+                slice(self, args.get(0), args.size() >= 2 ? args.get(1) : null)),
+        nativeMethod(
             "clear       ()                 -> nil",
             "Removes all elements from the list.",
             (interpreter, self, args) -> clear(self)),
@@ -73,6 +78,35 @@ class LoxListClass extends LoxNativeClass {
   static Object set(LoxInstance instance, Object index, Object expression) {
     setItemAt(instance, index, expression, "set");
     return expression;
+  }
+
+  static Object slice(LoxInstance instance, Object startIndex, Object endIndex) {
+    LoxList self = assertList(instance);
+    requireNonEmptySliceTarget(self.list.size(), "list", "slice");
+    int start =
+        normalizeSliceIndex(
+            requireInt(startIndex, "slice"),
+            self.list.size(),
+            "start",
+            /*allowEndpoint:*/ false,
+            "slice");
+    int end = self.list.size();
+    if (endIndex != null) {
+      end =
+          normalizeSliceIndex(
+              requireInt(endIndex, "slice"),
+              self.list.size(),
+              "end",
+              /*allowEndpoint:*/ true,
+              "slice");
+    }
+    if (start > end) {
+      throwRuntimeError("slice", "start cannot be greater than end");
+    }
+
+    var result = new LoxList();
+    result.list.addAll(self.list.subList(start, end));
+    return result;
   }
 
   static Object setItem(LoxInstance instance, Object index, Object expression) {

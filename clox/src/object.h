@@ -90,6 +90,9 @@ typedef Value (*NativeFunction)(int args_count, Value* args, VM* vm);
 typedef struct CallableParameter {
   const char* name;
   const char* type;
+  // Textual representation of the default value used when rendering signatures
+  // (e.g., "nil", "true", "3.14"), not a runtime `Value`.
+  const char* default_value_repr;
 } CallableParameter;
 
 typedef struct CallableSignature {

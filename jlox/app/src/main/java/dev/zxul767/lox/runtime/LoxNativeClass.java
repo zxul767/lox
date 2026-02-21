@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 
 class LoxNativeClass extends LoxClass {
   private static final String loxTypes = "(int|number|bool|list|str|any|nil)";
+  private static final String loxLiteralDefaults = "(nil|true|false|-?(?:[0-9]+(?:\\.[0-9]+)?))";
 
   private static final String signatureRegex =
       String.join(
@@ -25,7 +26,8 @@ class LoxNativeClass extends LoxClass {
       String.join(
           "",
           "\\s*(?<name>[A-Za-z_]+)\\s*", // parameter name
-          "(:(?<type>" + loxTypes + "))?\\s*" // optional type
+          "(:(?<type>" + loxTypes + "))?\\s*", // optional type
+          "(=(?<default>" + loxLiteralDefaults + "))?\\s*" // optional default value
           );
 
   private static final Pattern paramPattern = Pattern.compile(paramRegex, Pattern.COMMENTS);
@@ -64,7 +66,8 @@ class LoxNativeClass extends LoxClass {
 
   static NativeCallableSpec nativeFunction(
       String signatureText, String docstring, NativeCallable nativeFunction) {
-    return NativeCallableSpec.create(parseSignature(signatureText), docstring, nativeFunction);
+    CallableSignature signature = parseSignature(signatureText);
+    return NativeCallableSpec.create(signature, docstring, nativeFunction);
   }
 
   static Map<String, LoxCallable> bindMethods(List<NativeCallableSpec> specs) {
@@ -120,7 +123,9 @@ class LoxNativeClass extends LoxClass {
       boolean matchedParam = matcher.matches();
       assert matchedParam : String.format("invalid parameter: %s", param);
 
-      result.add(new CallableParameter(matcher.group("name"), matcher.group("type")));
+      result.add(
+          new CallableParameter(
+              matcher.group("name"), matcher.group("type"), matcher.group("default")));
     }
     return result;
   }
@@ -160,6 +165,28 @@ class LoxNativeClass extends LoxClass {
       throwRuntimeError(functionName, "argument must be an integer");
     }
     return (int) number;
+  }
+
+  static void requireNonEmptySliceTarget(int length, String typeName, String functionName) {
+    if (length == 0) {
+      throwRuntimeError(functionName, String.format("cannot slice an empty %s", typeName));
+    }
+  }
+
+  static int normalizeSliceIndex(
+      int originalIndex, int length, String indexName, boolean allowEndpoint, String functionName) {
+    int normalizedIndex = originalIndex;
+    if (originalIndex < 0) {
+      normalizedIndex = length + originalIndex;
+    }
+    int upperBound = allowEndpoint ? length : length - 1;
+    if (normalizedIndex < 0 || normalizedIndex > upperBound) {
+      throwRuntimeError(
+          functionName,
+          String.format(
+              "%s index %d is out of range [0..%d]", indexName, originalIndex, upperBound));
+    }
+    return normalizedIndex;
   }
 
   @Override

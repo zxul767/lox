@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "indexing.h"
 #include "lox_list.h"
 #include "memory.h"
 #include "value.h"
@@ -39,7 +40,7 @@ void lox_list__print(const ObjectList* list)
       value__print_repr(value);
     }
     if (i + 1 < list->array.count) {
-      fprintf(stderr, ",");
+      fprintf(stderr, ", ");
     }
   }
   fprintf(stderr, "]");
@@ -50,6 +51,8 @@ void lox_list__print(const ObjectList* list)
 static Value lox_list__length(int args_count, Value* args, VM* vm)
 {
   (void)vm;
+  (void)args_count;
+
   ObjectList* list = REQUIRE_LIST(args[0]);
 
   return NUMBER_VALUE(list->array.count);
@@ -58,30 +61,12 @@ static Value lox_list__length(int args_count, Value* args, VM* vm)
 static Value lox_list__append(int args_count, Value* args, VM* vm)
 {
   (void)vm;
+  (void)args_count;
+
   ObjectList* list = REQUIRE_LIST(args[0]);
   value_array__append(&list->array, args[1]);
 
   return NIL_VALUE;
-}
-
-static int normalize_index(int index, const ObjectList* list)
-{
-  int normed_index = index;
-  if (index < 0) {
-    normed_index = list->array.count + index;
-  }
-  if (normed_index < 0 || normed_index >= list->array.count) {
-    fprintf(
-        stderr,
-        "Index Error: tried to access index %d, but valid range is [0..%d] or "
-        "[-%d..-1].\n",
-        index,
-        list->array.count - 1,
-        list->array.count
-    );
-    return -1;
-  }
-  return normed_index;
 }
 
 static Value lox_list__at(int args_count, Value* args, VM* vm)
@@ -91,17 +76,12 @@ static Value lox_list__at(int args_count, Value* args, VM* vm)
 
   ObjectList* list = REQUIRE_LIST(args[0]);
 
-  if (list->array.count == 0) {
-    fprintf(stderr, "Index Error: Cannot access elements in empty list.\n");
-    return ERROR_VALUE;
-  }
-
   int index = AS_INT(args[1]);
-  index = normalize_index(index, list);
-  if (index == -1) {
+  int normed_index = 0;
+  if (!index__normalize_index(index, list->array.count, &normed_index)) {
     return ERROR_VALUE;
   }
-  return list->array.values[index];
+  return list->array.values[normed_index];
 }
 
 static Value lox_list__set(int args_count, Value* args, VM* vm)
@@ -111,19 +91,48 @@ static Value lox_list__set(int args_count, Value* args, VM* vm)
 
   ObjectList* list = REQUIRE_LIST(args[0]);
 
-  if (list->array.count == 0) {
-    fprintf(stderr, "Index Error: Cannot access elements in empty list.\n");
-    return ERROR_VALUE;
-  }
-
   int index = AS_INT(args[1]);
-  index = normalize_index(index, list);
-  if (index == -1) {
+  int normed_index = 0;
+  if (!index__normalize_index(index, list->array.count, &normed_index)) {
     return ERROR_VALUE;
   }
 
-  list->array.values[index] = args[2];
-  return args[2];
+  return (list->array.values[normed_index] = args[2]);
+}
+
+static Value lox_list__slice(int args_count, Value* args, VM* vm)
+{
+  (void)args_count;
+
+  ObjectList* list = REQUIRE_LIST(args[0]);
+  int start = AS_INT(args[1]);
+  int end = list->array.count;
+  if (args_count == 2 && !IS_NIL(args[2])) {
+    end = AS_INT(args[2]);
+  }
+
+  int normed_start = 0;
+  int normed_end = 0;
+  if (!index__normalize_slice_bounds(
+          start,
+          end,
+          list->array.count,
+          "list",
+          &normed_start,
+          &normed_end
+      )) {
+    return ERROR_VALUE;
+  }
+
+  Value sliced = NIL_VALUE;
+  WITH_OBJECTS_NURSERY(vm, {
+    ObjectList* result = (ObjectList*)lox_list__new(list->instance._class, vm);
+    for (int i = normed_start; i < normed_end; i++) {
+      value_array__append(&result->array, list->array.values[i]);
+    }
+    sliced = OBJECT_VALUE(result);
+  });
+  return sliced;
 }
 
 static Value lox_list__clear(int args_count, Value* args, VM* vm)
@@ -220,6 +229,22 @@ static void define_list_methods(ObjectClass* _class, VM* vm)
       lox_list__set,
       &set_signature,
       "Sets the element at index and returns the assigned value.",
+      vm
+  );
+
+  // self.slice(start:int, end:int=nil) -> list
+  static const CallableParameter slice_parameters[] = {
+      {"start", "int"},
+      {"end", "int", "nil"}
+  };
+  static const CallableSignature slice_signature =
+      {.name = NULL, .arity = 2, .parameters = slice_parameters, .return_type = "list"};
+  define_method(
+      _class,
+      "slice",
+      lox_list__slice,
+      &slice_signature,
+      "Returns sublist in [start, end).",
       vm
   );
 

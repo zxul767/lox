@@ -57,6 +57,11 @@ static void print_signature_parameter(const CallableSignature* signature, int in
     }
   }
   fprintf(stderr, "%s:%s", parameter_name, parameter_type);
+
+  if (signature->parameters != NULL &&
+      signature->parameters[index].default_value_repr != NULL) {
+    fprintf(stderr, "=%s", signature->parameters[index].default_value_repr);
+  }
 }
 
 static void print_signature_parameters(const CallableSignature* signature)
@@ -329,41 +334,45 @@ static bool try_help_callable(const Value value)
   return true;
 }
 
-// FIXME: this function should always return `nil` value, but it looks as though
-// it might be returning other values in some cases
 Value help(int args_count, Value* args, VM* vm)
 {
-  // `help` always takes exactly one argument; we keep this to satisfy the
-  // shared native-function signature and avoid unused-parameter warnings.
   (void)args_count;
 
   Value value = args[0];
-
+  bool printed = false;
   if (IS_OBJECT(value)) {
     switch (OBJECT_TYPE(value)) {
     case OBJECT_CLASS: {
-      return help_class(value);
+      help_class(value);
+      printed = true;
+      break;
     }
     case OBJECT_INSTANCE:
     case OBJECT_LIST: {
-      return help_instance(value);
+      help_instance(value);
+      printed = true;
+      break;
     }
     case OBJECT_STRING: {
-      Value result = help_string_instance(value);
+      help_string_instance(value);
       print_method_signatures_only(vm->string_class);
-      return result;
+      printed = true;
+      break;
     }
     default: {
       if (try_help_callable(value)) {
-        return NIL_VALUE;
+        printed = true;
       }
       break;
     }
     }
   }
 
-  value__print_repr(value);
-  fprintf(stderr, " [%s]\n", type_description(value));
+  if (!printed) {
+    value__print_repr(value);
+    fprintf(stderr, " [%s]\n", type_description(value));
+  }
+  fprintf(stderr, "\n");
 
   return NIL_VALUE;
 }

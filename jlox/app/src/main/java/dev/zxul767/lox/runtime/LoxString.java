@@ -28,9 +28,10 @@ class LoxStringClass extends LoxNativeClass {
             "Returns first index of target, or -1 if not found.",
             (interpreter, self, args) -> index_of(self, args.get(0))),
         nativeMethod(
-            "slice       (start:int, end:int) -> str",
+            "slice       (start:int, end:int=nil) -> str",
             "Returns substring in [start, end).",
-            (interpreter, self, args) -> slice(self, args.get(0), args.get(1))));
+            (interpreter, self, args) ->
+                slice(self, args.get(0), args.size() >= 2 ? args.get(1) : null)));
   }
 
   // constructor call
@@ -71,32 +72,28 @@ class LoxStringClass extends LoxNativeClass {
 
   static Object slice(LoxInstance instance, Object startIndex, Object endIndex) {
     LoxString self = assertString(instance);
-    int start = requireInt(startIndex, "slice");
-    int end = requireInt(endIndex, "slice");
-
-    // TODO: research why python simply returns empty strings instead of these
-    // errors. should we do the same?
-    if (start < 0 || start >= self.string.length()) {
-      throwIndexError(self, String.format("slice(start=%d, ...)", start), start);
-    }
-    if (end < 0 || end > self.string.length()) {
-      throwIndexError(self, String.format("slice(..., end=%d)", end), end);
+    requireNonEmptySliceTarget(self.string.length(), "string", "slice");
+    int start =
+        normalizeSliceIndex(
+            requireInt(startIndex, "slice"),
+            self.string.length(),
+            "start",
+            /*allowEndpoint:*/ false,
+            "slice");
+    int end = self.string.length();
+    if (endIndex != null) {
+      end =
+          normalizeSliceIndex(
+              requireInt(endIndex, "slice"),
+              self.string.length(),
+              "end",
+              /*allowEndpoint:*/ true,
+              "slice");
     }
     if (start > end) {
       throwRuntimeError("slice", "start cannot be greater than end");
     }
     return new LoxString(self.string.substring(start, end));
-  }
-
-  static void throwIndexError(LoxString self, String lexeme, int index) {
-    var message =
-        String.format(
-            "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
-            index, self.string.length() - 1, self.string.length());
-    if (self.string.length() == 0) {
-      message = "cannot access elements in empty list";
-    }
-    throwRuntimeError(lexeme, message);
   }
 }
 
