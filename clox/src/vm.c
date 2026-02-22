@@ -834,14 +834,15 @@ static InterpretResult run(VM* vm)
       Value value = pop_value(vm);
       // in Python tradition, by default we don't display `nil` in the REPL
       if (!IS_NIL(value)) {
-        value__print(value);
+        value__print_repr(value);
       }
       break;
     }
     case OP_PRINTLN: {
       Value value = pop_value(vm);
       if (!IS_NIL(value)) {
-        value__println(value);
+        value__print_repr(value);
+        fprintf(stderr, "\n");
       }
       break;
     }
