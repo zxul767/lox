@@ -3,9 +3,9 @@ fun fib(n) {
     return fib(n-1) + fib(n-2);
 }
 
-println("fibonacci numbers:")
+println("fibonacci numbers:");
 for (var i = 0; i < 15; i = i + 1) {
-    print(i)
-    print(" -> ")
-    println(fib(i))
+    print(i);
+    print(" -> ");
+    println(fib(i));
 }

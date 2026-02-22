@@ -11,6 +11,7 @@ import dev.zxul767.lox.runtime.StandardLibrary;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,7 @@ import org.jline.utils.AttributedStyle;
 public class Lox {
   private static final String QUIT = "quit";
   private static final String EXIT = "exit";
+  private static final String LOAD_FILE = ":load";
   private static final Interpreter interpreter = new Interpreter();
 
   public static void main(String[] args) throws IOException {
@@ -44,7 +46,7 @@ public class Lox {
   }
 
   private static void runFile(String path) throws IOException {
-    byte[] bytes = Files.readAllBytes(Paths.get(path));
+    byte[] bytes = Files.readAllBytes(resolveReadablePath(path));
     run(new String(bytes, Charset.defaultCharset()), /* in_repl_mode: */ false);
     if (Errors.hadError) System.exit(65);
     if (Errors.hadRuntimeError) System.exit(70);
@@ -83,6 +85,18 @@ public class Lox {
         if (line == null || line.equals(QUIT) || line.equals(EXIT)) break;
 
         if (line.trim().isEmpty()) continue;
+
+        if (line.startsWith(LOAD_FILE)) {
+          String path = line.substring(LOAD_FILE.length()).trim();
+          if (path.isEmpty()) {
+            System.out.println("Usage: :load <path>");
+          } else {
+            loadFileInRepl(path);
+          }
+          System.out.println();
+          Errors.reset();
+          continue;
+        }
 
         // FIXME: implement the "optional semicolon" feature properly;
         // this is a brittle kludge to make working with the REPL a little
@@ -149,6 +163,7 @@ public class Lox {
     terminal.writer().println(logo);
 
     terminal.writer().printf("- Type `%s` or `%s` to quit. (or use «ctrl-d»)\n", QUIT, EXIT);
+    terminal.writer().println("- Type `:load <path>` to load and run a Lox file");
     terminal.writer().println("- Type `help(<symbol>)` to inspect values or functions/methods");
     // TODO: figure out how to do multiline editing (if you copy and paste it
     // works, but how do we manually type multiple lines?)
@@ -168,7 +183,7 @@ public class Lox {
     // provide completions (triggered via TAB) for all keywords
     Completer completer =
         new AggregateCompleter(
-            new StringsCompleter(List.of(QUIT, EXIT)),
+            new StringsCompleter(List.of(QUIT, EXIT, LOAD_FILE)),
             new StringsCompleter(StandardLibrary.members.keySet()),
             new StringsCompleter(Scanner.keywords.keySet()));
 
@@ -180,6 +195,32 @@ public class Lox {
     // Lox and should be evaluated literally.
     reader.setOpt(LineReader.Option.DISABLE_EVENT_EXPANSION);
     return reader;
+  }
+
+  private static void loadFileInRepl(String path) {
+    try {
+      byte[] bytes = Files.readAllBytes(resolveReadablePath(path));
+      run(new String(bytes, Charset.defaultCharset()), /* in_repl_mode: */ true);
+    } catch (IOException error) {
+      System.out.printf("Could not open file \"%s\".%n", path);
+    }
+  }
+
+  private static Path resolveReadablePath(String rawPath) throws IOException {
+    Path requested = Paths.get(rawPath);
+    if (Files.exists(requested)) {
+      return requested;
+    }
+
+    String pwd = System.getenv("PWD");
+    if (pwd != null) {
+      Path workingDirectory = Paths.get(pwd).resolve(requested).normalize();
+      if (Files.exists(workingDirectory)) {
+        return workingDirectory;
+      }
+    }
+
+    throw new java.nio.file.NoSuchFileException(rawPath);
   }
 
   static List<Stmt> ensureLastExpressionIsPrinted(List<Stmt> statements) {
