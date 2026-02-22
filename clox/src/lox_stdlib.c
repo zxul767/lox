@@ -59,8 +59,8 @@ static void print_signature_parameter(const CallableSignature* signature, int in
   fprintf(stderr, "%s:%s", parameter_name, parameter_type);
 
   if (signature->parameters != NULL &&
-      signature->parameters[index].default_value_repr != NULL) {
-    fprintf(stderr, "=%s", signature->parameters[index].default_value_repr);
+      signature->parameters[index].default_value != NULL) {
+    fprintf(stderr, "=%s", signature->parameters[index].default_value);
   }
 }
 

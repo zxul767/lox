@@ -92,7 +92,7 @@ typedef struct CallableParameter {
   const char* type;
   // Textual representation of the default value used when rendering signatures
   // (e.g., "nil", "true", "3.14"), not a runtime `Value`.
-  const char* default_value_repr;
+  const char* default_value;
 } CallableParameter;
 
 typedef struct CallableSignature {

@@ -225,7 +225,7 @@ static void assert_defaults_are_trailing(const CallableSignature* signature)
 
   bool seen_default = false;
   for (int i = 0; i < signature->arity; i++) {
-    bool has_default = signature->parameters[i].default_value_repr != NULL;
+    bool has_default = signature->parameters[i].default_value != NULL;
     if (has_default) {
       seen_default = true;
     } else {

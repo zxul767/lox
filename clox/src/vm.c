@@ -71,9 +71,43 @@ static void runtime_error(VM* vm, const char* format, ...)
   fprintf(stderr, "Runtime Error: ");
   vfprintf(stderr, format, args);
   va_end(args);
-  fputs("\n", stderr);
+  fprintf(stderr, "\n");
 
-  debug__dump_stacktrace(vm);
+  if (vm->trace_execution) {
+    debug__dump_stacktrace(vm);
+  }
+  reset_for_execution(vm);
+}
+
+static int current_source_line(VM* vm)
+{
+  if (vm->frames_count == 0) {
+    return -1;
+  }
+  CallFrame* frame = top_frame(vm);
+  int offset = callframe__current_offset(frame);
+  return frame->closure->function->bytecode.to_source_line[offset];
+}
+
+static void runtime_error_with_token(VM* vm, const char* token, const char* format, ...)
+{
+  va_list args;
+  va_start(args, format);
+  fprintf(stderr, "Runtime Error: ");
+  vfprintf(stderr, format, args);
+  va_end(args);
+  fprintf(stderr, "\n");
+
+  if (token != NULL) {
+    int line = current_source_line(vm);
+    if (line >= 0) {
+      fprintf(stderr, "[line %d, token: '%s']\n", line, token);
+    }
+  }
+
+  if (vm->trace_execution) {
+    debug__dump_stacktrace(vm);
+  }
   reset_for_execution(vm);
 }
 
@@ -161,7 +195,9 @@ static void init_stdlib(VM* vm)
       vm
   );
   // print(arg) -> nil
-  static const CallableParameter print_parameters[] = {{"value", "any"}};
+  static const CallableParameter print_parameters[] = {
+      {.name = "value", .type = "any", .default_value = NULL}
+  };
   static const CallableSignature print_signature =
       {.name = NULL, .arity = 1, .parameters = print_parameters, .return_type = "nil"};
   define_native_function(
@@ -182,7 +218,9 @@ static void init_stdlib(VM* vm)
       vm
   );
   // help(arg) -> nil
-  static const CallableParameter help_parameters[] = {{"object", "any"}};
+  static const CallableParameter help_parameters[] = {
+      {.name = "object", .type = "any", .default_value = NULL}
+  };
   static const CallableSignature help_signature =
       {.name = NULL, .arity = 1, .parameters = help_parameters, .return_type = "nil"};
   define_native_function(
@@ -248,7 +286,7 @@ static int compute_min_arity(ObjectCallable* callable)
   int min_arity = callable->signature.arity;
   const CallableParameter* parameters = callable->signature.parameters;
   if (parameters != NULL) {
-    while (min_arity > 0 && parameters[min_arity - 1].default_value_repr != NULL) {
+    while (min_arity > 0 && parameters[min_arity - 1].default_value != NULL) {
       min_arity--;
     }
   }
@@ -412,14 +450,14 @@ static bool bind_method(ObjectClass* _class, ObjectString* name, VM* vm)
 static bool validate_integer_index(Value index, VM* vm, int* result)
 {
   if (!IS_NUMBER(index)) {
-    runtime_error(vm, "List index must be an integer.");
+    runtime_error_with_token(vm, "[", "List index must be an integer.");
     return false;
   }
 
   double raw = AS_NUMBER(index);
   int integer = (int)raw;
   if (raw != (double)integer) {
-    runtime_error(vm, "List index must be an integer.");
+    runtime_error_with_token(vm, "[", "List index must be an integer.");
     return false;
   }
 
@@ -430,14 +468,15 @@ static bool validate_integer_index(Value index, VM* vm, int* result)
 static bool normalize_list_index(int index, const ObjectList* list, VM* vm, int* result)
 {
   if (list->array.count == 0) {
-    runtime_error(vm, "Cannot access elements in empty list.");
+    runtime_error_with_token(vm, "[", "Cannot access elements in empty list.");
     return false;
   }
 
   int normalized = index < 0 ? list->array.count + index : index;
   if (normalized < 0 || normalized >= list->array.count) {
-    runtime_error(
+    runtime_error_with_token(
         vm,
+        "[",
         "tried to access index %d, but valid range is [0..%d] or [-%d..-1]",
         index,
         list->array.count - 1,
@@ -460,7 +499,7 @@ static bool resolve_list_index(
 )
 {
   if (!IS_LIST(receiver)) {
-    runtime_error(vm, receiver_error);
+    runtime_error_with_token(vm, "[", receiver_error);
     return false;
   }
 

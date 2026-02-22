@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
-  final Environment globals = new Environment();
+  private final Environment globals = new Environment();
   private Environment environment = globals;
   // maps every variable expression to the number of environment hops
   // needed to get to its declaring scope
@@ -51,7 +51,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
   }
 
   // Track how many environment hops (from the active environment) are
-  // necessary to make to reach the environment were the variable contained
+  // necessary to reach the environment were the variable contained
   // in `expr` was declared.
   void resolve(Expr expr, int hops) {
     locals.put(expr, hops);
@@ -257,9 +257,8 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     Integer distance = locals.get(expr);
     if (distance != null) {
       return environment.getAt(distance, name.lexeme);
-    } else {
-      return globals.get(name);
     }
+    return globals.get(name);
   }
 
   @Override
@@ -313,13 +312,39 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
 
   @Override
   public Object visitCallExpr(Expr.Call expr) {
-    Object callee = evaluate(expr.callee);
+    Object callee;
+    if (expr.callee instanceof Expr.Get getExpr && isIndexAccessor(getExpr.name.lexeme)) {
+      Object target = evaluate(getExpr.object);
+      if (!(target instanceof LoxList)) {
+        String message =
+            getExpr.name.lexeme.equals("__getitem__")
+                ? "Only lists support index access."
+                : "Only lists support index assignment.";
+        throw new RuntimeError(indexToken(expr.paren.line), message);
+      }
+      callee = ((LoxInstance) target).get(getExpr.name);
+    } else {
+      callee = evaluate(expr.callee);
+    }
+
     List<Object> args = new ArrayList<>();
     for (Expr arg : expr.arguments) {
       args.add(evaluate(arg));
     }
+    return invokeCallable(callee, args, expr.paren);
+  }
+
+  private static boolean isIndexAccessor(String name) {
+    return name.equals("__getitem__") || name.equals("__setitem__");
+  }
+
+  private static Token indexToken(int line) {
+    return new Token(TokenType.LEFT_BRACKET, "[", /* value: */ null, line);
+  }
+
+  private Object invokeCallable(Object callee, List<Object> args, Token callSite) {
     if (!(callee instanceof LoxCallable)) {
-      throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+      throw new RuntimeError(callSite, "Can only call functions and classes.");
     }
     LoxCallable function = (LoxCallable) callee;
     int minArity = function.signature().minArity();
@@ -330,7 +355,7 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
               ? String.valueOf(maxArity)
               : String.format("between %d and %d", minArity, maxArity);
       throw new RuntimeError(
-          expr.paren, String.format("Expected %s arguments but got %d.", expected, args.size()));
+          callSite, String.format("Expected %s arguments but got %d.", expected, args.size()));
     }
     return function.call(this, args);
   }
